@@ -42,6 +42,13 @@ Bambu-spole ──RFID──> ESP32 + RC522 ──HTTPS──> spools.json i Bam
 - **Proxyen** godtar bare forespørsler fra `saysphilippe.github.io`. Lokal testing med `wrangler dev` bruker `worker/.dev.vars`.
 - Alle GitHub Pages-sider under `saysphilippe.github.io` deler nettleserlagring. Ikke publiser andre Pages-sider på kontoen uten å tenke over det, eller gi BambuFilament et eget domene.
 
+## Innloggingsstatistikk
+
+Administrator har en egen fane **Innloggingsstatistikk** i brukervinduet: innlogginger totalt og
+siste 30 dager, et diagram per dag, «sist aktiv», siste innlogging, enheter (nettleser og system) per
+bruker, og en liste over de siste innloggingene. Dataene lagres i `activity.json` i det private
+data-repoet (maks 500 innlogginger). Bare vellykkede innlogginger registreres.
+
 ## Brukere og innlogging
 
 Alle kan se oversikten. For å endre (sjekke inn og ut, redigere, administrere brukere)
@@ -183,6 +190,7 @@ Kjør `node scripts/bump-version.mjs` før commit. Det setter et nytt versjonsnu
 | `users.json` i BambuFilament-auth | Brukere, farger, rolle og krypterte innloggingsnøkler (offentlig) |
 | `spools.json` i BambuFilament-data | Spoler (privat, skrives av leserne og siden) |
 | `shared.json` i BambuFilament-data | Delte AMS-data, bibliotek og venteliste (bare siden) |
+| `activity.json` i BambuFilament-data | Innlogginger og sist aktiv (innloggingsstatistikk) |
 | `data/colors.json` | Offisielle Bambu-fargenavn |
 | `data/catalog.json` | Bambu-katalogen med datoer og produktsider |
 | `scripts/update-catalog.mjs` | Henter filamentkatalogen (GitHub Actions, hver 6. time) |

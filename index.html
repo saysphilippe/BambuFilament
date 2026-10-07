@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=202610072230">
+  <link rel="stylesheet" href="style.css?v=202610072236">
 </head>
 <body>
   <header>
@@ -166,8 +166,14 @@
     </form>
   </dialog>
 
-  <dialog id="users">
+  <dialog id="users" class="wide-dialog">
     <h2>Brukere</h2>
+    <nav id="u-tabs" class="sub-tabs" hidden>
+      <button class="sub-tab active" data-utab="list">Brukere</button>
+      <button class="sub-tab" data-utab="stats">Innloggingsstatistikk</button>
+    </nav>
+    <div id="u-stats" hidden></div>
+    <div id="u-list-pane">
     <p class="hint">Hver bruker har sin egen farge, som vises på spolene de eier. Nye brukere får et midlertidig passord som må byttes ved første innlogging. Navnet må være likt <code>OWNER</code> i leserens <code>config.h</code>.</p>
     <ul id="u-list" class="u-list"></ul>
     <div id="u-fresh" class="u-fresh"></div>
@@ -178,6 +184,7 @@
     </form>
     <p id="u-hint" class="hint"></p>
     <p id="u-error" class="error"></p>
+    </div>
     <form method="dialog" class="d-buttons"><span class="spacer"></span><button class="btn">Lukk</button></form>
   </dialog>
 
@@ -272,6 +279,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=202610072230"></script>
+  <script type="module" src="app.js?v=202610072236"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072230";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072230";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072236";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072236";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -15,7 +15,11 @@ const FILES = {
   users: { repo: AUTH_REPO, path: "users.json", public: true, empty: () => ({ version: 1, users: [] }) },
   spools: { repo: DATA_REPO, path: "spools.json", empty: () => ({ version: 1, spools: [] }) },
   shared: { repo: DATA_REPO, path: "shared.json", empty: () => ({ version: 1, ams: {}, library: {}, wishes: {} }) },
+  // Innlogginger og sist aktiv, for innloggingsstatistikken (bare admin ser den).
+  activity: { repo: DATA_REPO, path: "activity.json", empty: () => ({ version: 1, logins: [], seen: {} }) },
 };
+const MAX_LOGINS = 500;            // eldste innlogginger fjernes
+const SEEN_EVERY_MS = 6 * 3600e3;  // «sist aktiv» lagres høyst hver 6. time per bruker
 const apiUrl = (file) => `https://api.github.com/repos/${FILES[file].repo}/contents/${FILES[file].path}`;
 const rawUrl = (file) => `https://raw.githubusercontent.com/${FILES[file].repo}/${BRANCH}/${FILES[file].path}`;
 
@@ -45,6 +49,8 @@ const state = {
   spools: [],
   colorNames: {},
   colorIndex: {},
+  activity: { logins: [], seen: {} },
+  usersTab: "list",
   tab: "stock",
   amsLive: null,
   libraryLive: null,
@@ -152,7 +158,8 @@ async function loadFile(file) {
 async function loadDoc() {
   const auth = await loadFile("users");
   if (!token()) return { ...auth, spools: [], ams: {}, library: {}, wishes: {} };
-  const [main, shared] = await Promise.all([loadFile("spools"), loadFile("shared")]);
+  const [main, shared, activity] = await Promise.all([loadFile("spools"), loadFile("shared"), loadFile("activity")]);
+  state.activity = cleanActivity(activity);
   return { users: auth.users || [], spools: main.spools || [], ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {} };
 }
 
@@ -174,6 +181,9 @@ async function saveDoc(mutate, message, file = "spools") {
     }
     if (file === "users") {
       doc.users ||= [];
+    } else if (file === "activity") {
+      doc.logins = Array.isArray(doc.logins) ? doc.logins : [];
+      doc.seen = doc.seen && typeof doc.seen === "object" ? doc.seen : {};
     } else if (file === "spools") {
       doc.spools ||= [];
       // Brukere ligger i auth-repoet og delte data i shared.json (eldre versjoner la dem her).
@@ -194,6 +204,10 @@ async function saveDoc(mutate, message, file = "spools") {
       body: JSON.stringify({ message, branch: BRANCH, sha, content: encodeBase64(JSON.stringify(doc, null, 2) + "\n") }),
     });
     if (put.ok) {
+      if (file === "activity") {
+        state.activity = cleanActivity(doc);
+        return state.doc;
+      }
       const merged = file === "users" ? { ...state.doc, users: doc.users }
         : file === "spools" ? { ...state.doc, spools: doc.spools }
         : { ...state.doc, ams: doc.ams, library: doc.library, wishes: doc.wishes };
@@ -314,6 +328,14 @@ function cleanLibrary(l) {
 // Eldre delte data hadde variant-ID-en (f.eks. "A01-G7") bakerst i location.
 const libVariantFromLocation = (loc) => (loc.match(/([A-Z]\d\d-[A-Z0-9]{2,3})$/) || [])[1] || "";
 
+function cleanActivity(a) {
+  const logins = (Array.isArray(a?.logins) ? a.logins : []).map((x) => ({
+    user: str(x.user), at: str(x.at), device: str(x.device), remember: !!x.remember,
+  })).filter((x) => x.user && !isNaN(new Date(x.at)));
+  const seen = Object.fromEntries(Object.entries(a?.seen || {}).map(([k, v]) => [str(k), str(v)]).filter(([, v]) => !isNaN(new Date(v))));
+  return { logins, seen };
+}
+
 const cleanMap = (obj, fn) => Object.fromEntries(Object.entries(obj || {}).map(([k, v]) => [k, fn(v)]).filter(([, v]) => v));
 
 function setDoc(doc) {
@@ -355,6 +377,7 @@ async function refresh() {
   setSync("Henter…");
   try {
     setDoc(DEMO ? demoDoc() : await loadDoc());
+    if (token()) recordSeen();
     setSync(DEMO ? "Demo – eksempeldata" : `Oppdatert ${new Date().toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })}`);
   } catch (e) {
     setSync(e.message, true);
@@ -730,6 +753,7 @@ function renderUsers() {
 function openUsers() {
   $("#u-error").textContent = "";
   renderUsers();
+  showUsersTab(state.usersTab);
   $("#users").showModal();
 }
 
@@ -804,6 +828,123 @@ async function removeUser(name, btn) {
   }
 }
 
+// ---------- Innloggingsstatistikk ----------
+
+// Kort beskrivelse av nettleser og system, f.eks. "Chrome · Windows".
+function deviceName() {
+  const ua = navigator.userAgent;
+  const browser = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Firefox\//.test(ua) ? "Firefox"
+    : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Annen nettleser";
+  const os = /Windows/.test(ua) ? "Windows" : /Android/.test(ua) ? "Android" : /iPhone|iPad|iPod/.test(ua) ? "iOS"
+    : /Mac OS X/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "annet system";
+  return `${browser} · ${os}`;
+}
+
+// Lagres i bakgrunnen; en feil her skal aldri hindre innlogging.
+async function recordLogin(name, remember) {
+  try {
+    const at = new Date().toISOString();
+    await saveDoc((doc) => {
+      doc.logins.push({ user: name, at, device: deviceName(), remember: !!remember });
+      doc.logins = doc.logins.slice(-MAX_LOGINS);
+      doc.seen[name] = at;
+    }, `Innlogging (${name})`, "activity");
+  } catch (err) {
+    console.warn("Kunne ikke lagre innlogging:", err.message);
+  }
+}
+
+// «Sist aktiv» oppdateres når en innlogget bruker bruker siden (høyst hver 6. time).
+async function recordSeen() {
+  const name = userName();
+  if (!name || DEMO) return;
+  const last = new Date(state.activity.seen[name] || 0).getTime();
+  if (Date.now() - last < SEEN_EVERY_MS) return;
+  try {
+    await saveDoc((doc) => { doc.seen[name] = new Date().toISOString(); }, `Aktiv (${name})`, "activity");
+  } catch (err) {
+    console.warn("Kunne ikke lagre aktivitet:", err.message);
+  }
+}
+
+function renderStats() {
+  const box = $("#u-stats");
+  const { logins, seen } = state.activity;
+  const now = Date.now();
+  const since30 = now - 30 * 864e5;
+  const recent = logins.filter((x) => new Date(x.at).getTime() >= since30);
+
+  // Innlogginger per dag, siste 30 dager
+  const days = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(now - (29 - i) * 864e5);
+    return d.toISOString().slice(0, 10);
+  });
+  const perDay = Object.fromEntries(days.map((d) => [d, 0]));
+  for (const x of recent) if (x.at.slice(0, 10) in perDay) perDay[x.at.slice(0, 10)]++;
+  const max = Math.max(1, ...Object.values(perDay));
+
+  const rows = users().filter((u) => u.known).map((u) => {
+    const mine = logins.filter((x) => x.user === u.name);
+    const last = mine[mine.length - 1];
+    return {
+      u, total: mine.length, recent: mine.filter((x) => new Date(x.at).getTime() >= since30).length,
+      last, seen: seen[u.name] || last?.at || "",
+      devices: [...new Set(mine.map((x) => x.device))],
+    };
+  }).sort((a, b) => (b.seen || "").localeCompare(a.seen || ""));
+
+  const ago = (d) => {
+    if (!d) return "aldri";
+    const h = (now - new Date(d).getTime()) / 3600e3;
+    return h < 1 ? "nå nettopp" : h < 24 ? `${Math.floor(h)} t siden` : `${Math.floor(h / 24)} d siden`;
+  };
+
+  box.innerHTML = `
+    <div class="stats stats-small">
+      <div class="stat"><b>${logins.length}</b><span>innlogginger totalt</span></div>
+      <div class="stat"><b>${recent.length}</b><span>siste 30 dager</span></div>
+      <div class="stat"><b>${rows.filter((r) => r.seen && now - new Date(r.seen).getTime() < 7 * 864e5).length}</b><span>aktive siste 7 dager</span></div>
+      <div class="stat"><b>${rows.filter((r) => !r.total).length}</b><span>aldri logget inn</span></div>
+    </div>
+
+    <h3>Innlogginger per dag (siste 30 dager)</h3>
+    <div class="day-chart" role="img" aria-label="Innlogginger per dag">
+      ${days.map((d) => `<div class="day-bar" title="${fmtDay(d)}: ${perDay[d]}"><span style="height:${Math.round((perDay[d] / max) * 100)}%"></span></div>`).join("")}
+    </div>
+    <div class="day-axis"><span>${fmtDay(days[0])}</span><span>i dag</span></div>
+
+    <h3>Per bruker</h3>
+    <table class="stat-table">
+      <thead><tr><th>Bruker</th><th>Sist aktiv</th><th>Siste innlogging</th><th>30 d</th><th>Totalt</th><th>Enheter</th></tr></thead>
+      <tbody>${rows.map((r) => `
+        <tr style="--owner:${r.u.color}">
+          <td><span class="owner-dot"></span> ${esc(r.u.name)}${r.u.mustChange ? ` <span class="muted">(midlertidig passord)</span>` : ""}</td>
+          <td title="${esc(r.seen ? fmtTime(r.seen) : "")}">${ago(r.seen)}</td>
+          <td>${r.last ? fmtTime(r.last.at) : "–"}</td>
+          <td>${r.recent}</td>
+          <td>${r.total}</td>
+          <td class="muted">${esc(r.devices.join(", ")) || "–"}</td>
+        </tr>`).join("")}</tbody>
+    </table>
+
+    <h3>Siste innlogginger</h3>
+    <ul class="login-log">${logins.slice(-25).reverse().map((x) => `
+      <li><span class="owner-dot" style="--owner:${userColor(x.user)}"></span><b>${esc(x.user)}</b>
+        <span class="muted">${fmtTime(x.at)} · ${esc(x.device)}${x.remember ? " · husk meg" : ""}</span></li>`).join("") || "<li class='muted'>Ingen innlogginger registrert ennå.</li>"}
+    </ul>
+    <p class="hint">Registreres fra og med nå: vellykkede innlogginger og «sist aktiv» (høyst hver 6. time). Mislykkede forsøk kan ikke registreres, fordi siden ikke har skrivetilgang før passordet er riktig. Lagres i det private data-repoet (maks ${MAX_LOGINS} innlogginger).</p>`;
+}
+
+function showUsersTab(tab) {
+  const admin = isAdmin();
+  state.usersTab = admin && tab === "stats" ? "stats" : "list";
+  $("#u-tabs").hidden = !admin;
+  document.querySelectorAll("#u-tabs .sub-tab").forEach((b) => b.classList.toggle("active", b.dataset.utab === state.usersTab));
+  $("#u-list-pane").hidden = state.usersTab !== "list";
+  $("#u-stats").hidden = state.usersTab !== "stats";
+  if (state.usersTab === "stats") renderStats();
+}
+
 // ---------- Innlogging ----------
 
 function renderAccount() {
@@ -859,6 +1000,7 @@ async function login(e) {
   }
   store("bf.lastUser", name);
   setSession({ user: name, token: tok }, $("#l-remember").checked);
+  recordLogin(name, $("#l-remember").checked);
   $("#login").close();
   if (user.mustChange) openChangePassword(true);
 }
@@ -1776,6 +1918,8 @@ document.addEventListener("click", (e) => {
   }
   const tab = e.target.closest(".tab");
   if (tab) return showTab(tab.dataset.tab);
+  const uTab = e.target.closest("#u-tabs .sub-tab");
+  if (uTab) return showUsersTab(uTab.dataset.utab);
   const subTab = e.target.closest(".sub-tab");
   if (subTab) {
     state.newsSub = subTab.dataset.sub;
