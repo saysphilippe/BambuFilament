@@ -84,8 +84,15 @@ export default {
 
     try {
       switch (path) {
-        case "/login": return json(await login(body), 200, origin);
-        case "/send-code": return json(await sendCode(body), 200, origin);
+        case "/login": return json(await login(body, env), 200, origin);
+        case "/send-code": {
+          // Én kode per e-postadresse per minutt, i tillegg til grensen per IP.
+          const email = String(body.email || "").toLowerCase();
+          if (env?.EMAIL_LIMIT && !(await env.EMAIL_LIMIT.limit({ key: email })).success) {
+            return json({ error: "Det er nettopp sendt en kode. Vent et minutt." }, 429, origin);
+          }
+          return json(await sendCode(body, env), 200, origin);
+        }
         case "/tfa": return json(await tfa(body), 200, origin);
         case "/refresh": return json(await refresh(body), 200, origin);
         case "/ams":
@@ -110,19 +117,49 @@ function fail(message, status = 400) {
   return Object.assign(new Error(message), { status });
 }
 
+// Billett for /send-code: signert med en hemmelig nøkkel (TICKET_SECRET, satt med
+// `wrangler secret put`) og gyldig i 10 minutter. Den utstedes bare når Bambu ber om
+// e-postkode etter en innlogging, så proxyen ikke kan brukes til å sende Bambu-e-post
+// til vilkårlige adresser.
+const TICKET_MS = 10 * 60 * 1000;
+
+async function hmac(secret, text) {
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(text)));
+  return btoa(String.fromCharCode(...sig)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function makeTicket(email, env) {
+  if (!env?.TICKET_SECRET) throw fail("Proxyen mangler TICKET_SECRET", 500);
+  const exp = Date.now() + TICKET_MS;
+  return `${exp}.${await hmac(env.TICKET_SECRET, `${email.toLowerCase()}|${exp}`)}`;
+}
+
+async function checkTicket(email, ticket, env) {
+  const [exp, sig] = String(ticket || "").split(".");
+  if (!env?.TICKET_SECRET || !exp || !sig || Number(exp) < Date.now()) return false;
+  const expected = await hmac(env.TICKET_SECRET, `${email.toLowerCase()}|${exp}`);
+  // Sammenligning i konstant tid
+  if (expected.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}
+
 // Steg 1: e-post + passord. Steg 2 (hvis Bambu ber om det): e-post + kode fra e-post.
-async function login({ account, password, code }) {
-  if (!account || (!password && !code)) throw fail("Mangler e-post og passord eller kode");
-  const body = code ? { account, code } : { account, password, apiError: "" };
+async function login({ account, password, code }, env) {
+  if (typeof account !== "string" || !account || (!password && !code)) throw fail("Mangler e-post og passord eller kode");
+  const body = code ? { account, code: String(code) } : { account, password: String(password), apiError: "" };
   const { status, data } = await bambu("/v1/user-service/user/login", { method: "POST", body });
   if (data.accessToken) return { token: data.accessToken, refreshToken: data.refreshToken || "", expiresIn: data.expiresIn || null };
-  if (data.loginType === "verifyCode") return { step: "code" };
+  if (data.loginType === "verifyCode") return { step: "code", ticket: await makeTicket(account, env) };
   if (data.loginType === "tfa") return { step: "tfa", tfaKey: data.tfaKey };
   throw fail(data.error || data.message || `Innlogging feilet (${status})`, status === 200 ? 400 : status);
 }
 
-async function sendCode({ email }) {
-  if (!email) throw fail("Mangler e-post");
+async function sendCode({ email, ticket }, env) {
+  if (typeof email !== "string" || !email) throw fail("Mangler e-post");
+  if (!(await checkTicket(email, ticket, env))) throw fail("Logg inn med e-post og passord først.", 403);
   const { status, data } = await bambu("/v1/user-service/user/sendemail/code", {
     method: "POST",
     body: { email, type: "codeLogin" },

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Ekstra lag mot XSS: bare egne skript, og data bare til GitHub, proxyen og Bambu-bildene.
        style-src trenger 'unsafe-inline' for fargefeltene (style-attributter med kontrollerte farger). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://store.bblcdn.eu https://store.bblcdn.com; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://bambufilament-proxy.saysphilippe.workers.dev http://127.0.0.1:8787; base-uri 'none'; form-action 'self'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://store.bblcdn.eu https://store.bblcdn.com; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://bambufilament-proxy.saysphilippe.workers.dev; base-uri 'none'; form-action 'self'; object-src 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
@@ -143,8 +143,8 @@
             <option value="empty">Brukt opp</option>
           </select>
         </label>
-        <label class="wide">Eget navn (valgfritt, erstatter fargenavnet)<input name="name"></label>
-        <label class="wide">Notat<textarea name="note" rows="2"></textarea></label>
+        <label class="wide">Eget navn (valgfritt, erstatter fargenavnet)<input name="name" maxlength="60"></label>
+        <label class="wide">Notat<textarea name="note" rows="2" maxlength="300"></textarea></label>
       </div>
       <p id="d-error" class="error"></p>
       <div class="d-buttons">
@@ -162,7 +162,7 @@
     <ul id="u-list" class="u-list"></ul>
     <div id="u-fresh" class="u-fresh"></div>
     <form id="u-form" class="u-form">
-      <input name="name" placeholder="Navn på ny bruker" required aria-label="Navn">
+      <input name="name" placeholder="Navn på ny bruker" required maxlength="40" aria-label="Navn">
       <input name="color" type="color" aria-label="Farge">
       <button class="btn btn-primary">Legg til</button>
     </form>

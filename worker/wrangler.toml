@@ -17,3 +17,8 @@ simple = { limit = 30, period = 60 }
 name = "STORE_LIMIT"
 namespace_id = "1003"
 simple = { limit = 120, period = 60 }
+
+[[ratelimits]]
+name = "EMAIL_LIMIT"
+namespace_id = "1004"
+simple = { limit = 1, period = 60 }

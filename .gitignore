@@ -2,3 +2,4 @@ firmware/BambuFilament/config.h
 firmware/BambuFilament/build/
 node_modules/
 .wrangler/
+.local-data/

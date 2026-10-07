@@ -22,7 +22,11 @@
 static const int SECTORS = 5;               // Bambu-dataene ligger i sektor 0–4 (blokk 0–19)
 static const int BLOCKS = SECTORS * 4;
 static const int MAX_TRIES = 3;             // nye forsøk ved 409 (noen andre lagret samtidig)
-static const int MAX_HISTORY = 30;          // antall hendelser som tas vare på per spole
+static const int MAX_HISTORY = 10;          // antall hendelser per spole (holder spools.json liten)
+// Største svar fra GitHub som behandles. Base64-innholdet, den dekodede teksten og
+// JSON-dokumentet må få plass i minnet samtidig (ca. 280 kB ledig). Delte AMS- og
+// bibliotekdata ligger i shared.json, som leseren ikke henter, så spools.json holdes liten.
+static const int MAX_RESPONSE_BYTES = 120000;
 
 static const uint8_t MASTER_SALT[16] = {
   0x9a, 0x75, 0x9c, 0xf2, 0xc4, 0xf7, 0xca, 0xff,
@@ -213,6 +217,12 @@ int fetchSpools(WiFiClientSecure &client, JsonDocument &doc, String &sha) {
   if (code != 200) {
     http.end();
     return code;
+  }
+  int size = http.getSize();
+  if (size > MAX_RESPONSE_BYTES) {
+    Serial.printf("spools.json er for stor for leseren (%d byte, maks %d).\n", size, MAX_RESPONSE_BYTES);
+    http.end();
+    return -4;
   }
   JsonDocument meta;
   DeserializationError err = deserializeJson(meta, http.getStream());

@@ -5,9 +5,18 @@ import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./a
 // så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
 const REPO = "saysphilippe/BambuFilament-data";
 const BRANCH = "main";
-const PATH = "spools.json";
-const API = `https://api.github.com/repos/${REPO}/contents/${PATH}`;
-const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${PATH}`;
+// spools.json: brukere og spoler (det RFID-leserne trenger, holdes lite).
+// shared.json: delte AMS-data, bibliotek og venteliste (kan bli stort, leserne henter den ikke).
+const FILES = {
+  spools: { path: "spools.json", empty: () => ({ version: 1, users: [], spools: [] }) },
+  shared: { path: "shared.json", empty: () => ({ version: 1, ams: {}, library: {}, wishes: {} }) },
+};
+const apiUrl = (file) => `https://api.github.com/repos/${REPO}/contents/${FILES[file].path}`;
+const rawUrl = (file) => `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${FILES[file].path}`;
+
+// Lengdegrenser for fritekst, så datafilen ikke kan blåses opp.
+const MAX = { name: 60, note: 300, user: 40 };
+const clip = (text, n) => String(text || "").trim().slice(0, n);
 const REFRESH_MS = 120000;
 // Cloudflare Worker som videresender til Bambu (se worker/). Tom = AMS-fanen er av.
 const PROXY_URL = ["127.0.0.1", "localhost"].includes(location.hostname) ? "http://127.0.0.1:8787" : "https://bambufilament-proxy.saysphilippe.workers.dev";
@@ -110,27 +119,36 @@ function encodeBase64(text) {
   return btoa(bin);
 }
 
-async function loadDoc() {
+async function loadFile(file) {
   try {
-    const res = await fetch(`${API}?ref=${BRANCH}`, {
+    const res = await fetch(`${apiUrl(file)}?ref=${BRANCH}`, {
       headers: headers({ Accept: "application/vnd.github.raw+json" }),
       cache: "no-store",
     });
     if (res.ok) return await res.json();
-    if (res.status === 404) return { version: 1, users: [], spools: [] };
+    if (res.status === 404) return FILES[file].empty();
   } catch { /* faller tilbake til raw.githubusercontent.com (uten API-grense) */ }
-  const res = await fetch(`${RAW}?t=${Date.now()}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Kunne ikke hente ${PATH} (${res.status})`);
+  const res = await fetch(`${rawUrl(file)}?t=${Date.now()}`, { cache: "no-store" });
+  if (res.status === 404) return FILES[file].empty();
+  if (!res.ok) throw new Error(`Kunne ikke hente ${FILES[file].path} (${res.status})`);
   return res.json();
 }
 
-// Henter siste versjon, lar mutate endre den, og lagrer. Prøver på nytt ved konflikt.
-async function saveDoc(mutate, message) {
+// Begge filene slås sammen til ett dokument i nettsiden.
+async function loadDoc() {
+  const [main, shared] = await Promise.all([loadFile("spools"), loadFile("shared")]);
+  return { ...main, ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {} };
+}
+
+// Henter siste versjon av filen, lar mutate endre den, og lagrer. Prøver på nytt ved konflikt.
+// file: "spools" (brukere, spoler) eller "shared" (ams, library, wishes).
+async function saveDoc(mutate, message, file = "spools") {
   if (DEMO) throw new Error("Demo-modus: endringer lagres ikke.");
   if (!token()) throw new Error("Logg inn for å kunne endre.");
+  const API = apiUrl(file);
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(`${API}?ref=${BRANCH}`, { headers: headers({ Accept: "application/vnd.github+json" }), cache: "no-store" });
-    let doc = { version: 1, users: [], spools: [] }, sha;
+    let doc = FILES[file].empty(), sha;
     if (res.ok) {
       const meta = await res.json();
       sha = meta.sha;
@@ -138,8 +156,18 @@ async function saveDoc(mutate, message) {
     } else if (res.status !== 404) {
       throw new Error(`GitHub svarte ${res.status} ved henting`);
     }
-    doc.users ||= [];
-    doc.spools ||= [];
+    if (file === "spools") {
+      doc.users ||= [];
+      doc.spools ||= [];
+      // Delte data hører hjemme i shared.json (eldre versjoner av siden la dem her).
+      delete doc.ams;
+      delete doc.library;
+      delete doc.wishes;
+    } else {
+      doc.ams ||= {};
+      doc.library ||= {};
+      doc.wishes ||= {};
+    }
     const error = mutate(doc);
     if (error) throw new Error(error);
     const put = await fetch(API, {
@@ -148,8 +176,11 @@ async function saveDoc(mutate, message) {
       body: JSON.stringify({ message, branch: BRANCH, sha, content: encodeBase64(JSON.stringify(doc, null, 2) + "\n") }),
     });
     if (put.ok) {
-      setDoc(doc);
-      return doc;
+      const merged = file === "spools"
+        ? { ...doc, ams: state.doc.ams, library: state.doc.library, wishes: state.doc.wishes }
+        : { ...state.doc, ams: doc.ams, library: doc.library, wishes: doc.wishes };
+      setDoc(merged);
+      return state.doc;
     }
     if (put.status === 401) {
       setSession(null);
@@ -277,7 +308,7 @@ function setDoc(doc) {
 }
 
 function addEvent(spool, action) {
-  spool.history = [...(spool.history || []), { at: new Date().toISOString(), action, by: userName() }].slice(-30);
+  spool.history = [...(spool.history || []), { at: new Date().toISOString(), action, by: userName() }].slice(-10);
 }
 
 // Brukere fra listen, pluss eiere som finnes på spoler uten å være lagt inn.
@@ -484,10 +515,10 @@ async function saveDetail(e) {
   if (action === "delete" && !confirmed(e.submitter, "Slette? Trykk igjen")) return;
 
   const fields = {
-    name: form.elements.name.value.trim(),
-    owner: form.elements.owner.value,
+    name: clip(form.elements.name.value, MAX.name),
+    owner: clip(form.elements.owner.value, MAX.user),
     status: action === "in" || action === "out" ? action : form.elements.status.value,
-    note: form.elements.note.value.trim(),
+    note: clip(form.elements.note.value, MAX.note),
   };
   form.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
@@ -575,7 +606,7 @@ function openUsers() {
 async function addUser(e) {
   e.preventDefault();
   const form = e.target;
-  const name = form.elements.name.value.trim();
+  const name = clip(form.elements.name.value, MAX.user);
   const color = form.elements.color.value;
   if (!name) return;
   $("#u-error").textContent = "";
@@ -901,7 +932,7 @@ async function publishSnapshot() {
   await saveDoc((doc) => {
     if (amsChanged) (doc.ams ||= {})[me.name] = snapshot(state.amsLive);
     if (libChanged) (doc.library ||= {})[me.name] = state.libraryLive;
-  }, `AMS/bibliotek-oppdatering (${me.name})`);
+  }, `AMS/bibliotek-oppdatering (${me.name})`, "shared");
 }
 
 // Hver bruker velger for seg om AMS og/eller filamentbiblioteket deles med alle.
@@ -909,16 +940,19 @@ async function setShare(kind, share) {
   state.amsError = "";
   const label = kind === "library" ? "filamentbibliotek" : "AMS";
   try {
+    const flag = kind === "library" ? "shareLibrary" : "shareAms";
+    const live = kind === "library" ? state.libraryLive : state.amsLive && snapshot(state.amsLive);
     await saveDoc((doc) => {
       const u = doc.users.find((x) => x.name === userName());
       if (!u) return "Brukeren din finnes ikke.";
-      const flag = kind === "library" ? "shareLibrary" : "shareAms";
-      const bucket = kind === "library" ? (doc.library ||= {}) : (doc.ams ||= {});
-      const live = kind === "library" ? state.libraryLive : state.amsLive && snapshot(state.amsLive);
       u[flag] = share;
-      if (share && live) bucket[u.name] = live;
-      if (!share) delete bucket[u.name];
     }, `${share ? "Deler" : "Sluttet å dele"} ${label} (${userName()})`);
+    if (share && !live) return render();
+    await saveDoc((doc) => {
+      const bucket = kind === "library" ? doc.library : doc.ams;
+      if (share) bucket[userName()] = live;
+      else delete bucket[userName()];
+    }, `${share ? "Deler" : "Sluttet å dele"} ${label} (${userName()})`, "shared");
   } catch (err) {
     state.amsError = err.message;
   }
@@ -1108,7 +1142,7 @@ async function bambuSubmit(e) {
     if (bambuLogin.step === "password") {
       bambuLogin.email = $("#b-email").value.trim();
       res = await proxy("/login", { account: bambuLogin.email, password: $("#b-password").value });
-      if (res.step === "code") await proxy("/send-code", { email: bambuLogin.email });
+      if (res.step === "code") await proxy("/send-code", { email: bambuLogin.email, ticket: res.ticket });
     } else if (bambuLogin.step === "code") {
       res = await proxy("/login", { account: bambuLogin.email, code: $("#b-code").value.trim() });
     } else {
@@ -1211,7 +1245,7 @@ async function toggleWish(key, btn) {
       if (i >= 0) list.splice(i, 1);
       else list.push({ user: userName(), at: new Date().toISOString() });
       if (!list.length) delete doc.wishes[key];
-    }, `Venteliste: ${key} (${userName()})`);
+    }, `Venteliste: ${key} (${userName()})`, "shared");
     render();
     renderNews();
     if (state.tab === "shop") renderShop();
