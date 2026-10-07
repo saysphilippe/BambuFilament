@@ -415,3 +415,5 @@ a.btn { text-decoration: none; display: inline-block; }
 .lib-loc { font-size: 12px; color: var(--accent); font-weight: 600; }
 .lib-weight { font-weight: 600; }
 .share-toggles { display: flex; flex-direction: column; gap: 6px; }
+
+.btn.confirming { background: var(--danger); border-color: var(--danger); color: #fff; }

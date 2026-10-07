@@ -393,7 +393,7 @@ async function saveDetail(e) {
   const id = state.selected;
   const action = e.submitter?.value;
   if (action === "close") return $("#detail").close();
-  if (action === "delete" && !confirm("Slette spolen fra oversikten?")) return;
+  if (action === "delete" && !confirmed(e.submitter, "Slette? Trykk igjen")) return;
 
   const fields = {
     name: form.elements.name.value.trim(),
@@ -419,6 +419,30 @@ async function saveDetail(e) {
   }
 }
 
+// ---------- Bekreftelse ----------
+
+// Første trykk ber om bekreftelse i knappen, andre trykk (innen 5 sek) utfører handlingen.
+// Brukes i stedet for window.confirm, som nettleseren kan blokkere uten å si fra.
+function confirmed(btn, question = "Trykk igjen for å bekrefte") {
+  if (!btn) return true;
+  if (btn.dataset.confirming) {
+    clearTimeout(Number(btn.dataset.confirming));
+    delete btn.dataset.confirming;
+    btn.textContent = btn.dataset.label;
+    btn.classList.remove("confirming");
+    return true;
+  }
+  btn.dataset.label = btn.textContent;
+  btn.textContent = question;
+  btn.classList.add("confirming");
+  btn.dataset.confirming = String(setTimeout(() => {
+    delete btn.dataset.confirming;
+    btn.textContent = btn.dataset.label;
+    btn.classList.remove("confirming");
+  }, 5000));
+  return false;
+}
+
 // ---------- Brukere ----------
 
 // Midlertidige passord laget i denne økten. Vises til vinduet lukkes, og lagres aldri.
@@ -436,7 +460,7 @@ function renderUsers() {
       <span class="u-name">${esc(u.name)}${note ? ` <span class="muted">(${note})</span>` : ""}</span>
       <span class="muted">${count} ${count === 1 ? "spole" : "spoler"}</span>
       ${u.known ? `
-        <button type="button" class="btn btn-small" data-reset="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Lag nytt midlertidig passord">Nytt passord</button>
+        <button type="button" class="btn btn-small" data-reset="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Lag midlertidig passord">${u.cred ? "Nytt passord" : "Lag passord"}</button>
         <button type="button" class="btn btn-danger btn-small" data-remove="${esc(u.name)}" ${!canEdit || why !== "Fjern bruker" ? "disabled" : ""} title="${why}">Fjern</button>` : ""}
     </li>`;
   }).join("") || "<li class='muted'>Ingen brukere ennå</li>";
@@ -484,9 +508,11 @@ async function addUser(e) {
   }
 }
 
-async function resetPassword(name) {
-  if (!confirm(`Lage nytt midlertidig passord for ${name}? Det gamle slutter å virke.`)) return;
-  $("#u-error").textContent = "";
+async function resetPassword(name, btn) {
+  const hasPassword = !!state.doc.users.find((u) => u.name === name)?.cred;
+  if (hasPassword && !confirmed(btn, "Det gamle slutter å virke – trykk igjen")) return;
+  $("#u-error").textContent = `Lager passord for ${name}…`;
+  if (btn) btn.disabled = true;
   try {
     const temp = randomPassword();
     const cred = await encryptToken(token(), temp);
@@ -498,6 +524,7 @@ async function resetPassword(name) {
       u.mustChange = true;
     }, `Nytt passord for ${name} (${userName()})`);
     freshPasswords = freshPasswords.filter(([n]) => n !== name).concat([[name, temp]]);
+    $("#u-error").textContent = "";
     if (name === userName()) {
       $("#users").close();
       openChangePassword(true);
@@ -505,11 +532,12 @@ async function resetPassword(name) {
     renderUsers();
   } catch (err) {
     $("#u-error").textContent = err.message;
+    if (btn) btn.disabled = false;
   }
 }
 
-async function removeUser(name) {
-  if (!confirm(`Fjerne ${name} fra brukerlisten?`)) return;
+async function removeUser(name, btn) {
+  if (!confirmed(btn, "Fjerne? Trykk igjen")) return;
   $("#u-error").textContent = "";
   try {
     await saveDoc((doc) => {
@@ -1005,7 +1033,7 @@ async function amsAction(action, el) {
   if (action === "share-ams") await setShare("ams", el.checked);
   if (action === "share-library") await setShare("library", el.checked);
   if (action === "disconnect") {
-    if (!confirm("Koble fra Bambu-kontoen i denne nettleseren?")) return;
+    if (!confirmed(el, "Koble fra? Trykk igjen")) return;
     store(bambuKey(), "");
     state.amsLive = null;
     renderAms();
@@ -1239,9 +1267,9 @@ document.addEventListener("click", (e) => {
   const card = e.target.closest(".card, #activity-list li");
   if (card) return openDetail(card.dataset.id);
   const rm = e.target.closest("[data-remove]");
-  if (rm) return removeUser(rm.dataset.remove);
+  if (rm) return removeUser(rm.dataset.remove, rm);
   const reset = e.target.closest("[data-reset]");
-  if (reset) resetPassword(reset.dataset.reset);
+  if (reset) resetPassword(reset.dataset.reset, reset);
 });
 $("#d-form").addEventListener("submit", saveDetail);
 $("#u-form").addEventListener("submit", addUser);
