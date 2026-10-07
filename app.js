@@ -6,6 +6,8 @@ const BRANCH = "main";
 const PATH = "data/spools.json";
 const API = `https://api.github.com/repos/${REPO}/contents/${PATH}`;
 const REFRESH_MS = 120000;
+// Cloudflare Worker som videresender til Bambu (se worker/). Tom = AMS-fanen er av.
+const PROXY_URL = ["127.0.0.1", "localhost"].includes(location.hostname) ? "http://127.0.0.1:8787" : "";
 const DEMO = new URLSearchParams(location.search).has("demo");
 
 const STATUS = { in: "På lager", out: "Tatt ut", empty: "Brukt opp" };
@@ -25,6 +27,11 @@ const state = {
   doc: { version: 1, users: [], spools: [] },
   spools: [],
   colorNames: {},
+  colorIndex: {},
+  tab: "stock",
+  amsLive: null,
+  amsBusy: false,
+  amsError: "",
   filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type" },
   selected: null,
 };
@@ -170,7 +177,7 @@ function enrich(spool) {
 }
 
 function setDoc(doc) {
-  state.doc = { ...doc, users: doc.users || [], spools: doc.spools || [] };
+  state.doc = { ...doc, users: doc.users || [], spools: doc.spools || [], ams: doc.ams || {} };
   state.spools = state.doc.spools.map(enrich);
 }
 
@@ -248,6 +255,7 @@ function chip(group, value, label, active, dot) {
 }
 
 function render() {
+  renderAms();
   const all = users();
   const inStock = state.spools.filter((s) => s.status === "in");
   const kg = inStock.reduce((sum, s) => sum + (s.tag?.weight || 0), 0) / 1000;
@@ -514,8 +522,11 @@ function renderAccount() {
 function setSession(value) {
   session = value;
   store("bf.session", value ? JSON.stringify(value) : "");
+  state.amsLive = null;
+  state.amsError = "";
   renderAccount();
   render();
+  if (value && state.tab === "ams") refreshAms();
 }
 
 function openAccount() {
@@ -642,6 +653,258 @@ function setupDone() {
   openChangePassword(true);
 }
 
+// ---------- AMS ----------
+
+const AMS_REFRESH_MS = 5 * 60 * 1000;          // Bambu anbefaler ikke hyppigere "pushall"
+const SNAPSHOT_MAX_AGE_MS = 6 * 60 * 60 * 1000; // delt øyeblikksbilde fornyes minst så ofte
+
+const bambuKey = () => `bf.bambu.${userName()}`;
+function bambuToken() {
+  try { return JSON.parse(store(bambuKey()) || "null")?.token || ""; } catch { return ""; }
+}
+
+async function proxy(path, body, bambu) {
+  if (!PROXY_URL) throw new Error("AMS-proxyen er ikke satt opp ennå.");
+  const res = await fetch(PROXY_URL + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(bambu ? { Authorization: `Bearer ${bambu}` } : {}) },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || `Proxyen svarte ${res.status}`), { status: res.status });
+  return data;
+}
+
+// Det som deles med andre: uten serienummer.
+function snapshot(live) {
+  return {
+    updated: live.updated,
+    printers: live.printers.map(({ id, ...p }) => p),
+  };
+}
+
+const sameSnapshot = (a, b) => !!a && !!b && JSON.stringify(a.printers) === JSON.stringify(b.printers);
+
+async function refreshAms() {
+  const tok = bambuToken();
+  if (!tok || !userName()) return renderAms();
+  state.amsBusy = true;
+  state.amsError = "";
+  renderAms();
+  try {
+    state.amsLive = await proxy("/ams", {}, tok);
+    await publishSnapshot();
+  } catch (err) {
+    state.amsError = err.message;
+    if (err.status === 401) store(bambuKey(), "");
+  }
+  state.amsBusy = false;
+  renderAms();
+}
+
+// Lagrer øyeblikksbildet i repoet hvis brukeren deler og innholdet er endret.
+async function publishSnapshot() {
+  const me = state.doc.users.find((u) => u.name === userName());
+  if (!me?.shareAms || !state.amsLive) return;
+  const snap = snapshot(state.amsLive);
+  const old = state.doc.ams?.[me.name];
+  const fresh = old && Date.now() - new Date(old.updated).getTime() < SNAPSHOT_MAX_AGE_MS;
+  if (sameSnapshot(old, snap) && fresh) return;
+  await saveDoc((doc) => {
+    doc.ams ||= {};
+    doc.ams[me.name] = snap;
+  }, `AMS-oppdatering (${me.name})`);
+}
+
+async function setShare(share) {
+  state.amsError = "";
+  try {
+    await saveDoc((doc) => {
+      const u = doc.users.find((x) => x.name === userName());
+      if (!u) return "Brukeren din finnes ikke.";
+      u.shareAms = share;
+      doc.ams ||= {};
+      if (share && state.amsLive) doc.ams[u.name] = snapshot(state.amsLive);
+      if (!share) delete doc.ams[u.name];
+    }, `${share ? "Deler" : "Sluttet å dele"} AMS-data (${userName()})`);
+  } catch (err) {
+    state.amsError = err.message;
+  }
+  render();
+}
+
+function trayName(t) {
+  const hex = (t.color || "").toUpperCase();
+  const hit = state.colorIndex[`${t.infoIdx}|#${hex}`];
+  return { color: hit?.[0] || "", type: hit?.[1] || t.subBrand || t.type || "Ukjent" };
+}
+
+function traySwatch(t) {
+  const cols = (t.cols?.length ? t.cols : [t.color]).filter(Boolean).map((c) => "#" + c);
+  if (!cols.length) return "var(--muted-bg)";
+  return swatch({ colors: cols });
+}
+
+function renderTray(t, label) {
+  if (t.empty) return `<div class="tray empty-tray"><span class="slot">${label}</span><div class="tray-dot"></div><div class="tray-text muted">Tom</div></div>`;
+  const n = trayName(t);
+  const remain = t.remain !== null && t.remain >= 0 ? t.remain : null;
+  return `<div class="tray">
+    <span class="slot">${label}</span>
+    <div class="tray-dot" style="background:${traySwatch(t)}"></div>
+    <div class="tray-text">
+      <div class="tray-color">${esc(n.color || "#" + (t.color || "").slice(0, 6))}</div>
+      <div class="tray-type">${esc(n.type)}</div>
+      ${remain !== null ? `<div class="remain"><span style="width:${remain}%"></span></div><div class="muted">${remain} %</div>` : ""}
+    </div>
+  </div>`;
+}
+
+function renderPrinter(p) {
+  const units = p.ams.map((u) => `
+    <div class="ams-unit">
+      <div class="ams-unit-head">
+        <b>AMS ${String.fromCharCode(65 + u.unit)}</b>
+        ${u.humidity !== null ? `<span class="muted">Fukt ${u.humidity}${u.humidity > 5 ? " %" : "/5"}</span>` : ""}
+        ${u.temp !== null ? `<span class="muted">${u.temp} °C</span>` : ""}
+      </div>
+      <div class="trays">${u.trays.map((t) => renderTray(t, `${String.fromCharCode(65 + u.unit)}${t.slot + 1}`)).join("")}</div>
+    </div>`).join("");
+  const ext = p.external.filter((t) => !t.empty).map((t) => renderTray(t, "Ekstern")).join("");
+  const body = !p.online ? `<p class="muted">Printeren er frakoblet.</p>`
+    : !p.reported ? `<p class="muted">Printeren svarte ikke denne gangen.</p>`
+    : (units || ext) ? units + (ext ? `<div class="ams-unit"><div class="ams-unit-head"><b>Ekstern spole</b></div><div class="trays">${ext}</div></div>` : "")
+    : `<p class="muted">Ingen AMS.</p>`;
+  return `<div class="printer">
+    <div class="printer-head">
+      <span class="online-dot ${p.online ? "on" : ""}"></span>
+      <b>${esc(p.name)}</b><span class="muted">${esc(p.model)}</span>
+    </div>
+    ${body}
+  </div>`;
+}
+
+function renderAms() {
+  const me = userName();
+  const meUser = state.doc.users.find((u) => u.name === me);
+  const connected = !!bambuToken();
+  const panel = $("#ams-me");
+
+  if (DEMO) {
+    panel.innerHTML = `<p class="muted">AMS-data vises ikke i demo-modus.</p>`;
+  } else if (!PROXY_URL) {
+    panel.innerHTML = `<p class="muted">AMS-proxyen er ikke satt opp ennå.</p>`;
+  } else if (!me) {
+    panel.innerHTML = `<p>Logg inn for å koble til Bambu-kontoen din og se AMS-ene dine.</p>`;
+  } else if (!connected) {
+    panel.innerHTML = `
+      <div class="ams-me-row">
+        <div><b>Koble til Bambu-kontoen din</b><p class="hint">Innloggingen gjelder bare denne nettleseren. Bambu-passordet lagres ikke.</p></div>
+        <button class="btn btn-primary" data-ams="connect">Koble til</button>
+      </div>`;
+  } else {
+    panel.innerHTML = `
+      <div class="ams-me-row">
+        <div>
+          <b>Bambu-konto tilkoblet</b>
+          <div class="muted">${state.amsBusy ? "Henter AMS-data…" : state.amsLive ? `Oppdatert ${fmtTime(state.amsLive.updated)}` : ""}</div>
+        </div>
+        <label class="switch"><input type="checkbox" data-ams="share" ${meUser?.shareAms ? "checked" : ""}> Del AMS-data med alle</label>
+        <button class="btn" data-ams="refresh" ${state.amsBusy ? "disabled" : ""}>Oppdater</button>
+        <button class="btn btn-danger" data-ams="disconnect">Koble fra</button>
+      </div>`;
+  }
+  if (state.amsError) panel.innerHTML += `<p class="error">${esc(state.amsError)}</p>`;
+
+  const sections = users().map((u) => {
+    const live = u.name === me && state.amsLive;
+    const data = live || state.doc.ams?.[u.name];
+    if (!data) return "";
+    const tag = live ? (u.shareAms ? "Ditt · deles med alle" : "Ditt · bare synlig for deg") : `Delt ${fmtTime(data.updated)}`;
+    return `<section class="ams-owner" style="--owner:${u.color}">
+      <h2><span class="owner-dot"></span>${esc(u.name)} <span class="muted">${tag}</span></h2>
+      <div class="printers">${data.printers.map(renderPrinter).join("") || `<p class="muted">Ingen printere.</p>`}</div>
+    </section>`;
+  }).join("");
+  $("#ams-list").innerHTML = sections || `<p class="empty-msg">Ingen AMS-data er delt ennå.</p>`;
+}
+
+// Tilkobling til Bambu: e-post + passord, deretter eventuelt kode fra e-post eller autentiseringsapp.
+const bambuLogin = { step: "password", email: "", tfaKey: "" };
+
+function openBambu() {
+  Object.assign(bambuLogin, { step: "password", email: "", tfaKey: "" });
+  $("#b-email").value = "";
+  $("#b-password").value = "";
+  $("#b-code").value = "";
+  showBambuStep();
+  $("#bambu").showModal();
+}
+
+function showBambuStep() {
+  const s = bambuLogin.step;
+  $("#b-step-password").hidden = s !== "password";
+  $("#b-step-code").hidden = s === "password";
+  $("#b-code-hint").textContent = s === "tfa"
+    ? "Skriv inn koden fra autentiseringsappen din."
+    : `Bambu har sendt en kode til ${bambuLogin.email}. Skriv den inn her.`;
+  $("#b-error").textContent = "";
+}
+
+async function bambuSubmit(e) {
+  e.preventDefault();
+  if (e.submitter?.value === "cancel") return $("#bambu").close();
+  const err = $("#b-error");
+  err.textContent = "Kobler til…";
+  try {
+    let res;
+    if (bambuLogin.step === "password") {
+      bambuLogin.email = $("#b-email").value.trim();
+      res = await proxy("/login", { account: bambuLogin.email, password: $("#b-password").value });
+      if (res.step === "code") await proxy("/send-code", { email: bambuLogin.email });
+    } else if (bambuLogin.step === "code") {
+      res = await proxy("/login", { account: bambuLogin.email, code: $("#b-code").value.trim() });
+    } else {
+      res = await proxy("/tfa", { tfaKey: bambuLogin.tfaKey, tfaCode: $("#b-code").value.trim() });
+    }
+    if (res.token) {
+      store(bambuKey(), JSON.stringify({ token: res.token, email: bambuLogin.email, at: new Date().toISOString() }));
+      $("#b-password").value = "";
+      $("#bambu").close();
+      refreshAms();
+      return;
+    }
+    bambuLogin.step = res.step;
+    bambuLogin.tfaKey = res.tfaKey || "";
+    showBambuStep();
+  } catch (ex) {
+    err.textContent = ex.message;
+  }
+}
+
+async function amsAction(action, el) {
+  if (action === "connect") openBambu();
+  if (action === "refresh") refreshAms();
+  if (action === "share") await setShare(el.checked);
+  if (action === "disconnect") {
+    if (!confirm("Koble fra Bambu-kontoen i denne nettleseren?")) return;
+    store(bambuKey(), "");
+    state.amsLive = null;
+    renderAms();
+  }
+}
+
+// ---------- Faner ----------
+
+function showTab(tab) {
+  state.tab = tab === "ams" ? "ams" : "stock";
+  store("bf.tab", state.tab);
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === state.tab));
+  $("#tab-stock").hidden = state.tab !== "stock";
+  $("#tab-ams").hidden = state.tab !== "ams";
+  if (state.tab === "ams" && !state.amsLive && !state.amsBusy) refreshAms();
+}
+
 // ---------- Demo ----------
 
 // Eksempelspoler bygget fra Bambus offisielle fargeliste, for å vise hvordan siden ser ut.
@@ -666,7 +929,24 @@ function demoDoc() {
       blocks: buildBlocks({ materialId, variantId: `${materialId.slice(2)}-${code}`, detailedType: entry[1], colors: entry[2] }),
     };
   }).filter(Boolean);
-  return { version: 1, users: ["Philippe", "Niklas", "Peter"].map((name, i) => ({ name, color: USER_COLORS[i] })), spools };
+  const tray = (key, slot, remain) => {
+    const entry = state.colorNames[key];
+    if (!entry) return { slot, empty: true };
+    return { slot, type: entry[1].split(" ")[0], subBrand: entry[1], color: entry[2][0].slice(1), cols: entry[2].map((c) => c.slice(1)), infoIdx: key.split("-")[0], remain };
+  };
+  const unit = (unitNo, keys, humidity) => ({
+    unit: unitNo, humidity, temp: 24.5,
+    trays: keys.map((k, i) => (k ? tray(k, i, [82, 45, 100, 12][i]) : { slot: i, empty: true })),
+  });
+  const printer = (name, model, units) => ({ name, model, online: true, reported: true, ams: units, external: [] });
+  const ams = {
+    Philippe: { updated: new Date(now - 6e5).toISOString(), printers: [printer("Verkstedet", "X1C", [
+      unit(0, ["GFA00-A0", "GFA00-B3", "GFA01-B0", null], 18),
+      unit(1, ["GFG02-G0", "GFA05-P5", "GFA00-M2", "GFA08-Y1"], 22),
+    ])] },
+    Niklas: { updated: new Date(now - 3.6e6).toISOString(), printers: [printer("Garasjen", "P1S", [unit(0, ["GFA16-N0", "GFB01-W0", null, "GFA50-G7"], 31)])] },
+  };
+  return { version: 1, users: ["Philippe", "Niklas", "Peter"].map((name, i) => ({ name, color: USER_COLORS[i], shareAms: i < 2 })), spools, ams };
 }
 
 // ---------- Oppstart ----------
@@ -684,6 +964,10 @@ for (const key of ["q", "type", "status", "sort"]) {
 }
 
 document.addEventListener("click", (e) => {
+  const tab = e.target.closest(".tab");
+  if (tab) return showTab(tab.dataset.tab);
+  const ams = e.target.closest("button[data-ams]");
+  if (ams) return amsAction(ams.dataset.ams, ams);
   const c = e.target.closest(".chip");
   if (c) {
     state.filters[c.dataset.group] = state.filters[c.dataset.group] === c.dataset.value ? "" : c.dataset.value;
@@ -707,7 +991,10 @@ $("#setup-form").addEventListener("submit", setup);
 $("#su-done").addEventListener("click", setupDone);
 $("#users").addEventListener("close", () => (freshPasswords = []));
 $("#open-users").addEventListener("click", openUsers);
-$("#refresh").addEventListener("click", refresh);
+$("#refresh").addEventListener("click", () => (state.tab === "ams" ? Promise.all([refresh(), refreshAms()]) : refresh()));
+$("#ams-me").addEventListener("change", (e) => e.target.dataset.ams === "share" && amsAction("share", e.target));
+$("#bambu form").addEventListener("submit", bambuSubmit);
+setInterval(() => document.visibilityState === "visible" && state.tab === "ams" && bambuToken() && refreshAms(), AMS_REFRESH_MS);
 if (DEMO) document.body.classList.add("demo");
 renderAccount();
 if (!DEMO) setInterval(() => document.visibilityState === "visible" && refresh(), REFRESH_MS);
@@ -717,5 +1004,9 @@ fetch("data/colors.json")
   .catch(() => ({}))
   .then((names) => {
     state.colorNames = names;
-    refresh();
+    for (const [key, [name, type, colors]] of Object.entries(names)) {
+      const idx = key.split("-")[0];
+      if (colors[0]) state.colorIndex[`${idx}|${colors[0].toUpperCase()}`] ||= [name, type];
+    }
+    refresh().then(() => showTab(location.hash === "#ams" ? "ams" : store("bf.tab")));
   });

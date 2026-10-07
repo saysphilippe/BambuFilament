@@ -31,7 +31,13 @@
 
   <div class="demo-banner">Demo med eksempeldata – endringer lagres ikke. <a href="./">Gå til ekte oversikt</a></div>
 
+  <nav class="tabs" aria-label="Visning">
+    <button class="tab active" data-tab="stock">Lager</button>
+    <button class="tab" data-tab="ams">AMS</button>
+  </nav>
+
   <main>
+   <div id="tab-stock">
     <section id="stats" class="stats"></section>
 
     <section id="activity" class="panel activity" hidden>
@@ -62,6 +68,12 @@
 
     <div id="count" class="count"></div>
     <section id="grid" class="grid"></section>
+   </div>
+
+   <div id="tab-ams" hidden>
+    <section id="ams-me" class="panel"></section>
+    <div id="ams-list"></div>
+   </div>
   </main>
 
   <dialog id="detail">
@@ -122,6 +134,27 @@
     <p id="u-hint" class="hint"></p>
     <p id="u-error" class="error"></p>
     <form method="dialog" class="d-buttons"><span class="spacer"></span><button class="btn">Lukk</button></form>
+  </dialog>
+
+  <dialog id="bambu">
+    <form method="dialog">
+      <h2>Koble til Bambu-konto</h2>
+      <div id="b-step-password">
+        <p class="hint">Logg inn med Bambu Lab-kontoen din (samme som i Bambu Handy). Innloggingen går via BambuFilament-proxyen til Bambu. Bare tilgangsnøkkelen lagres, og bare i denne nettleseren. Passordet lagres ikke.</p>
+        <label>E-post<input id="b-email" type="email" autocomplete="username"></label>
+        <label>Passord<input id="b-password" type="password" autocomplete="current-password"></label>
+      </div>
+      <div id="b-step-code" hidden>
+        <p id="b-code-hint" class="hint"></p>
+        <label>Kode<input id="b-code" inputmode="numeric" autocomplete="one-time-code"></label>
+      </div>
+      <p id="b-error" class="error"></p>
+      <div class="d-buttons">
+        <span class="spacer"></span>
+        <button value="cancel" class="btn">Avbryt</button>
+        <button value="next" class="btn btn-primary">Fortsett</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="login">

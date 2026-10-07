@@ -42,6 +42,30 @@ PBKDF2-SHA256, 310 000 runder). Riktig passord låser opp tokenen i nettleseren.
 Tokenen lages på https://github.com/settings/personal-access-tokens/new:
 *Only select repositories* → `BambuFilament`, *Repository permissions* → *Contents: Read and write*.
 
+## AMS-fanen
+
+Viser innholdet i AMS-ene til hver bruker: farge, type, gjenværende mengde og fuktighet.
+
+- Hver bruker kobler til **sin egen Bambu-konto** i fanen. Innloggingen skjer med e-post og passord,
+  pluss eventuelt kode på e-post eller fra autentiseringsapp. Bare Bambu-tilgangsnøkkelen lagres,
+  og bare i brukerens egen nettleser. Bambu-passordet lagres aldri.
+- Hver bruker velger selv **Del AMS-data med alle**. Da lagres et øyeblikksbilde (uten serienummer)
+  i `data/spools.json` når brukeren har siden åpen og innholdet endrer seg. De andre ser siste
+  delte bilde med tidspunkt.
+- Bambu sitt API kan ikke kalles direkte fra en nettleser (ingen CORS, og MQTT krever TCP).
+  Derfor går kallene via en liten **Cloudflare Worker** i `worker/`. Den videresender innlogging,
+  printerliste og en `pushall`-forespørsel over Bambu sin sky-MQTT, og lagrer ingenting.
+
+Publisere Workeren:
+
+```
+cd worker
+npx wrangler login
+npx wrangler deploy
+```
+
+Sett så `PROXY_URL` i `app.js` til adressen `wrangler deploy` skriver ut.
+
 ## Leseren
 
 | Del | Kobles til ESP32 |
@@ -79,6 +103,7 @@ Bruk:
 | `index.html`, `style.css`, `app.js` | Nettsiden |
 | `bambu.js` | Tolking av brikkedata |
 | `auth.js` | Kryptering av token og passord |
+| `worker/` | Cloudflare Worker som videresender til Bambu sitt sky-API (AMS) |
 | `data/spools.json` | Brukere og spoler (skrives av leseren og siden) |
 | `data/colors.json` | Offisielle Bambu-fargenavn |
 | `firmware/BambuFilament/` | ESP32-firmware |

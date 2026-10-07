@@ -1,2 +1,4 @@
 firmware/BambuFilament/config.h
 firmware/BambuFilament/build/
+node_modules/
+.wrangler/
