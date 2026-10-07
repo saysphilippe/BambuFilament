@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BambuFilament</title>
+  <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="./">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="var(--accent)"/><circle cx="16" cy="16" r="5" fill="var(--bg)"/></svg>
+      <h1>BambuFilament</h1>
+    </a>
+    <div class="actions">
+      <span id="sync" class="sync"></span>
+      <button id="refresh" class="icon-btn" title="Oppdater" aria-label="Oppdater">
+        <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>
+      </button>
+      <button id="open-users" class="icon-btn" title="Brukere" aria-label="Brukere">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>
+      </button>
+      <button id="account" class="account-btn" title="Konto">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+        <span id="account-label">Logg inn</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="demo-banner">Demo med eksempeldata – endringer lagres ikke. <a href="./">Gå til ekte oversikt</a></div>
+
+  <main>
+    <section id="stats" class="stats"></section>
+
+    <section id="activity" class="panel activity" hidden>
+      <h2>Siste bevegelser</h2>
+      <ul id="activity-list"></ul>
+    </section>
+
+    <section class="panel filters">
+      <div class="filter-row">
+        <input id="q" type="search" placeholder="Søk etter farge, type, eier, notat…" aria-label="Søk">
+        <select id="status" aria-label="Status">
+          <option value="in">På lager</option>
+          <option value="out">Tatt ut</option>
+          <option value="empty">Brukt opp</option>
+          <option value="">Alle</option>
+        </select>
+        <select id="type" aria-label="Type"></select>
+        <select id="sort" aria-label="Sortering">
+          <option value="type">Sorter: type</option>
+          <option value="color">Sorter: farge</option>
+          <option value="owner">Sorter: eier</option>
+          <option value="recent">Sorter: sist skannet</option>
+        </select>
+      </div>
+      <div class="chip-row"><span class="chip-label">Eier</span><div id="owner-chips" class="chips"></div></div>
+      <div class="chip-row"><span class="chip-label">Farge</span><div id="family-chips" class="chips"></div></div>
+    </section>
+
+    <div id="count" class="count"></div>
+    <section id="grid" class="grid"></section>
+  </main>
+
+  <dialog id="detail">
+    <form id="d-form" method="dialog">
+      <div class="d-head">
+        <div id="d-swatch" class="d-swatch"></div>
+        <div class="d-head-text">
+          <h2 id="d-title"></h2>
+          <div id="d-sub" class="d-type"></div>
+          <span id="d-owner" class="owner-pill"></span>
+        </div>
+      </div>
+
+      <div class="d-quick">
+        <button id="d-checkin" value="in" class="btn btn-in">Sjekk inn</button>
+        <button id="d-checkout" value="out" class="btn btn-out">Sjekk ut</button>
+      </div>
+
+      <dl id="d-rows" class="d-rows"></dl>
+
+      <h3>Historikk</h3>
+      <ul id="d-history" class="d-history"></ul>
+
+      <h3>Rediger</h3>
+      <p id="d-hint" class="hint"></p>
+      <div class="d-fields">
+        <label>Eier<select name="owner"></select></label>
+        <label>Status
+          <select name="status">
+            <option value="in">På lager</option>
+            <option value="out">Tatt ut</option>
+            <option value="empty">Brukt opp</option>
+          </select>
+        </label>
+        <label class="wide">Eget navn (valgfritt, erstatter fargenavnet)<input name="name"></label>
+        <label class="wide">Notat<textarea name="note" rows="2"></textarea></label>
+      </div>
+      <p id="d-error" class="error"></p>
+      <div class="d-buttons">
+        <button value="delete" class="btn btn-danger">Slett</button>
+        <span class="spacer"></span>
+        <button id="d-close" value="close" class="btn">Lukk</button>
+        <button value="save" class="btn btn-primary">Lagre</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="users">
+    <h2>Brukere</h2>
+    <p class="hint">Hver bruker har sin egen farge, som vises på spolene de eier. Nye brukere får et midlertidig passord som må byttes ved første innlogging. Navnet må være likt <code>OWNER</code> i leserens <code>config.h</code>.</p>
+    <ul id="u-list" class="u-list"></ul>
+    <div id="u-fresh" class="u-fresh"></div>
+    <form id="u-form" class="u-form">
+      <input name="name" placeholder="Navn på ny bruker" required aria-label="Navn">
+      <input name="color" type="color" aria-label="Farge">
+      <button class="btn btn-primary">Legg til</button>
+    </form>
+    <p id="u-hint" class="hint"></p>
+    <p id="u-error" class="error"></p>
+    <form method="dialog" class="d-buttons"><span class="spacer"></span><button class="btn">Lukk</button></form>
+  </dialog>
+
+  <dialog id="login">
+    <form method="dialog">
+      <h2>Logg inn</h2>
+      <label>Bruker<select id="l-user"></select></label>
+      <label>Passord<input id="l-password" type="password" autocomplete="current-password"></label>
+      <p id="l-error" class="error"></p>
+      <div class="d-buttons">
+        <span class="spacer"></span>
+        <button value="cancel" class="btn" formnovalidate>Avbryt</button>
+        <button value="login" class="btn btn-primary">Logg inn</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="account-dialog">
+    <form method="dialog">
+      <h2>Innlogget som <span id="a-name"></span></h2>
+      <p class="hint">Du er innlogget i denne nettleseren til du logger ut.</p>
+      <div class="d-buttons">
+        <button value="logout" class="btn btn-danger">Logg ut</button>
+        <span class="spacer"></span>
+        <button value="password" class="btn">Bytt passord</button>
+        <button value="close" class="btn btn-primary">Lukk</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="password">
+    <form method="dialog">
+      <h2>Bytt passord</h2>
+      <p id="p-forced" class="notice">Du er logget inn med et midlertidig passord. Velg ditt eget passord før du fortsetter.</p>
+      <label>Nytt passord (minst 10 tegn)<input id="p-new" type="password" autocomplete="new-password"></label>
+      <label>Gjenta nytt passord<input id="p-repeat" type="password" autocomplete="new-password"></label>
+      <p id="p-error" class="error"></p>
+      <div class="d-buttons">
+        <span class="spacer"></span>
+        <button id="p-cancel" value="cancel" class="btn">Avbryt</button>
+        <button value="save" class="btn btn-primary">Lagre passord</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="setup">
+    <form id="setup-form" method="dialog">
+      <h2>Første oppsett</h2>
+      <p class="hint">Ingen brukere har innlogging ennå. Lim inn en GitHub-token med skrivetilgang til repoet. Den lagres kryptert per bruker, og hver bruker låser den opp med sitt eget passord.</p>
+      <label>GitHub-token<input id="su-token" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+      <p class="hint">Lag en <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a> med tilgang kun til <b>saysphilippe/BambuFilament</b> og rettigheten <i>Contents: Read and write</i>.</p>
+      <label>Brukere (én per linje, du først)<textarea id="su-names" rows="3">Philippe
+Niklas
+Peter</textarea></label>
+      <p id="su-error" class="error"></p>
+      <div class="d-buttons">
+        <span class="spacer"></span>
+        <button value="cancel" class="btn">Avbryt</button>
+        <button value="setup" class="btn btn-primary">Opprett brukere</button>
+      </div>
+    </form>
+    <div id="setup-done" hidden>
+      <h2>Brukerne er opprettet</h2>
+      <p>Gi disse midlertidige passordene til brukerne. De vises <b>bare nå</b>. Hver bruker må bytte passord ved første innlogging.</p>
+      <table id="su-list" class="pw-table"></table>
+      <p>Du er logget inn som <b id="su-me"></b> og velger ditt eget passord i neste steg.</p>
+      <div class="d-buttons"><span class="spacer"></span><button id="su-done" class="btn btn-primary">Velg mitt passord</button></div>
+    </div>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
