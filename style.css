@@ -473,3 +473,10 @@ details.all-type > .news-colors { margin-top: 10px; }
 .card.kind-library, .card.kind-ams { cursor: default; }
 .card.kind-library:hover, .card.kind-ams:hover { transform: none; }
 .card-loc { font-size: 12px; font-weight: 600; color: var(--accent); }
+
+body.locked .tabs, body.locked main, body.locked #open-users, body.locked #refresh, body.locked #sync { display: none !important; }
+.gate { display: grid; place-items: center; min-height: 70vh; padding: 16px; }
+.gate-card { max-width: 420px; padding: 28px 24px; text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); }
+.gate-card svg { width: 48px; height: 48px; }
+.gate-card h2 { margin: 12px 0 8px; }
+.gate-card .btn { margin: 8px 0 4px; padding: 10px 28px; }

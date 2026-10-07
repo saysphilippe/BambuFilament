@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=202610072226">
+  <link rel="stylesheet" href="style.css?v=202610072230">
 </head>
 <body>
   <header>
@@ -34,6 +34,16 @@
   </header>
 
   <div class="demo-banner">Demo med eksempeldata – endringer lagres ikke. <a href="./">Gå til ekte oversikt</a></div>
+
+  <section id="gate" class="gate" hidden>
+    <div class="gate-card">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="var(--accent)"/><circle cx="16" cy="16" r="5" fill="var(--bg)"/></svg>
+      <h2>Logg inn for å se lagrene</h2>
+      <p class="hint">BambuFilament er en felles filamentoversikt for en lukket gruppe. Spoler, AMS, bibliotek og venteliste vises bare for innloggede brukere.</p>
+      <button id="gate-login" class="btn btn-primary">Logg inn</button>
+      <p class="hint"><a href="?demo">Se demo med eksempeldata</a></p>
+    </div>
+  </section>
 
   <nav class="tabs" aria-label="Visning">
     <button class="tab active" data-tab="stock">Våre lokale lager</button>
@@ -262,6 +272,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=202610072226"></script>
+  <script type="module" src="app.js?v=202610072230"></script>
 </body>
 </html>

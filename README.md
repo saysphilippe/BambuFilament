@@ -23,9 +23,11 @@ Bambu-spole ──RFID──> ESP32 + RC522 ──HTTPS──> spools.json i Bam
 
 ## Sikkerhet
 
-- **Data og kode er adskilt.** Data ligger i
-  [saysphilippe/BambuFilament-data](https://github.com/saysphilippe/BambuFilament-data): `spools.json`
-  (brukere og spoler, også for leserne) og `shared.json` (delte AMS-data, bibliotek og venteliste). Den delte
+- **Ingen data før innlogging.** Nettsiden viser bare en innloggingsside til man er logget inn.
+- **Tre repoer:** koden her (offentlig), [BambuFilament-auth](https://github.com/saysphilippe/BambuFilament-auth)
+  (offentlig, bare `users.json` med navn, farger og krypterte innloggingsnøkler) og BambuFilament-data
+  (**privat**: `spools.json` med spoler, også for leserne, og `shared.json` med AMS, bibliotek og venteliste).
+  Den delte tokenen har tilgang til data og auth, aldri til koden. Lesernes tokener trenger bare data. Den delte
   skrivetokenen og tokenene i leserne gjelder **bare** det repoet, så de kan ikke endre nettsidekoden.
 - **Delte data kontrolleres** før de vises: farger må være gyldig hex, tall må være tall, og all tekst escapes.
 - **Innloggingen** gjelder bare fanen, med mindre man velger «Husk meg» (30 dager).
@@ -59,7 +61,7 @@ PBKDF2-SHA256, 600 000 runder). Riktig passord låser opp tokenen i nettleseren.
   eller tøm `users[].cred` og kjør første oppsett på nytt).
 
 Tokenen lages på https://github.com/settings/personal-access-tokens/new:
-*Only select repositories* → **`BambuFilament-data`** (ikke `BambuFilament`), *Repository permissions* → *Contents: Read and write*.
+*Only select repositories* → **`BambuFilament-data`** og **`BambuFilament-auth`** (ikke `BambuFilament`), *Repository permissions* → *Contents: Read and write*.
 
 ## AMS-fanen
 
@@ -178,7 +180,8 @@ Kjør `node scripts/bump-version.mjs` før commit. Det setter et nytt versjonsnu
 | `auth.js` | Kryptering av token og passord |
 | `worker/` | Cloudflare Worker som videresender til Bambu sitt sky-API (AMS, bibliotek) og butikken |
 | `firmware/BambuFilament/github_roots.h` | Rotsertifikater for api.github.com |
-| `spools.json` i BambuFilament-data | Brukere og spoler (skrives av leserne og siden) |
+| `users.json` i BambuFilament-auth | Brukere, farger, rolle og krypterte innloggingsnøkler (offentlig) |
+| `spools.json` i BambuFilament-data | Spoler (privat, skrives av leserne og siden) |
 | `shared.json` i BambuFilament-data | Delte AMS-data, bibliotek og venteliste (bare siden) |
 | `data/colors.json` | Offisielle Bambu-fargenavn |
 | `data/catalog.json` | Bambu-katalogen med datoer og produktsider |

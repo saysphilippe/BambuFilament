@@ -1,18 +1,23 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072226";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072226";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072230";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072230";
 
-// Dataene ligger i et eget repo. Den delte skrivetokenen gjelder bare det repoet,
-// så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
-const REPO = "saysphilippe/BambuFilament-data";
+// Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
+// data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
+//
+// - BambuFilament-auth (offentlig): users.json med navn, farger og krypterte
+//   innloggingsnøkler. Må kunne leses før innlogging.
+// - BambuFilament-data (privat): spools.json (spoler, også for RFID-leserne) og
+//   shared.json (delte AMS-data, bibliotek, venteliste). Leses bare med tokenen.
+const DATA_REPO = "saysphilippe/BambuFilament-data";
+const AUTH_REPO = "saysphilippe/BambuFilament-auth";
 const BRANCH = "main";
-// spools.json: brukere og spoler (det RFID-leserne trenger, holdes lite).
-// shared.json: delte AMS-data, bibliotek og venteliste (kan bli stort, leserne henter den ikke).
 const FILES = {
-  spools: { path: "spools.json", empty: () => ({ version: 1, users: [], spools: [] }) },
-  shared: { path: "shared.json", empty: () => ({ version: 1, ams: {}, library: {}, wishes: {} }) },
+  users: { repo: AUTH_REPO, path: "users.json", public: true, empty: () => ({ version: 1, users: [] }) },
+  spools: { repo: DATA_REPO, path: "spools.json", empty: () => ({ version: 1, spools: [] }) },
+  shared: { repo: DATA_REPO, path: "shared.json", empty: () => ({ version: 1, ams: {}, library: {}, wishes: {} }) },
 };
-const apiUrl = (file) => `https://api.github.com/repos/${REPO}/contents/${FILES[file].path}`;
-const rawUrl = (file) => `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${FILES[file].path}`;
+const apiUrl = (file) => `https://api.github.com/repos/${FILES[file].repo}/contents/${FILES[file].path}`;
+const rawUrl = (file) => `https://raw.githubusercontent.com/${FILES[file].repo}/${BRANCH}/${FILES[file].path}`;
 
 // Lengdegrenser for fritekst, så datafilen ikke kan blåses opp.
 const MAX = { name: 60, note: 300, user: 40 };
@@ -126,22 +131,33 @@ async function loadFile(file) {
       cache: "no-store",
     });
     if (res.ok) return await res.json();
-    if (res.status === 404) return FILES[file].empty();
-  } catch { /* faller tilbake til raw.githubusercontent.com (uten API-grense) */ }
+    if (res.status === 404 && FILES[file].public) return FILES[file].empty();
+    if (res.status === 401) {
+      setSession(null);
+      throw new Error("Innloggingen er ikke lenger gyldig. Logg inn på nytt.");
+    }
+    if (!FILES[file].public) throw new Error(`Fikk ikke lest ${FILES[file].path} (${res.status}). Har tokenen tilgang til BambuFilament-data?`);
+  } catch (err) {
+    if (!FILES[file].public) throw err;
+    /* offentlig fil: faller tilbake til raw.githubusercontent.com (uten API-grense) */
+  }
   const res = await fetch(`${rawUrl(file)}?t=${Date.now()}`, { cache: "no-store" });
   if (res.status === 404) return FILES[file].empty();
   if (!res.ok) throw new Error(`Kunne ikke hente ${FILES[file].path} (${res.status})`);
   return res.json();
 }
 
-// Begge filene slås sammen til ett dokument i nettsiden.
+// Brukerlisten hentes alltid (trengs for å logge inn). Spoler og delte data hentes
+// bare når man er logget inn, siden data-repoet er privat.
 async function loadDoc() {
+  const auth = await loadFile("users");
+  if (!token()) return { ...auth, spools: [], ams: {}, library: {}, wishes: {} };
   const [main, shared] = await Promise.all([loadFile("spools"), loadFile("shared")]);
-  return { ...main, ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {} };
+  return { users: auth.users || [], spools: main.spools || [], ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {} };
 }
 
 // Henter siste versjon av filen, lar mutate endre den, og lagrer. Prøver på nytt ved konflikt.
-// file: "spools" (brukere, spoler) eller "shared" (ams, library, wishes).
+// file: "users" (brukere og innlogging), "spools" (spoler) eller "shared" (ams, library, wishes).
 async function saveDoc(mutate, message, file = "spools") {
   if (DEMO) throw new Error("Demo-modus: endringer lagres ikke.");
   if (!token()) throw new Error("Logg inn for å kunne endre.");
@@ -156,10 +172,12 @@ async function saveDoc(mutate, message, file = "spools") {
     } else if (res.status !== 404) {
       throw new Error(`GitHub svarte ${res.status} ved henting`);
     }
-    if (file === "spools") {
+    if (file === "users") {
       doc.users ||= [];
+    } else if (file === "spools") {
       doc.spools ||= [];
-      // Delte data hører hjemme i shared.json (eldre versjoner av siden la dem her).
+      // Brukere ligger i auth-repoet og delte data i shared.json (eldre versjoner la dem her).
+      delete doc.users;
       delete doc.ams;
       delete doc.library;
       delete doc.wishes;
@@ -176,8 +194,8 @@ async function saveDoc(mutate, message, file = "spools") {
       body: JSON.stringify({ message, branch: BRANCH, sha, content: encodeBase64(JSON.stringify(doc, null, 2) + "\n") }),
     });
     if (put.ok) {
-      const merged = file === "spools"
-        ? { ...doc, ams: state.doc.ams, library: state.doc.library, wishes: state.doc.wishes }
+      const merged = file === "users" ? { ...state.doc, users: doc.users }
+        : file === "spools" ? { ...state.doc, spools: doc.spools }
         : { ...state.doc, ams: doc.ams, library: doc.library, wishes: doc.wishes };
       setDoc(merged);
       return state.doc;
@@ -187,7 +205,7 @@ async function saveDoc(mutate, message, file = "spools") {
       throw new Error("Innloggingen er ikke lenger gyldig (tokenen er utløpt eller trukket tilbake). Logg inn på nytt.");
     }
     if (put.status === 403 || put.status === 404) {
-      throw new Error("GitHub-tokenen har ikke skrivetilgang. Den må gjelde repoet BambuFilament-data og ha rettigheten Contents: Read and write.");
+      throw new Error(`GitHub-tokenen har ikke skrivetilgang til ${FILES[file].repo.split("/")[1]}. Tokenen må gjelde både BambuFilament-data og BambuFilament-auth, med Contents: Read and write.`);
     }
     if (put.status !== 409) throw new Error(`GitHub svarte ${put.status} ved lagring`);
   }
@@ -325,7 +343,15 @@ function users() {
 
 const userColor = (name) => safeColor(users().find((u) => u.name === name)?.color);
 
+// Uten innlogging vises bare innloggingssiden (demo er unntaket).
+function renderGate() {
+  const locked = !DEMO && !token();
+  document.body.classList.toggle("locked", locked);
+  $("#gate").hidden = !locked;
+}
+
 async function refresh() {
+  renderGate();
   setSync("Henter…");
   try {
     setDoc(DEMO ? demoDoc() : await loadDoc());
@@ -721,7 +747,7 @@ async function addUser(e) {
       if (!adminIn(doc)) return ADMIN_ONLY;
       if (doc.users.some((u) => u.name.toLowerCase() === name.toLowerCase())) return `${name} finnes allerede.`;
       doc.users.push({ name, color, cred, mustChange: true });
-    }, `La til bruker ${name} (${userName()})`);
+    }, `La til bruker ${name} (${userName()})`, "users");
     freshPasswords.push([name, temp]);
     form.elements.name.value = "";
     render();
@@ -745,7 +771,7 @@ async function resetPassword(name, btn) {
       if (!u) return `${name} finnes ikke lenger.`;
       u.cred = cred;
       u.mustChange = true;
-    }, `Nytt passord for ${name} (${userName()})`);
+    }, `Nytt passord for ${name} (${userName()})`, "users");
     freshPasswords = freshPasswords.filter(([n]) => n !== name).concat([[name, temp]]);
     $("#u-error").textContent = "";
     if (name === userName()) {
@@ -766,9 +792,9 @@ async function removeUser(name, btn) {
     await saveDoc((doc) => {
       if (!adminIn(doc)) return ADMIN_ONLY;
       if (name === userName()) return "Du kan ikke fjerne deg selv.";
-      if (doc.spools.some((s) => s.owner === name)) return `${name} eier fortsatt spoler. Flytt eller slett dem først.`;
+      if (state.spools.some((s) => s.owner === name)) return `${name} eier fortsatt spoler. Flytt eller slett dem først.`;
       doc.users = doc.users.filter((u) => u.name !== name);
-    }, `Fjernet bruker ${name} (${userName()})`);
+    }, `Fjernet bruker ${name} (${userName()})`, "users");
     freshPasswords = freshPasswords.filter(([n]) => n !== name);
     if (state.filters.owner === name) state.filters.owner = "";
     render();
@@ -787,8 +813,15 @@ function renderAccount() {
 }
 
 function setSession(value, remember = !!session?.exp) {
+  const changed = !!session?.token !== !!value?.token;
   session = value && { user: value.user, token: value.token };
   saveSession(session, remember);
+  renderGate();
+  // Ved inn- eller utlogging hentes dataene på nytt (eller tømmes).
+  if (changed) {
+    if (!value) setDoc({ users: state.doc.users, spools: [], ams: {}, library: {}, wishes: {} });
+    setTimeout(refresh);
+  }
   state.amsLive = null;
   state.libraryLive = null;
   state.amsError = "";
@@ -873,7 +906,7 @@ async function changePassword(e) {
       if (!u) return "Brukeren din finnes ikke lenger.";
       u.cred = cred;
       u.mustChange = false;
-    }, `Byttet passord (${userName()})`);
+    }, `Byttet passord (${userName()})`, "users");
     freshPasswords = freshPasswords.filter(([n]) => n !== userName());
     dlg.close();
   } catch (err) {
@@ -900,9 +933,11 @@ async function setup(e) {
   $("#su-error").textContent = "Sjekker tokenen…";
   try {
     if (!/^(github_pat_|ghp_)/.test(tok)) throw new Error("Det ser ikke ut som en GitHub-token. Den skal starte med github_pat_.");
-    const res = await fetch(`https://api.github.com/repos/${REPO}`, { headers: { Authorization: `Bearer ${tok}` } });
-    if (res.status === 401) throw new Error("GitHub godtar ikke tokenen. Sjekk at hele tokenen er kopiert, og at den ikke er utløpt.");
-    if (!res.ok) throw new Error("Tokenen har ikke tilgang til repoet BambuFilament-data. Velg det under Repository access.");
+    for (const repo of [DATA_REPO, AUTH_REPO]) {
+      const res = await fetch(`https://api.github.com/repos/${repo}`, { headers: { Authorization: `Bearer ${tok}` } });
+      if (res.status === 401) throw new Error("GitHub godtar ikke tokenen. Sjekk at hele tokenen er kopiert, og at den ikke er utløpt.");
+      if (!res.ok) throw new Error(`Tokenen har ikke tilgang til ${repo.split("/")[1]}. Velg både BambuFilament-data og BambuFilament-auth under Repository access.`);
+    }
     $("#su-error").textContent = "Krypterer og lagrer…";
     const created = [];
     for (const [i, name] of names.entries()) {
@@ -918,7 +953,7 @@ async function setup(e) {
         if (existing) Object.assign(existing, { cred, admin, mustChange: true });
         else doc.users.push({ name, color, cred, admin, mustChange: true });
       }
-    }, `Første oppsett: ${names.join(", ")}`);
+    }, `Første oppsett: ${names.join(", ")}`, "users");
     setSession(session);
     freshPasswords = created.slice(1).map((c) => [c.name, c.temp]);
     $("#su-list").innerHTML = created.slice(1).map((c) => `<tr><td>${esc(c.name)}</td><td><code class="pw">${esc(c.temp)}</code></td></tr>`).join("");
@@ -933,6 +968,7 @@ async function setup(e) {
 
 function setupDone() {
   $("#setup").close();
+  refresh();
   openChangePassword(true);
 }
 
@@ -1051,7 +1087,7 @@ async function setShare(kind, share) {
       const u = doc.users.find((x) => x.name === userName());
       if (!u) return "Brukeren din finnes ikke.";
       u[flag] = share;
-    }, `${share ? "Deler" : "Sluttet å dele"} ${label} (${userName()})`);
+    }, `${share ? "Deler" : "Sluttet å dele"} ${label} (${userName()})`, "users");
     if (share && !live) return render();
     await saveDoc((doc) => {
       const bucket = kind === "library" ? doc.library : doc.ams;
@@ -1798,6 +1834,7 @@ for (const [id, key] of [["#shop-status", "status"], ["#shop-sort", "sort"]]) {
 $("#d-form").addEventListener("submit", saveDetail);
 $("#u-form").addEventListener("submit", addUser);
 $("#account").addEventListener("click", openAccount);
+$("#gate-login").addEventListener("click", openLogin);
 $("#login form").addEventListener("submit", login);
 $("#account-dialog form").addEventListener("submit", accountAction);
 $("#password form").addEventListener("submit", changePassword);
