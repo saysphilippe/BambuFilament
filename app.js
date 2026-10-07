@@ -7,7 +7,7 @@ const PATH = "data/spools.json";
 const API = `https://api.github.com/repos/${REPO}/contents/${PATH}`;
 const REFRESH_MS = 120000;
 // Cloudflare Worker som videresender til Bambu (se worker/). Tom = AMS-fanen er av.
-const PROXY_URL = ["127.0.0.1", "localhost"].includes(location.hostname) ? "http://127.0.0.1:8787" : "";
+const PROXY_URL = ["127.0.0.1", "localhost"].includes(location.hostname) ? "http://127.0.0.1:8787" : "https://bambufilament-proxy.saysphilippe.workers.dev";
 const DEMO = new URLSearchParams(location.search).has("demo");
 
 const STATUS = { in: "På lager", out: "Tatt ut", empty: "Brukt opp" };
