@@ -46,6 +46,9 @@ function loadSession() {
 let session = DEMO ? null : loadSession();
 const token = () => session?.token || "";
 const userName = () => session?.user || "";
+const isAdmin = () => !!state.doc.users.find((u) => u.name === userName())?.admin;
+const ADMIN_ONLY = "Bare administrator kan endre brukere.";
+const adminIn = (doc) => !!doc.users.find((u) => u.name === userName())?.admin;
 
 // ---------- GitHub ----------
 
@@ -398,12 +401,12 @@ async function saveDetail(e) {
 let freshPasswords = [];
 
 function renderUsers() {
-  const canEdit = !!token();
+  const canEdit = !!token() && isAdmin();
   const me = userName();
   $("#u-list").innerHTML = users().map((u) => {
     const count = state.spools.filter((s) => s.owner === u.name).length;
     const why = u.name === me ? "Du kan ikke fjerne deg selv" : count ? "Flytt eller slett spolene til brukeren først" : "Fjern bruker";
-    const note = !u.known ? "ikke i brukerlisten" : !u.cred ? "ingen innlogging" : u.mustChange ? "må bytte passord" : "";
+    const note = [u.admin && "admin", !u.known && "ikke i brukerlisten", u.known && !u.cred && "ingen innlogging", u.mustChange && "må bytte passord"].filter(Boolean).join(", ");
     return `<li style="--owner:${u.color}">
       <span class="owner-dot"></span>
       <span class="u-name">${esc(u.name)}${note ? ` <span class="muted">(${note})</span>` : ""}</span>
@@ -420,7 +423,9 @@ function renderUsers() {
   const form = $("#u-form");
   form.querySelectorAll("input, button").forEach((el) => (el.disabled = !canEdit));
   $("#u-hint").hidden = canEdit;
-  $("#u-hint").textContent = DEMO ? "Demo-modus: endringer lagres ikke." : "Logg inn for å kunne legge til og fjerne brukere.";
+  $("#u-hint").textContent = DEMO ? "Demo-modus: endringer lagres ikke."
+    : !token() ? "Logg inn som administrator for å legge til og fjerne brukere."
+    : "Bare administrator kan legge til og fjerne brukere. Du kan bytte ditt eget passord under kontoen din.";
   const used = new Set(state.doc.users.map((u) => u.color));
   form.elements.color.value = USER_COLORS.find((c) => !used.has(c)) || USER_COLORS[0];
 }
@@ -442,6 +447,7 @@ async function addUser(e) {
     const temp = randomPassword();
     const cred = await encryptToken(token(), temp);
     await saveDoc((doc) => {
+      if (!adminIn(doc)) return ADMIN_ONLY;
       if (doc.users.some((u) => u.name.toLowerCase() === name.toLowerCase())) return `${name} finnes allerede.`;
       doc.users.push({ name, color, cred, mustChange: true });
     }, `La til bruker ${name} (${userName()})`);
@@ -461,6 +467,7 @@ async function resetPassword(name) {
     const temp = randomPassword();
     const cred = await encryptToken(token(), temp);
     await saveDoc((doc) => {
+      if (!adminIn(doc)) return ADMIN_ONLY;
       const u = doc.users.find((x) => x.name === name);
       if (!u) return `${name} finnes ikke lenger.`;
       u.cred = cred;
@@ -482,6 +489,7 @@ async function removeUser(name) {
   $("#u-error").textContent = "";
   try {
     await saveDoc((doc) => {
+      if (!adminIn(doc)) return ADMIN_ONLY;
       if (name === userName()) return "Du kan ikke fjerne deg selv.";
       if (doc.spools.some((s) => s.owner === name)) return `${name} eier fortsatt spoler. Flytt eller slett dem først.`;
       doc.users = doc.users.filter((u) => u.name !== name);
@@ -606,15 +614,15 @@ async function setup(e) {
     const created = [];
     for (const [i, name] of names.entries()) {
       const temp = randomPassword();
-      created.push({ name, color: USER_COLORS[i % USER_COLORS.length], cred: await encryptToken(tok, temp), temp });
+      created.push({ name, color: USER_COLORS[i % USER_COLORS.length], cred: await encryptToken(tok, temp), temp, admin: i === 0 });
     }
     session = { user: names[0], token: tok };
     await saveDoc((doc) => {
       if (doc.users.some((u) => u.cred)) return "Oppsettet er allerede gjort. Last siden på nytt.";
-      for (const { name, color, cred } of created) {
+      for (const { name, color, cred, admin } of created) {
         const existing = doc.users.find((u) => u.name === name);
-        if (existing) Object.assign(existing, { cred, mustChange: true });
-        else doc.users.push({ name, color, cred, mustChange: true });
+        if (existing) Object.assign(existing, { cred, admin, mustChange: true });
+        else doc.users.push({ name, color, cred, admin, mustChange: true });
       }
     }, `Første oppsett: ${names.join(", ")}`);
     setSession(session);
