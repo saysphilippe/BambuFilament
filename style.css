@@ -439,3 +439,30 @@ details.all-type summary::-webkit-details-marker { display: none; }
 details.all-type[open] { border-color: var(--accent); }
 details.all-type > .news-colors { margin-top: 10px; }
 .strip span.na { opacity: .35; }
+
+.sub-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+.sub-tab { padding: 8px 14px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.sub-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+[hidden] { display: none !important; }
+
+.wait-img { flex: none; width: 40px; height: 40px; object-fit: cover; border-radius: 8px; background: var(--muted-bg); }
+
+.shop-head { display: flex; flex-direction: column; gap: 10px; }
+.shop-head .hint { margin: 0; }
+.shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
+.shop-card { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+.shop-card.is-out .shop-img img { opacity: .5; }
+.shop-img { position: relative; display: block; aspect-ratio: 4 / 3; background: #fff; border-bottom: 1px solid var(--border); }
+.shop-img img { width: 100%; height: 100%; object-fit: contain; }
+.badge-new { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 99px; background: var(--accent); color: var(--accent-text); font-size: 11px; font-weight: 700; }
+.shop-body { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px; flex: 1; }
+.shop-name { font-weight: 650; color: inherit; text-decoration: none; }
+.shop-name:hover { color: var(--accent); }
+.shop-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; }
+.variants { font-size: 13px; }
+.variants summary { cursor: pointer; color: var(--muted); }
+.variants ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow-y: auto; }
+.variants li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px solid var(--border); }
+.variants li span:last-child { flex: none; color: var(--in); font-weight: 600; }
+.variants li.v-out span:last-child { color: var(--out); }
+.shop-more { display: block; margin: 16px auto; }

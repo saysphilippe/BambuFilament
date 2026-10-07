@@ -66,6 +66,16 @@ npx wrangler deploy
 
 Sett så `PROXY_URL` i `app.js` til adressen `wrangler deploy` skriver ut.
 
+## Butikk
+
+Fanen **Butikk** viser alle produktene i Bambu Lab sin EU-butikk (rundt 1100): filament, printere,
+AMS, hotend, plater, laser, reservedeler og Maker's Supply. Hvert produkt har pris, lagerstatus per
+variant og lenke til produktsiden. Utsolgte produkter kan få «Jeg venter på denne», og havner da på
+ventelisten under *Nytt fra Bambu*.
+
+`scripts/update-store.mjs` henter dataene til `data/store.json` klokken 05 og 17 UTC, med få
+samtidige kall og nye forsøk ved struping.
+
 ## Filamentbiblioteket
 
 Samme Bambu-tilkobling henter også brukerens **filamentbibliotek** (Filament Manager i Bambu Studio
@@ -134,5 +144,8 @@ Bruk:
 | `data/spools.json` | Brukere og spoler (skrives av leseren og siden) |
 | `data/colors.json` | Offisielle Bambu-fargenavn |
 | `data/catalog.json` | Bambu-katalogen med datoer og produktsider |
-| `scripts/update-catalog.mjs` | Henter katalogen (kjøres daglig av GitHub Actions) |
+| `scripts/update-catalog.mjs` | Henter filamentkatalogen (GitHub Actions, hver 6. time) |
+| `scripts/update-store.mjs` | Henter hele butikken med lagerstatus (GitHub Actions, to ganger i døgnet) |
+| `scripts/bambu-store.mjs` | Felles oppslag mot Bambu-butikken |
+| `data/store.json` | Alle butikkprodukter med pris og lagerstatus |
 | `firmware/BambuFilament/` | ESP32-firmware |

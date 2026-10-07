@@ -4,15 +4,14 @@
 //   til filen gir datoen hver farge og type dukket opp første gang.
 // - Produktsider: nettstedskartet til eu.store.bambulab.com (tittel, bilde, lenke).
 //
-// Kjøres daglig av .github/workflows/catalog.yml. Krever Node 20+, ingen avhengigheter.
+// Kjøres hver 6. time av .github/workflows/catalog.yml. Krever Node 20+, ingen avhengigheter.
 // GITHUB_TOKEN brukes hvis den finnes (høyere grense mot GitHub API).
 
 import { writeFile, readFile } from "node:fs/promises";
+import { STORE, sitemapProducts, storeProduct } from "./bambu-store.mjs";
 
 const REPO = "bambulab/BambuStudio";
 const FILE = "resources/profiles/BBL/filament/filaments_color_codes.json";
-const SITEMAP = "https://eu.store.bambulab.com/sitemap_products_1.xml";
-const STORE = "https://eu.store.bambulab.com";
 
 const gh = (url) =>
   fetch(url, {
@@ -71,46 +70,7 @@ async function colorHistory() {
 
 // ---------- Produktsider ----------
 
-const decode = (s) => s
-  .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-  .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9+]/g, "");
-
-// Butikken avviser av og til GitHub sine servere, så proxyen på Cloudflare brukes som reserve.
-const SITEMAP_PROXY = "https://bambufilament-proxy.saysphilippe.workers.dev/sitemap";
-
-async function sitemapXml() {
-  try {
-    const res = await fetch(SITEMAP, { headers: { "User-Agent": "Mozilla/5.0 (BambuFilament catalog)" } });
-    const xml = await res.text();
-    if (res.ok && xml.includes("<url>")) {
-      console.log(`Nettstedskart direkte: ${res.url}`);
-      return xml;
-    }
-    console.warn(`Nettstedskart direkte: ${res.status}, prøver proxyen`);
-  } catch (err) {
-    console.warn(`Nettstedskart direkte: ${err.message}, prøver proxyen`);
-  }
-  const res = await fetch(SITEMAP_PROXY, { method: "POST", headers: { Origin: "https://saysphilippe.github.io" } });
-  if (!res.ok) throw new Error(`sitemap via proxy: ${res.status}`);
-  return res.text();
-}
-
-async function products() {
-  const xml = await sitemapXml();
-  return xml.split("<url>").slice(1)
-    .map((b) => ({
-      url: (b.match(/<loc>([^<]*)/) || [])[1] || "",
-      lastmod: (b.match(/<lastmod>([^<]*)/) || [])[1] || "",
-      title: decode((b.match(/<image:title>([^<]*)/) || [])[1] || ""),
-      image: (b.match(/<image:loc>([^<]*)/) || [])[1] || "",
-    }))
-    // GitHub sine servere kan bli sendt til en annen region (f.eks. us.store), så alle
-    // regioner godtas og lenken bygges om til EU-butikken. Språkvarianter (/de/ osv.) hoppes over.
-    .map((p) => ({ ...p, handle: (p.url.match(/^https:\/\/[a-z]+\.store\.bambulab\.com\/products\/([^/?#]+)$/) || [])[1] }))
-    .filter((p) => p.handle)
-    .map(({ handle, ...p }) => ({ ...p, url: `${STORE}/products/${handle}` }));
-}
 
 // Finner produktsiden for en filamenttype: eksakt tittel først, så nærmeste treff.
 function findProduct(type, prods) {
@@ -131,7 +91,7 @@ const { latest, firstColor, firstType, baseline } = await colorHistory();
 if (!latest) throw new Error("Fant ingen fargedata");
 
 let prods = [];
-try { prods = await products(); } catch (err) { console.warn(`Produktsider: ${err.message}`); }
+try { prods = await sitemapProducts(); } catch (err) { console.warn(`Produktsider: ${err.message}`); }
 
 // colors.json: samme kompakte format som nettsiden allerede bruker.
 const colors = {};
@@ -170,29 +130,7 @@ for (const t of Object.values(types)) {
 // "Black(30105)", der tallet er fila_color_code i Bambu sin fargeliste.
 // Resultat per farge: "in" (kan kjøpes), "out" (utsolgt) eller "missing" (ikke i butikken).
 
-const STORE_API = "https://eu-store-api.bambulab.com/mall-goods/product/queryDrawer";
-const STORE_PROXY = "https://bambufilament-proxy.saysphilippe.workers.dev/store-product";
-const STORE_HEADERS = {
-  Accept: "application/json",
-  "Bbl-Locale": "en-US",
-  "X-BBL-STORE-REGION": "EU",
-  "X-BBL-TIME-ZONE": "Europe/Oslo",
-  "User-Agent": "Mozilla/5.0 (BambuFilament catalog)",
-};
-
-async function storeSkus(seoCode) {
-  const tries = [
-    () => fetch(`${STORE_API}?seoCode=${seoCode}`, { headers: STORE_HEADERS }),
-    () => fetch(STORE_PROXY, { method: "POST", headers: { Origin: "https://saysphilippe.github.io" }, body: JSON.stringify({ seoCode }) }),
-  ];
-  for (const attempt of tries) {
-    try {
-      const json = await (await attempt()).json();
-      if (json.code === 1 && json.data) return json.data.productSkuList || [];
-    } catch { /* prøv neste */ }
-  }
-  return null;
-}
+const storeSkus = async (seo) => (await storeProduct(seo))?.productSkuList || null;
 
 const stockCache = {};
 let stockChecked = 0;

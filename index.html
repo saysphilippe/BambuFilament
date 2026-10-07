@@ -35,6 +35,7 @@
     <button class="tab active" data-tab="stock">Lager</button>
     <button class="tab" data-tab="ams">AMS og bibliotek</button>
     <button class="tab" data-tab="news">Nytt fra Bambu</button>
+    <button class="tab" data-tab="shop">Butikk</button>
   </nav>
 
   <main>
@@ -72,6 +73,33 @@
    </div>
 
    <div id="tab-news" hidden></div>
+
+   <div id="tab-shop" hidden>
+    <section class="panel shop-head">
+      <div class="filter-row">
+        <input id="shop-q" type="search" placeholder="Søk i hele Bambu-butikken…" aria-label="Søk i butikken">
+        <select id="shop-status" aria-label="Lagerstatus">
+          <option value="">Alle lagerstatuser</option>
+          <option value="in">På lager</option>
+          <option value="notin">Ikke på lager (helt eller delvis)</option>
+          <option value="partial">Noen varianter utsolgt</option>
+          <option value="out">Utsolgt</option>
+        </select>
+        <select id="shop-sort" aria-label="Sortering">
+          <option value="name">Sorter: navn</option>
+          <option value="priceAsc">Sorter: pris, lav–høy</option>
+          <option value="priceDesc">Sorter: pris, høy–lav</option>
+          <option value="status">Sorter: utsolgt først</option>
+        </select>
+      </div>
+      <div id="shop-cats" class="chips"></div>
+      <p id="shop-updated" class="hint"></p>
+      <p id="shop-error" class="error"></p>
+    </section>
+    <div id="shop-count" class="count"></div>
+    <section id="shop-grid" class="shop-grid"></section>
+    <button id="shop-more" class="btn shop-more" hidden>Vis flere</button>
+   </div>
 
    <div id="tab-ams" hidden>
     <section id="ams-me" class="panel"></section>
