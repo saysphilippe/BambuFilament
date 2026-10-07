@@ -12,17 +12,17 @@ const MQTT_HOST = "us.mqtt.bambulab.com";
 const MQTT_PORT = 8883;
 const REPORT_TIMEOUT_MS = 9000;
 
-const ALLOWED_ORIGINS = [
-  "https://saysphilippe.github.io",
-  "http://127.0.0.1:8765",
-  "http://localhost:8765",
-];
+// Bare nettsiden på github.io. Ved lokal testing (wrangler dev) legges ekstra
+// adresser til via DEV_ORIGINS i worker/.dev.vars, som ikke brukes ved publisering.
+const SITE_ORIGIN = "https://saysphilippe.github.io";
+const allowedOrigins = (env) => [SITE_ORIGIN, ...String(env?.DEV_ORIGINS || "").split(",").map((o) => o.trim()).filter(Boolean)];
 
 // ---------- HTTP ----------
 
+// origin er alltid kontrollert av kalleren (enten en godkjent adresse eller SITE_ORIGIN).
 function cors(origin) {
   return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
@@ -64,10 +64,13 @@ const LIMITS = {
 
 export default {
   async fetch(request, env) {
-    const origin = request.headers.get("Origin") || "";
+    const allowed = allowedOrigins(env);
+    const sent = request.headers.get("Origin") || "";
+    // Ukjent opprinnelse behandles som github.io-adressen i CORS-svar, så nettlesere avviser svaret.
+    const origin = allowed.includes(sent) ? sent : SITE_ORIGIN;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
     if (request.method !== "POST") return json({ error: "Bruk POST" }, 405, origin);
-    if (!ALLOWED_ORIGINS.includes(origin)) return json({ error: "Ukjent opprinnelse" }, 403, origin);
+    if (!allowed.includes(sent)) return json({ error: "Ukjent opprinnelse" }, 403, origin);
 
     const path = new URL(request.url).pathname;
     const limiter = env?.[LIMITS[path]];

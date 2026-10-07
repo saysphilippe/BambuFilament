@@ -706,6 +706,11 @@ function openChangePassword(forced) {
   dlg.dataset.forced = forced ? "1" : "";
   $("#p-forced").hidden = !forced;
   $("#p-cancel").hidden = forced;
+  // Ved frivillig bytte må nåværende passord oppgis, så ingen kan bytte det fra en
+  // innlogget nettleser («Husk meg») og stenge eieren ute. Tvunget bytte rett etter
+  // innlogging med midlertidig passord er unntaket.
+  $("#p-current-label").hidden = forced;
+  $("#p-current").value = "";
   $("#p-new").value = "";
   $("#p-repeat").value = "";
   $("#p-error").textContent = "";
@@ -717,6 +722,11 @@ async function changePassword(e) {
   const dlg = $("#password");
   if (e.submitter?.value === "cancel" && !dlg.dataset.forced) return dlg.close();
   const pw = $("#p-new").value;
+  if (!dlg.dataset.forced) {
+    const me = state.doc.users.find((u) => u.name === userName());
+    const ok = me?.cred && (await decryptToken(me.cred, $("#p-current").value)) === token();
+    if (!ok) return ($("#p-error").textContent = "Nåværende passord er feil.");
+  }
   const weak = passwordProblem(pw, userName());
   if (weak) return ($("#p-error").textContent = weak);
   if (pw !== $("#p-repeat").value) return ($("#p-error").textContent = "Passordene er ikke like.");

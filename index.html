@@ -3,6 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Ekstra lag mot XSS: bare egne skript, og data bare til GitHub, proxyen og Bambu-bildene.
+       style-src trenger 'unsafe-inline' for fargefeltene (style-attributter med kontrollerte farger). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://store.bblcdn.eu https://store.bblcdn.com; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://bambufilament-proxy.saysphilippe.workers.dev http://127.0.0.1:8787; base-uri 'none'; form-action 'self'; object-src 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
@@ -221,6 +225,7 @@
     <form method="dialog">
       <h2>Bytt passord</h2>
       <p id="p-forced" class="notice">Du er logget inn med et midlertidig passord. Velg ditt eget passord før du fortsetter.</p>
+      <label id="p-current-label">Nåværende passord<input id="p-current" type="password" autocomplete="current-password"></label>
       <label>Nytt passord (minst 12 tegn, gjerne flere tilfeldige ord)<input id="p-new" type="password" autocomplete="new-password"></label>
       <label>Gjenta nytt passord<input id="p-repeat" type="password" autocomplete="new-password"></label>
       <p id="p-error" class="error"></p>

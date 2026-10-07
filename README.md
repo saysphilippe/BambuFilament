@@ -31,6 +31,10 @@ Bambu-spole ──RFID──> ESP32 + RC522 ──HTTPS──> spools.json i Bam
 - **Passord:** minst 12 tegn, ikke vanlige ord eller brukernavnet. PBKDF2-SHA256 med 600 000 runder.
 - **Proxyen** har rate limiting per IP (innlogging 10 per minutt).
 - **ESP32** sjekker GitHub-sertifikatet (rotsertifikater i `github_roots.h`).
+- **Content-Security-Policy:** bare egne skript, og data sendes bare til GitHub, proxyen og Bambu sine bilde-CDN-er.
+- **Passordbytte** krever nåværende passord (unntatt tvunget bytte etter midlertidig passord).
+- **Proxyen** godtar bare forespørsler fra `saysphilippe.github.io`. Lokal testing med `wrangler dev` bruker `worker/.dev.vars`.
+- Alle GitHub Pages-sider under `saysphilippe.github.io` deler nettleserlagring. Ikke publiser andre Pages-sider på kontoen uten å tenke over det, eller gi BambuFilament et eget domene.
 
 ## Brukere og innlogging
 
