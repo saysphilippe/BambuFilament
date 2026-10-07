@@ -83,7 +83,10 @@ async function sitemapXml() {
   try {
     const res = await fetch(SITEMAP, { headers: { "User-Agent": "Mozilla/5.0 (BambuFilament catalog)" } });
     const xml = await res.text();
-    if (res.ok && xml.includes("<url>")) return xml;
+    if (res.ok && xml.includes("<url>")) {
+      console.log(`Nettstedskart direkte: ${res.url}`);
+      return xml;
+    }
     console.warn(`Nettstedskart direkte: ${res.status}, prøver proxyen`);
   } catch (err) {
     console.warn(`Nettstedskart direkte: ${err.message}, prøver proxyen`);
@@ -102,7 +105,11 @@ async function products() {
       title: decode((b.match(/<image:title>([^<]*)/) || [])[1] || ""),
       image: (b.match(/<image:loc>([^<]*)/) || [])[1] || "",
     }))
-    .filter((p) => p.url.startsWith(`${STORE}/products/`));
+    // GitHub sine servere kan bli sendt til en annen region (f.eks. us.store), så alle
+    // regioner godtas og lenken bygges om til EU-butikken. Språkvarianter (/de/ osv.) hoppes over.
+    .map((p) => ({ ...p, handle: (p.url.match(/^https:\/\/[a-z]+\.store\.bambulab\.com\/products\/([^/?#]+)$/) || [])[1] }))
+    .filter((p) => p.handle)
+    .map(({ handle, ...p }) => ({ ...p, url: `${STORE}/products/${handle}` }));
 }
 
 // Finner produktsiden for en filamenttype: eksakt tittel først, så nærmeste treff.
