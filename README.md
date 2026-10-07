@@ -164,6 +164,11 @@ Bruk:
 
 `config.h` ligger i `.gitignore` og blir aldri lastet opp.
 
+## Publisere endringer
+
+Kjør `node scripts/bump-version.mjs` før commit. Det setter et nytt versjonsnummer på `app.js`,
+`style.css` og modulene, så nettlesere ikke bruker en gammel versjon fra hurtigbufferen.
+
 ## Filer
 
 | Fil | Innhold |

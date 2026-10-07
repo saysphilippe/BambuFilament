@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072226";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072226";
 
 // Dataene ligger i et eget repo. Den delte skrivetokenen gjelder bare det repoet,
 // så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1020,7 +1020,8 @@ async function refreshAms() {
     }
   }
   state.amsBusy = false;
-  renderAms();
+  // Hele siden tegnes på nytt, så «Våre lokale lager» også viser de nye AMS- og bibliotekdataene.
+  render();
 }
 
 // Lagrer øyeblikksbildet i repoet hvis brukeren deler og innholdet er endret.
