@@ -61,7 +61,7 @@ Viser innholdet i AMS-ene til hver bruker: farge, type, gjenværende mengde og f
   pluss eventuelt kode på e-post eller fra autentiseringsapp. Bare Bambu-tilgangsnøkkelen lagres,
   og bare i brukerens egen nettleser. Bambu-passordet lagres aldri.
 - Hver bruker velger selv **Del AMS-data med alle**. Da lagres et øyeblikksbilde (uten serienummer)
-  i `data/spools.json` når brukeren har siden åpen og innholdet endrer seg. De andre ser siste
+  i `spools.json` (BambuFilament-data) når brukeren har siden åpen og innholdet endrer seg. De andre ser siste
   delte bilde med tidspunkt.
 - Bambu sitt API kan ikke kalles direkte fra en nettleser (ingen CORS, og MQTT krever TCP).
   Derfor går kallene via en liten **Cloudflare Worker** i `worker/`. Den videresender innlogging,

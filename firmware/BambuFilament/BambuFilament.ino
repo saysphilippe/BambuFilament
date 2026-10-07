@@ -2,7 +2,7 @@
 //
 // Leser MIFARE Classic-brikken på en Bambu Lab-spole, utleder sektornøklene
 // fra brikkens UID (HKDF-SHA256, se github.com/Bambu-Research-Group/RFID-Tag-Guide)
-// og legger rådataene inn i data/spools.json i GitHub-repoet. Web-appen på
+// og legger rådataene inn i spools.json i GitHub-repoet BambuFilament-data. Web-appen på
 // github.io tolker blokkene og viser oversikten.
 //
 // Biblioteker: MFRC522 (GithubCommunity), ArduinoJson 7. Kort: ESP32 Dev Module.
