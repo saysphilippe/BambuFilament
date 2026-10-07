@@ -2,7 +2,7 @@ name: Oppdater Bambu-katalog
 
 on:
   schedule:
-    - cron: "17 5 * * *"   # daglig 05:17 UTC
+    - cron: "17 */6 * * *"   # hver 6. time (lagerstatus endrer seg ofte)
   workflow_dispatch:
 
 permissions:

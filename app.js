@@ -36,6 +36,8 @@ const state = {
   catalog: null,
   newsDays: store("bf.newsDays") || "180",
   newsOnlyMissing: false,
+  newsStock: store("bf.newsStock") || "",
+  openTypes: new Set(),
   filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type" },
   selected: null,
 };
@@ -184,7 +186,7 @@ function enrich(spool) {
 }
 
 function setDoc(doc) {
-  state.doc = { ...doc, users: doc.users || [], spools: doc.spools || [], ams: doc.ams || {}, library: doc.library || {} };
+  state.doc = { ...doc, users: doc.users || [], spools: doc.spools || [], ams: doc.ams || {}, library: doc.library || {}, wishes: doc.wishes || {} };
   state.spools = state.doc.spools.map(enrich);
 }
 
@@ -1075,6 +1077,73 @@ function ownedBadge(owners) {
   return `<span class="owned">${owners.map((o) => `<span class="owner-dot" style="--owner:${userColor(o)}" title="${esc(o)}"></span>`).join("")}Har: ${esc(owners.join(", "))}</span>`;
 }
 
+// Lagerstatus i Bambu-butikken (EU), hentet av katalogjobben.
+const STOCK = {
+  in: ["På lager i butikken", "stock-in"],
+  out: ["Utsolgt i butikken", "stock-out"],
+  missing: ["Ikke i butikken", "stock-missing"],
+};
+
+function stockBadge(stock) {
+  const s = STOCK[stock];
+  return s ? `<span class="stock ${s[1]}">${s[0]}</span>` : "";
+}
+
+// Ønsker: { "GFG00-P01": [{ user, at }], "type:PLA Lite": [...] }
+const wishersOf = (key) => (state.doc.wishes?.[key] || []).map((w) => w.user);
+
+function wishButton(key) {
+  const who = wishersOf(key);
+  const mine = who.includes(userName());
+  const label = mine ? "✓ Du venter på denne" : "Jeg venter på denne";
+  return `<button type="button" class="btn btn-small wish${mine ? " active" : ""}" data-wish="${esc(key)}"
+    title="${who.length ? "Venter: " + esc(who.join(", ")) : "Marker at du vil ha denne når den kommer på lager"}">${label}${who.length ? ` <span class="wish-count">${who.length}</span>` : ""}</button>`;
+}
+
+async function toggleWish(key, btn) {
+  if (!token()) return openLogin();
+  btn.disabled = true;
+  try {
+    await saveDoc((doc) => {
+      doc.wishes ||= {};
+      const list = (doc.wishes[key] ||= []);
+      const i = list.findIndex((w) => w.user === userName());
+      if (i >= 0) list.splice(i, 1);
+      else list.push({ user: userName(), at: new Date().toISOString() });
+      if (!list.length) delete doc.wishes[key];
+    }, `Venteliste: ${key} (${userName()})`);
+    render();
+    renderNews();
+  } catch (err) {
+    alertNews(err.message);
+    btn.disabled = false;
+  }
+}
+
+function alertNews(text) {
+  const el = $("#news-error");
+  if (el) el.textContent = text;
+}
+
+function catalogIndex() {
+  const byKey = {};
+  for (const t of state.catalog?.types || []) {
+    byKey[`type:${t.type}`] = { t, type: true };
+    for (const x of t.colors) byKey[x.key] = { t, x };
+  }
+  return byKey;
+}
+
+const typeInStock = (t) => t.colors.some((x) => x.stock === "in");
+
+// Lagerfilteret: "" = alle, "in", "out", "missing", "notin" = utsolgt eller ikke i butikken.
+function stockMatch(stock) {
+  const f = state.newsStock;
+  if (!f) return true;
+  if (f === "notin") return stock === "out" || stock === "missing";
+  return stock === f;
+}
+
 function renderNews() {
   const box = $("#tab-news");
   const c = state.catalog;
@@ -1092,20 +1161,53 @@ function renderNews() {
     .flatMap((t) => t.colors.filter((x) => isNew(x.firstSeen)).map((x) => ({ ...x, t })))
     .sort((a, b) => b.firstSeen.localeCompare(a.firstSeen) || a.t.type.localeCompare(b.t.type));
   if (state.newsOnlyMissing) newColors = newColors.filter((x) => !owned[x.key]);
+  newColors = newColors.filter((x) => stockMatch(x.stock));
+  const visibleColors = (t) => t.colors.filter((x) => stockMatch(x.stock) && (!state.newsOnlyMissing || !owned[x.key]));
+  const shownTypes = c.types.filter((t) => visibleColors(t).length);
+  const shownNewTypes = newTypes.filter((t) => visibleColors(t).length);
 
   const byDay = {};
   for (const x of newColors) (byDay[x.firstSeen.slice(0, 10)] ||= []).push(x);
 
   const colorCard = (x) => `
-    <a class="news-color" href="${esc(x.t.product?.url || c.source.store + "/collections/filament")}" target="_blank" rel="noopener">
-      <span class="news-swatch" style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}"></span>
-      <span class="news-color-text">
-        <b>${esc(x.name || x.key)}</b>
-        <span>${esc(x.t.type)}</span>
-        ${ownedBadge(owned[x.key])}
-      </span>
-      <span class="ext">↗</span>
-    </a>`;
+    <div class="news-color ${x.stock ? "is-" + x.stock : ""}">
+      <a class="news-color-main" href="${esc(x.t.product?.url || c.source.store + "/collections/filament")}" target="_blank" rel="noopener">
+        <span class="news-swatch" style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}"></span>
+        <span class="news-color-text">
+          <b>${esc(x.name || x.key)}</b>
+          <span>${esc(x.t.type)}</span>
+          ${stockBadge(x.stock)}
+          ${ownedBadge(owned[x.key])}
+        </span>
+        <span class="ext">↗</span>
+      </a>
+      ${x.stock && x.stock !== "in" || wishersOf(x.key).length ? wishButton(x.key) : ""}
+    </div>`;
+
+  // Det brukerne venter på, med status nå. Det som har kommet på lager vises først.
+  const idx = catalogIndex();
+  const waiting = Object.entries(state.doc.wishes || {})
+    .filter(([key, list]) => list.length && idx[key])
+    .map(([key, list]) => {
+      const { t, x, type } = idx[key];
+      const stock = type ? (typeInStock(t) ? "in" : t.product ? "out" : "missing") : x.stock;
+      return { key, t, x, type, list, stock };
+    })
+    .sort((a, b) => (b.stock === "in") - (a.stock === "in") || b.list.length - a.list.length);
+  const waitCard = (w) => `
+    <div class="wait-item ${w.stock === "in" ? "arrived" : ""}">
+      <span class="news-swatch" style="background:${w.type ? "var(--muted-bg)" : swatch({ colors: w.x.hex.length ? w.x.hex : ["#cccccc"] })}"></span>
+      <div class="news-color-text">
+        <b>${esc(w.type ? w.t.type : w.x.name)}</b>
+        <span>${w.type ? "Hele typen" : esc(w.t.type)}</span>
+        ${w.stock === "in" ? `<span class="stock stock-in">Nå på lager i butikken!</span>` : stockBadge(w.stock)}
+        <span class="waiters">${w.list.map((x) => `<span class="owner-dot" style="--owner:${userColor(x.user)}"></span>${esc(x.user)}`).join(" ")}</span>
+      </div>
+      <div class="wait-actions">
+        ${w.t.product ? `<a class="btn btn-small" href="${esc(w.t.product.url)}" target="_blank" rel="noopener">Butikken ↗</a>` : ""}
+        ${wishButton(w.key)}
+      </div>
+    </div>`;
 
   box.innerHTML = `
     <section class="panel news-head">
@@ -1119,19 +1221,30 @@ function renderNews() {
           ${[[30, "Siste 30 dager"], [90, "Siste 3 måneder"], [180, "Siste 6 måneder"], [365, "Siste år"], [0, "Alt siden juli 2025"]]
             .map(([v, l]) => `<option value="${v}"${Number(state.newsDays) === v ? " selected" : ""}>${l}</option>`).join("")}
         </select>
+        <select id="news-stock" aria-label="Lagerstatus i butikken">
+          ${[["", "Alle lagerstatuser"], ["in", "På lager i butikken"], ["notin", "Ikke på lager"], ["out", "Utsolgt"], ["missing", "Ikke i butikken"]]
+            .map(([v, l]) => `<option value="${v}"${state.newsStock === v ? " selected" : ""}>${l}</option>`).join("")}
+        </select>
         <label class="switch"><input type="checkbox" id="news-missing" ${state.newsOnlyMissing ? "checked" : ""}> Bare farger ingen av oss har</label>
       </div>
     </section>
 
-    <h2 class="section-title">Nye typer <span class="muted">${newTypes.length}</span></h2>
-    ${newTypes.length ? `<div class="news-types">${newTypes.map((t) => `
+    <p id="news-error" class="error"></p>
+
+    <h2 class="section-title">Det venter vi på <span class="muted">${waiting.length}</span></h2>
+    ${waiting.length ? `<div class="wait-list">${waiting.map(waitCard).join("")}</div>`
+      : `<p class="muted">Ingen venter på noe ennå. Trykk «Jeg venter på denne» på en farge eller type som er utsolgt eller ikke i butikken.</p>`}
+
+    <h2 class="section-title">Nye typer <span class="muted">${shownNewTypes.length}</span></h2>
+    ${shownNewTypes.length ? `<div class="news-types">${shownNewTypes.map((t) => `
       <div class="news-type">
         ${t.product?.image ? `<img src="${esc(t.product.image)}" alt="" loading="lazy">` : `<div class="img-ph"></div>`}
         <div class="news-type-body">
           <b>${esc(t.type)}</b>
           <span class="muted">Ny ${fmtDay(t.firstSeen)} · ${t.colors.length} farger</span>
           <div class="strip">${t.colors.slice(0, 14).map((x) => `<span style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}" title="${esc(x.name)}"></span>`).join("")}</div>
-          ${productLink(t)}
+          <div class="row-actions">${productLink(t)}${!typeInStock(t) || wishersOf(`type:${t.type}`).length ? wishButton(`type:${t.type}`) : ""}</div>
+          ${!t.product ? stockBadge("missing") : !typeInStock(t) ? stockBadge("out") : ""}
         </div>
       </div>`).join("")}</div>` : `<p class="muted">Ingen nye typer i perioden.</p>`}
 
@@ -1141,20 +1254,36 @@ function renderNews() {
       <div class="news-colors">${list.map(colorCard).join("")}</div>`).join("")
       : `<p class="muted">Ingen nye farger i perioden.</p>`}
 
-    <h2 class="section-title">Alle typer fra Bambu <span class="muted">${c.types.length}</span></h2>
-    <div class="all-types">${c.types.map((t) => {
+    <h2 class="section-title">Alle typer fra Bambu <span class="muted">${shownTypes.length}${shownTypes.length !== c.types.length ? ` av ${c.types.length}` : ""}</span></h2>
+    <p class="hint">Trykk på en type for å se fargene, lagerstatus i butikken og venteliste.</p>
+    <div class="all-types">${shownTypes.map((t) => {
       const have = t.colors.filter((x) => owned[x.key]).length;
-      return `<div class="all-type">
-        <div class="all-type-head"><b>${esc(t.type)}</b><span class="muted">${have ? `${have} av ${t.colors.length} farger hos oss` : `${t.colors.length} farger`}</span>${productLink(t, "Produktside")}</div>
-        <div class="strip big">${t.colors.map((x) => `<a href="${esc(t.product?.url || c.source.store + "/collections/filament")}" target="_blank" rel="noopener"
-          class="${owned[x.key] ? "have" : ""}" style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}"
-          title="${esc(x.name)}${owned[x.key] ? " – har: " + esc(owned[x.key].join(", ")) : ""}"></a>`).join("")}</div>
-      </div>`;
+      const inStore = t.colors.filter((x) => x.stock === "in").length;
+      const known = t.colors.some((x) => x.stock);
+      return `<details class="all-type" data-type="${esc(t.type)}" ${state.openTypes.has(t.type) ? "open" : ""}>
+        <summary>
+          <div class="all-type-head">
+            <b>${esc(t.type)}</b>
+            <span class="muted">${t.colors.length} farger${known ? ` · ${inStore} på lager i butikken` : ""}${have ? ` · ${have} hos oss` : ""}</span>
+            ${productLink(t, "Produktside")}
+          </div>
+          <div class="strip big">${t.colors.map((x) => `<span class="${owned[x.key] ? "have" : ""} ${x.stock && x.stock !== "in" ? "na" : ""}"
+            style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}"
+            title="${esc(x.name)}${STOCK[x.stock] ? " – " + STOCK[x.stock][0] : ""}${owned[x.key] ? " – har: " + esc(owned[x.key].join(", ")) : ""}"></span>`).join("")}</div>
+        </summary>
+        ${!typeInStock(t) ? `<div class="row-actions type-wish">${stockBadge(t.product ? "out" : "missing")}${wishButton(`type:${t.type}`)}</div>` : ""}
+        <div class="news-colors">${visibleColors(t).map((x) => colorCard({ ...x, t })).join("")}</div>
+      </details>`;
     }).join("")}</div>`;
 
   $("#news-days").addEventListener("input", (e) => {
     state.newsDays = e.target.value;
     store("bf.newsDays", state.newsDays);
+    renderNews();
+  });
+  $("#news-stock").addEventListener("input", (e) => {
+    state.newsStock = e.target.value;
+    store("bf.newsStock", state.newsStock);
     renderNews();
   });
   $("#news-missing").addEventListener("change", (e) => {
@@ -1250,6 +1379,11 @@ for (const key of ["q", "status", "sort"]) {
 }
 
 document.addEventListener("click", (e) => {
+  const wish = e.target.closest("[data-wish]");
+  if (wish) {
+    e.preventDefault();
+    return toggleWish(wish.dataset.wish, wish);
+  }
   const tab = e.target.closest(".tab");
   if (tab) return showTab(tab.dataset.tab);
   const typeTab = e.target.closest(".type-tab");
@@ -1271,6 +1405,12 @@ document.addEventListener("click", (e) => {
   const reset = e.target.closest("[data-reset]");
   if (reset) resetPassword(reset.dataset.reset, reset);
 });
+// Husk hvilke typer som er åpne i «Alle typer», så de ikke lukkes ved oppdatering.
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (!d.matches?.("details.all-type")) return;
+  if (d.open) state.openTypes.add(d.dataset.type); else state.openTypes.delete(d.dataset.type);
+}, true);
 $("#d-form").addEventListener("submit", saveDetail);
 $("#u-form").addEventListener("submit", addUser);
 $("#account").addEventListener("click", openAccount);

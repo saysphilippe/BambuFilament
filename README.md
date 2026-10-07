@@ -80,10 +80,15 @@ Hver bruker velger for seg om **AMS** og/eller **filamentbiblioteket** skal dele
 Fanen viser nye filamenttyper og farger fra Bambu Lab, med lenke til produktsiden i
 nettbutikken og en markering av om noen av oss allerede har fargen.
 
-Workflowen `.github/workflows/catalog.yml` kjører `scripts/update-catalog.mjs` daglig. Skriptet
+Workflowen `.github/workflows/catalog.yml` kjører `scripts/update-catalog.mjs` hver 6. time. Skriptet
 - leser `filaments_color_codes.json` i Bambu Studio-repoet og historikken dens. Det gir
   datoen hver farge og type kom, med juli 2025 som utgangspunkt, og
 - leser nettstedskartet til eu.store.bambulab.com for å finne produktsiden til hver type.
+
+- henter lagerstatus per farge fra EU-butikken (*på lager*, *utsolgt* eller *ikke i butikken*).
+
+Brukere kan trykke **«Jeg venter på denne»** på farger og typer som ikke kan kjøpes. Øverst i fanen
+vises **«Det venter vi på»**, med hvem som venter. Når noe kommer på lager, flyttes det øverst og merkes.
 
 Resultatet lagres i `data/catalog.json` og `data/colors.json`. Workflowen kan også kjøres
 manuelt under *Actions* → *Oppdater Bambu-katalog* → *Run workflow*.

@@ -77,6 +77,7 @@ export default {
           if (!token) return json({ error: "Mangler Bambu-token" }, 401, origin);
           return json(await library(token), 200, origin);
         case "/sitemap": return sitemap(origin);
+        case "/store-product": return storeProduct(body, origin);
         default: return json({ error: "Ukjent endepunkt" }, 404, origin);
       }
     } catch (err) {
@@ -186,6 +187,21 @@ async function sitemap(origin) {
     status: res.status,
     headers: { "Content-Type": "application/xml; charset=utf-8", ...cors(origin) },
   });
+}
+
+// Produkt med lagerstatus per SKU fra Bambu-butikken (EU), for katalogskriptet.
+async function storeProduct({ seoCode }, origin) {
+  if (!/^[a-z0-9-]+$/.test(seoCode || "")) throw fail("Ugyldig produkt");
+  const res = await fetch(`https://eu-store-api.bambulab.com/mall-goods/product/queryDrawer?seoCode=${seoCode}`, {
+    headers: {
+      Accept: "application/json",
+      "Bbl-Locale": "en-US",
+      "X-BBL-STORE-REGION": "EU",
+      "X-BBL-TIME-ZONE": "Europe/Oslo",
+      "User-Agent": "Mozilla/5.0 (BambuFilament catalog)",
+    },
+  });
+  return new Response(res.body, { status: res.status, headers: { "Content-Type": "application/json", ...cors(origin) } });
 }
 
 // ---------- AMS ----------

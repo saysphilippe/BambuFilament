@@ -149,6 +149,7 @@ for (const e of latest) {
       key: keyOf(e),
       name: e.fila_color_name?.en || "",
       hex: e.fila_color || [],
+      code: String(e.fila_color_code || ""),
       firstSeen: firstColor[keyOf(e)] || null,
     });
   }
@@ -161,6 +162,57 @@ const prevProduct = Object.fromEntries((previous.types || []).map((t) => [t.type
 for (const t of Object.values(types)) {
   const p = prods.length ? findProduct(t.type, prods) : null;
   t.product = p ? { url: p.url, title: p.title, image: p.image } : prevProduct[t.type] || null;
+}
+
+// ---------- Lagerstatus i Bambu-butikken (EU) ----------
+//
+// queryDrawer gir alle SKU-er for et produkt med isSoldOut. Fargen står som
+// "Black(30105)", der tallet er fila_color_code i Bambu sin fargeliste.
+// Resultat per farge: "in" (kan kjøpes), "out" (utsolgt) eller "missing" (ikke i butikken).
+
+const STORE_API = "https://eu-store-api.bambulab.com/mall-goods/product/queryDrawer";
+const STORE_PROXY = "https://bambufilament-proxy.saysphilippe.workers.dev/store-product";
+const STORE_HEADERS = {
+  Accept: "application/json",
+  "Bbl-Locale": "en-US",
+  "X-BBL-STORE-REGION": "EU",
+  "X-BBL-TIME-ZONE": "Europe/Oslo",
+  "User-Agent": "Mozilla/5.0 (BambuFilament catalog)",
+};
+
+async function storeSkus(seoCode) {
+  const tries = [
+    () => fetch(`${STORE_API}?seoCode=${seoCode}`, { headers: STORE_HEADERS }),
+    () => fetch(STORE_PROXY, { method: "POST", headers: { Origin: "https://saysphilippe.github.io" }, body: JSON.stringify({ seoCode }) }),
+  ];
+  for (const attempt of tries) {
+    try {
+      const json = await (await attempt()).json();
+      if (json.code === 1 && json.data) return json.data.productSkuList || [];
+    } catch { /* prøv neste */ }
+  }
+  return null;
+}
+
+const stockCache = {};
+let stockChecked = 0;
+for (const t of Object.values(types)) {
+  const seo = t.product?.url.split("/products/")[1];
+  if (!seo) continue;
+  stockCache[seo] ||= await storeSkus(seo);
+  const skus = stockCache[seo];
+  if (!skus) continue;
+  stockChecked++;
+  const byCode = {};
+  for (const sku of skus) {
+    const color = (sku.productSkuPropertyList || []).find((p) => p.propertyKey === "Color")?.propertyValue || "";
+    const code = (color.match(/\((\d+)\)/) || [])[1];
+    if (!code) continue;
+    byCode[code] ||= false;
+    if (!sku.isSoldOut) byCode[code] = true;
+  }
+  t.storeColors = Object.keys(byCode).length;
+  for (const c of t.colors) c.stock = !(c.code in byCode) ? "missing" : byCode[c.code] ? "in" : "out";
 }
 
 const catalog = {
@@ -180,5 +232,8 @@ if (before !== JSON.stringify({ ...catalog, updated: undefined }, null, 1)) {
 await writeFile("data/colors.json", JSON.stringify(colors));
 
 const missing = catalog.types.filter((t) => !t.product).map((t) => t.type);
+const stockCounts = {};
+for (const t of catalog.types) for (const c of t.colors) stockCounts[c.stock || "ukjent"] = (stockCounts[c.stock || "ukjent"] || 0) + 1;
 console.log(`${catalog.types.length} typer, ${Object.keys(colors).length} farger, ${prods.length} produktsider`);
+console.log(`Lagerstatus fra ${stockChecked} typer: ${JSON.stringify(stockCounts)}`);
 if (missing.length) console.log(`Uten produktside: ${missing.join(", ")}`);
