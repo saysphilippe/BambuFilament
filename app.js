@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072250";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072250";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072254";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072254";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -590,6 +590,7 @@ function render() {
         <div class="swatch" style="background:${swatch(s.tag)}">
           ${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}
           <span class="source source-${s.kind}">${SOURCE[s.kind]}</span>
+          <span class="tip">${productionTip(s)}</span>
         </div>
         <div class="owner-bar"><span class="owner-dot"></span>${esc(s.owner || "Ingen eier")}</div>
         <div class="card-body">
@@ -638,7 +639,7 @@ function openDetail(id) {
     ["Dyse", `${t.hotendMin}–${t.hotendMax} °C`],
     ["Seng", `${t.bedTemp} °C`],
     ["Tørking", `${t.dryingTemp} °C i ${t.dryingHours} t`],
-    ["Produsert", fmtDate(t.productionDate)],
+    ["Produsert", t.productionDate instanceof Date && !isNaN(t.productionDate) ? fmtProduction(t.productionDate) : "–"],
     ["Bambu-ID", `${t.materialId} · ${t.variantId}`],
   ] : [["Data", "Kunne ikke tolke brikken"]];
   rows.push(["Lagt inn", fmtDate(s.added)], ["Sist skannet", `${fmtDate(s.lastScan)} (${num(s.scans) || 1}×)`]);
@@ -1466,6 +1467,21 @@ function libraryWeight(id) {
     if (hit) return hit;
   }
   return null;
+}
+
+// Produksjonstidspunktet står i RFID-brikken (blokk 12) som fabrikkens lokaltid,
+// så det vises akkurat som det er lagret, uten omregning til norsk tid.
+function fmtProduction(d) {
+  const opts = { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" };
+  const time = d.toLocaleTimeString("nb-NO", { timeZone: "UTC", hour: "2-digit", minute: "2-digit" });
+  return `${d.toLocaleDateString("nb-NO", opts)} kl. ${time}`;
+}
+
+function productionTip(s) {
+  const d = s.tag?.productionDate;
+  if (s.kind === "rfid" && d instanceof Date && !isNaN(d)) return `Produsert ${esc(fmtProduction(d))}`;
+  if (s.kind === "rfid") return "Produksjonsdato mangler på brikken";
+  return "Produksjonsdato er bare kjent for spoler skannet med RFID-leseren";
 }
 
 function weightLabel(s) {
