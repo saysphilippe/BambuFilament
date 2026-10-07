@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-07T21:17:37.357Z",
+ "updated": "2026-10-07T21:21:14.795Z",
  "source": {
   "colors": "https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/filaments_color_codes.json",
   "store": "https://eu.store.bambulab.com"
@@ -175,7 +175,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/abs-filament",
     "title": "ABS",
-    "image": "https://store.bblcdn.eu/s8/default/5d297742b7744e58a742421ec967a0ea/ABSsilver.png"
+    "image": "https://store.bblcdn.com/s7/default/69834a7536c540e489913a0f8e707e5e/ABSsilver.png"
    },
    "storeColors": 11
   },
@@ -268,7 +268,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/abs-gf",
     "title": "ABS-GF",
-    "image": "https://store.bblcdn.eu/s8/default/f10c8381233a457abfd61dd3c8bf5554/JP36183.png"
+    "image": "https://store.bblcdn.com/s7/default/e70d8b312066450f97e6d5a73de59c8d/JP36183.png"
    },
    "storeColors": 6
   },
@@ -341,7 +341,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/asa-filament",
     "title": "ASA",
-    "image": "https://store.bblcdn.eu/s8/default/88ecadc1c1e748ec8af28233bfa132b5/ASA_White.jpg"
+    "image": "https://store.bblcdn.com/s7/default/064eb368ba6e494f97c74b73e3f6c6ca/ASA_White.jpg"
    },
    "storeColors": 6
   },
@@ -364,7 +364,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/asa-aero",
     "title": "ASA Aero",
-    "image": "https://store.bblcdn.eu/s8/default/b2516f844d3644a6b722b1238dfd63e2/asaaeroball.png"
+    "image": "https://store.bblcdn.com/s7/default/4a241b43f1204242ba3f495b58a1a33c/asaaeroball.png"
    },
    "storeColors": 1
   },
@@ -387,7 +387,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/asa-cf",
     "title": "ASA-CF",
-    "image": "https://store.bblcdn.eu/s8/default/782c8db0e72b43799b3164741380111f/1_db8508ce-9151-474f-8fc4-e57ec533edc0.jpg"
+    "image": "https://store.bblcdn.com/s7/default/b2bb49f62dbe4dc79e3d9492f7fc938f/1_d66cf8d1-086a-454f-a80f-a6e380cc0129.jpg"
    },
    "storeColors": 1
   },
@@ -410,7 +410,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pa6-cf",
     "title": "PA6-CF",
-    "image": "https://store.bblcdn.eu/s8/default/a73fe23577b84ea58c333a714eae4cad/PA6-CF.png"
+    "image": "https://store.bblcdn.com/s7/default/14012cf051a54fa6965d28c55b73fff9/PA6-CF.png"
    },
    "storeColors": 1
   },
@@ -503,7 +503,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pa6-gf",
     "title": "PA6-GF",
-    "image": "https://store.bblcdn.eu/s8/default/206b1f9df0a64848becdf721b2541936/JP35952.jpg"
+    "image": "https://store.bblcdn.com/s7/default/ddd1982caff84b0a87a3f7fa1aca75f1/JP35952.jpg"
    },
    "storeColors": 8
   },
@@ -526,7 +526,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/paht-cf",
     "title": "PAHT-CF",
-    "image": "https://store.bblcdn.eu/s8/default/1adca385b4fd4502b492ed2651908f51/PAHTCFORIGINAL.png"
+    "image": "https://store.bblcdn.com/s7/default/8d726ef8d4e143f5a517589b0e3631d5/PAHTCFORIGINAL.png"
    },
    "storeColors": 1
   },
@@ -579,7 +579,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pc-filament",
     "title": "PC",
-    "image": "https://store.bblcdn.eu/s8/default/c6edead629b04fb48155d9e665c1e7d3/C00-C1-1.75-1000-spl.png"
+    "image": "https://store.bblcdn.com/s7/default/2164536e3f5140ef972c23a6ab0558ec/C00-C1-1.75-1000-spl.png"
    },
    "storeColors": 4
   },
@@ -622,7 +622,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pc-fr",
     "title": "PC FR",
-    "image": "https://store.bblcdn.eu/s8/default/d327d3a6a0514c6093a376e61551c11c/3_2bfbabcc-c211-415c-926b-f5891b308048.jpg"
+    "image": "https://store.bblcdn.com/s7/default/5ecd124435bb4b24b96c5e35460d433d/20250224-142244.jpg"
    },
    "storeColors": 3
   },
@@ -645,7 +645,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pet-cf",
     "title": "PET-CF",
-    "image": "https://store.bblcdn.eu/s8/default/c69a75229e824ec2a92b2e37f8510b01/pet-cr.png"
+    "image": "https://store.bblcdn.com/s7/default/f4fee29534da4743a02a1c350a8d661c/pet-cr.png"
    },
    "storeColors": 1
   },
@@ -828,7 +828,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/petg-basic",
     "title": "PETG Basic",
-    "image": "https://store.bblcdn.eu/s8/default/2aec282c1ec545f880a7aa75fbec8f95/PETG_Basic_orange.jpg"
+    "image": "https://store.bblcdn.com/s7/default/19d781e6d97d49b9952e787f95eef2bf/PETG_Basic_Orange.jpg"
    },
    "storeColors": 13
   },
@@ -981,7 +981,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/petg-hf",
     "title": "PETG HF",
-    "image": "https://store.bblcdn.eu/s8/default/588e1afe37284baaa4ee09fbff15a66d/5_87e53b22-3a47-4e93-adce-7f40106815c0.jpg"
+    "image": "https://store.bblcdn.com/s7/default/834a8ad1816747b290e1d6c0ea018942/PETGHF_6.jpg"
    },
    "storeColors": 14
   },
@@ -1074,7 +1074,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/petg-matte",
     "title": "PETG Matte",
-    "image": "https://store.bblcdn.eu/s8/default/d70a3897529942a9b9ef310ee10112d0/black.png"
+    "image": "https://store.bblcdn.com/s7/default/9329e7d3e3234b9e919697deb14489ba/black.png"
    },
    "storeColors": 8
   },
@@ -1177,7 +1177,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/petg-translucent",
     "title": "PETG Translucent",
-    "image": "https://store.bblcdn.eu/s8/default/e39842a1bdb243a2bbb809444d83ad94/JP34951_dfb10fec-368d-47a7-8bd8-bb506498a9bd.jpg"
+    "image": "https://store.bblcdn.com/s7/default/9d6c7b93cef74230a6075b81df079696/JP34951_360f550d-25f1-4d47-84cb-0212d548652d.jpg"
    },
    "storeColors": 9
   },
@@ -1250,7 +1250,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/petg-cf",
     "title": "PETG-CF",
-    "image": "https://store.bblcdn.eu/s8/default/7e67cea6705a4709a7452e1b0fb113e4/PETG-CFpurp_37ad5532-5d64-4eb9-90b0-d183f2511e9e.png"
+    "image": "https://store.bblcdn.com/s7/default/31093e7d52524e169c240afed3aeb603/PETG-CFblue.png"
    },
    "storeColors": 6
   },
@@ -1293,7 +1293,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-aero",
     "title": "PLA Aero",
-    "image": "https://store.bblcdn.eu/s8/default/c2e94607bb684af49bcaa25ec9dac8da/AERO_bc503e27-6fed-4b8e-a505-342f6050dc27.png"
+    "image": "https://store.bblcdn.com/s7/default/3be4afb273ad419e9828fd7867d9dfda/AERO.png"
    },
    "storeColors": 2
   },
@@ -1694,7 +1694,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-basic-filament",
     "title": "PLA Basic",
-    "image": "https://store.bblcdn.eu/s8/default/0e0f2442945b482eac4ecb20182faf6b/pla_baisc_white.jpg"
+    "image": "https://store.bblcdn.com/s7/default/18de47bcc5d9405596014400afd8a661/PLA_Basic_White.jpg"
    },
    "storeColors": 30
   },
@@ -1764,7 +1764,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-galaxy",
     "title": "PLA Galaxy",
-    "image": "https://store.bblcdn.eu/s8/default/5a46d227df6e4ed4bbe44dd87d31d069/purle.jpg"
+    "image": "https://store.bblcdn.com/s7/default/4660ca267dad46fe865a4c17d4b095a5/purle.jpg"
    },
    "storeColors": 4
   },
@@ -1827,7 +1827,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-glow",
     "title": "PLA Glow",
-    "image": "https://store.bblcdn.eu/s8/default/3c41198f191c4fda907f0c820a370813/glow.jpg"
+    "image": "https://store.bblcdn.com/s7/default/3ae3b1c1bd254058bf08b79f3ee815b3/PLA_Glow.jpg"
    },
    "storeColors": 5
   },
@@ -1985,7 +1985,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-marble",
     "title": "PLA Marble",
-    "image": "https://store.bblcdn.eu/s8/default/403434f58f2e4ba8a72159a24315dd2b/A07-R5-1.75-1000-spl.jpg"
+    "image": "https://store.bblcdn.com/s7/default/4b3c4976913b4183a66b085472307137/A07-R5-1.75-1000-spl.jpg"
    },
    "storeColors": 2
   },
@@ -2248,7 +2248,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-matte",
     "title": "PLA Matte",
-    "image": "https://store.bblcdn.eu/s8/default/8221709b8311467cb756b4325da9c5a2/PLA_Matte_white.jpg"
+    "image": "https://store.bblcdn.com/s7/default/2ada3acd0e9b45d08469531d61a98bc8/PLA_Matte_white.jpg"
    },
    "storeColors": 25
   },
@@ -2311,7 +2311,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-metal",
     "title": "PLA Metal",
-    "image": "https://store.bblcdn.eu/s8/default/a8cb6b37d9d8430b88743d1784093c1a/A02-B2-1.75-1000-spl.png"
+    "image": "https://store.bblcdn.com/s7/default/5b1cc1cda03f45f5b00efa0685bda6a2/A02-B2-1.75-1000-spl.png"
    },
    "storeColors": 5
   },
@@ -2374,7 +2374,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-pure",
     "title": "PLA Pure",
-    "image": "https://store.bblcdn.eu/s8/default/ddad17bc01ba4519965ad3d8ada7fa42/PLA_purePLA_pure.jpg"
+    "image": "https://store.bblcdn.com/s7/default/89d4327b95e945dd848fb22d441151c8/PLA_purePLA_pure.jpg"
    },
    "storeColors": 5
   },
@@ -2579,7 +2579,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-silk-upgrade",
     "title": "PLA Silk+",
-    "image": "https://store.bblcdn.eu/s8/default/9aaebe748b88497387f3c159307aa5bf/cf2723db072c4371b3606938b8cccdb9.jpg"
+    "image": "https://store.bblcdn.com/s7/default/8ffced148867425fb0d6d3fb59de0f37/PLA_Silk_8_d3d9592f-96fd-4456-8a9c-fbe9996b41ce.jpg"
    },
    "storeColors": 13
   },
@@ -2722,7 +2722,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-silk-upgrade",
     "title": "PLA Silk+",
-    "image": "https://store.bblcdn.eu/s8/default/9aaebe748b88497387f3c159307aa5bf/cf2723db072c4371b3606938b8cccdb9.jpg"
+    "image": "https://store.bblcdn.com/s7/default/8ffced148867425fb0d6d3fb59de0f37/PLA_Silk_8_d3d9592f-96fd-4456-8a9c-fbe9996b41ce.jpg"
    },
    "storeColors": 13
   },
@@ -2795,7 +2795,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-sparkle",
     "title": "PLA Sparkle",
-    "image": "https://store.bblcdn.eu/s8/default/7407fc887147448bbbf89189c9539952/Sparklegreen.png"
+    "image": "https://store.bblcdn.com/s7/default/b33fcdd91bfc4dffa7ec8ddbe7b50a91/Sparklegreen.png"
    },
    "storeColors": 6
   },
@@ -2908,7 +2908,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-tough-upgrade",
     "title": "PLA Tough+",
-    "image": "https://store.bblcdn.eu/s8/default/76a53975eaab4238ab610612c4efdc5f/PLA_Tough_(3).jpg"
+    "image": "https://store.bblcdn.com/s7/default/50dea15e68e94f0da6ccb2bc2e24e299/PLA_Tough_(2).jpg"
    },
    "storeColors": 7
   },
@@ -2991,7 +2991,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-tough-upgrade",
     "title": "PLA Tough+",
-    "image": "https://store.bblcdn.eu/s8/default/76a53975eaab4238ab610612c4efdc5f/PLA_Tough_(3).jpg"
+    "image": "https://store.bblcdn.com/s7/default/50dea15e68e94f0da6ccb2bc2e24e299/PLA_Tough_(2).jpg"
    },
    "storeColors": 7
   },
@@ -3104,7 +3104,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-translucent",
     "title": "PLA Translucent",
-    "image": "https://store.bblcdn.eu/s8/default/18aacd2b879441cd80c2cd067b2ad0a1/teal_4dc29df4-13e2-4c00-9e6a-7dbf9183952a.jpg"
+    "image": "https://store.bblcdn.com/s7/default/7a274c60cf77465295cb0ebbd5597668/teal.jpg"
    },
    "storeColors": 10
   },
@@ -3177,7 +3177,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-wood",
     "title": "PLA Wood",
-    "image": "https://store.bblcdn.eu/s8/default/11c1ab483b664ebbbfcf7414c1ec0167/4_4f1d41bd-761c-4ac8-bea1-540852b7334d.jpg"
+    "image": "https://store.bblcdn.com/s7/default/57618973443746d79aed97ca049f29f6/4_edf1bf62-74b1-4ae2-b03a-d66d6b475191.jpg"
    },
    "storeColors": 6
   },
@@ -3260,7 +3260,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pla-cf",
     "title": "PLA-CF",
-    "image": "https://store.bblcdn.eu/s8/default/6c62179718bc473c94f3e629543e001b/c0f99c4f6c04f5422dcd8db2da060392.png"
+    "image": "https://store.bblcdn.com/s7/default/1b92f2d8468940af912e3b693a2f1514/a607d88492630a4fc0e1169570fcd150_8739bab5-48f4-48a1-9471-199c1e334f3d.png"
    },
    "storeColors": 7
   },
@@ -3283,7 +3283,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/ppa-cf",
     "title": "PPA-CF",
-    "image": "https://store.bblcdn.eu/s8/default/0db74d6bbfd54a3f9756c4395a519457/PPA1.jpg"
+    "image": "https://store.bblcdn.com/s7/default/eb0598bcb29342ad9a4c10d3b75ea8dc/6391ace427ade714b70fb966024ae804_ccd9809a-f71d-4cbf-92ad-f92bf73d28fc.jpg"
    },
    "storeColors": 1
   },
@@ -3306,7 +3306,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pps-cf",
     "title": "PPS-CF",
-    "image": "https://store.bblcdn.eu/s8/default/b9b9f671b9754c84b45ecd4c9e58f7e5/Mainimage.png"
+    "image": "https://store.bblcdn.com/s7/default/f2be3e9c0d3d411da026542ef29c0074/Mainimage.png"
    },
    "storeColors": 1
   },
@@ -3329,7 +3329,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/pva",
     "title": "PVA",
-    "image": "https://store.bblcdn.eu/s8/default/151690be785849e88d3d926351a85a6b/pvasupport12.jpg"
+    "image": "https://store.bblcdn.com/s7/default/6927756edcd74795b7707f9d1e6b293c/pvasupport12.jpg"
    },
    "storeColors": 1
   },
@@ -3352,7 +3352,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/support-for-abs",
     "title": "Support for ABS",
-    "image": "https://store.bblcdn.eu/s8/default/1037a943c71d40e99da4609bb4934b61/20240704-172034.png"
+    "image": "https://store.bblcdn.com/s7/default/32302bd4eebc45e3bd6fc67badf51b38/20240704-172034.png"
    },
    "storeColors": 1
   },
@@ -3375,7 +3375,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/support-for-pa-pet",
     "title": "Support for PA/PET",
-    "image": "https://store.bblcdn.eu/s8/default/51c284b0cc7b4dc8ba24601c4b35d9c7/SupportforPAPET.png"
+    "image": "https://store.bblcdn.com/s7/default/7a79f37d35384fc5b85d2fcb9a83ff0f/SupportforPAPET_20e5517b-5a4d-4527-a9a0-32f4b578500a.png"
    },
    "storeColors": 1
   },
@@ -3398,7 +3398,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/support-for-pla-petg",
     "title": "Support for PLA/PETG",
-    "image": "https://store.bblcdn.eu/s8/default/bae39a0960be4a41b09d800b8add0176/3_333e81ce-72cf-4643-a79a-19afd5ac5866.jpg"
+    "image": "https://store.bblcdn.com/s7/default/4a9d988773b14e93914f82f888afd771/3_6307a9b6-9d3e-4ab6-be1c-bbeeb8ee6f1c.jpg"
    },
    "storeColors": 2
   },
@@ -3431,7 +3431,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/support-for-pla-petg",
     "title": "Support for PLA/PETG",
-    "image": "https://store.bblcdn.eu/s8/default/bae39a0960be4a41b09d800b8add0176/3_333e81ce-72cf-4643-a79a-19afd5ac5866.jpg"
+    "image": "https://store.bblcdn.com/s7/default/4a9d988773b14e93914f82f888afd771/3_6307a9b6-9d3e-4ab6-be1c-bbeeb8ee6f1c.jpg"
    },
    "storeColors": 2
   },
@@ -3494,7 +3494,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/tpu-85a-tpu-90a",
     "title": "TPU 85A / TPU 90A",
-    "image": "https://store.bblcdn.eu/s8/default/a6a50e4e7a4b42c2bc7b430dfb5cafd4/silver_2.png"
+    "image": "https://store.bblcdn.com/s7/default/9218dd7f72af4425be51eeb30853a75e/silver_2.png"
    },
    "storeColors": 13
   },
@@ -3589,7 +3589,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/tpu-85a-tpu-90a",
     "title": "TPU 85A / TPU 90A",
-    "image": "https://store.bblcdn.eu/s8/default/a6a50e4e7a4b42c2bc7b430dfb5cafd4/silver_2.png"
+    "image": "https://store.bblcdn.com/s7/default/9218dd7f72af4425be51eeb30853a75e/silver_2.png"
    },
    "storeColors": 13
   },
@@ -3622,7 +3622,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/tpu-95a-hf",
     "title": "TPU 95A HF",
-    "image": "https://store.bblcdn.eu/s8/default/59379e6c40124c21bc7dd55245fb1ebe/TPUHF_1.png"
+    "image": "https://store.bblcdn.com/s7/default/681f386ccce64332b2eca2cab35dc75d/TPUHF_1.png"
    },
    "storeColors": 6
   },
@@ -3695,7 +3695,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/tpu-95a-hf",
     "title": "TPU 95A HF",
-    "image": "https://store.bblcdn.eu/s8/default/59379e6c40124c21bc7dd55245fb1ebe/TPUHF_1.png"
+    "image": "https://store.bblcdn.com/s7/default/681f386ccce64332b2eca2cab35dc75d/TPUHF_1.png"
    },
    "storeColors": 6
   },
@@ -3778,7 +3778,7 @@
    "product": {
     "url": "https://eu.store.bambulab.com/products/tpu-for-ams",
     "title": "TPU for AMS",
-    "image": "https://store.bblcdn.eu/s8/default/5b848554718b444faa29355ce6f54264/d4fb1dd751904e1ea09d142c68d7ec36.jpg"
+    "image": "https://store.bblcdn.com/s7/default/7dffd33d182d4d799d49b182860c7851/d4fb1dd751904e1ea09d142c68d7ec36.jpg"
    },
    "storeColors": 7
   }
