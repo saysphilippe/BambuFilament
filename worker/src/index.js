@@ -73,6 +73,10 @@ export default {
         case "/ams":
           if (!token) return json({ error: "Mangler Bambu-token" }, 401, origin);
           return json(await ams(token), 200, origin);
+        case "/library":
+          if (!token) return json({ error: "Mangler Bambu-token" }, 401, origin);
+          return json(await library(token), 200, origin);
+        case "/sitemap": return sitemap(origin);
         default: return json({ error: "Ukjent endepunkt" }, 404, origin);
       }
     } catch (err) {
@@ -108,12 +112,21 @@ async function sendCode({ email }) {
   return { sent: true };
 }
 
-// Tofaktor med autentiseringsapp. Tokenen kommer som cookie.
+// Tofaktor med autentiseringsapp. Bambu krever en CSRF-nøkkel først, og tokenen kommer som cookie.
 async function tfa({ tfaKey, tfaCode }) {
   if (!tfaKey || !tfaCode) throw fail("Mangler kode");
+  const csrfRes = await fetch("https://bambulab.com/api/csrf", { headers: { "User-Agent": "BambuFilament/1.0" } });
+  const csrfCookies = csrfRes.headers.getSetCookie ? csrfRes.headers.getSetCookie().join(";") : csrfRes.headers.get("Set-Cookie") || "";
+  const csrf = (csrfCookies.match(/bbl_csrf_token=([^;]+)/) || [])[1];
+  if (!csrf) throw fail(`Fikk ikke CSRF-nøkkel fra Bambu (${csrfRes.status})`, 502);
   const res = await fetch("https://bambulab.com/api/sign-in/tfa", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "User-Agent": "BambuFilament/1.0" },
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": "BambuFilament/1.0",
+      "x-bbl-csrf-token": csrf,
+      Cookie: `bbl_csrf_token=${csrf}`,
+    },
     body: JSON.stringify({ tfaKey, tfaCode }),
   });
   const cookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get("Set-Cookie") || ""];
@@ -130,6 +143,49 @@ async function refresh({ refreshToken }) {
   const { status, data } = await bambu("/v1/user-service/user/refreshtoken", { method: "POST", body: { refreshToken } });
   if (!data.accessToken) throw fail(data.error || data.message || `Kunne ikke fornye innloggingen (${status})`, 401);
   return { token: data.accessToken, refreshToken: data.refreshToken || refreshToken, expiresIn: data.expiresIn || null };
+}
+
+// ---------- Filamentbibliotek (Filament Manager i Bambu Studio / Handy) ----------
+
+async function library(token) {
+  const spools = [];
+  for (let offset = 0, page = 0; page < 20; page++) {
+    const { status, data } = await bambu(`/v1/design-user-service/my/filament/v2?offset=${offset}&limit=100`, { token });
+    if (status === 401) throw fail("Bambu-innloggingen er utløpt. Koble til på nytt.", 401);
+    if (status >= 400) throw fail(data?.error || `Kunne ikke hente filamentbiblioteket (${status})`, status);
+    const hits = (data.hits || []).filter((h) => h && typeof h === "object");
+    spools.push(...hits);
+    offset += hits.length;
+    if (!hits.length || typeof data.total !== "number" || offset >= data.total) break;
+  }
+  const hex = (c) => (typeof c === "string" ? c.replace(/^#/, "").toUpperCase() : "");
+  return {
+    updated: new Date().toISOString(),
+    spools: spools.map((s) => ({
+      vendor: s.filamentVendor || "",
+      name: s.filamentName || s.displayName || "",
+      type: s.filamentType || "",
+      filamentId: s.filamentId || "",
+      color: hex(s.color),
+      colors: Array.isArray(s.colors) ? s.colors.map(hex).filter(Boolean) : [],
+      net: Number(s.netWeight) || 0,
+      total: Number(s.totalNetWeight) || 0,
+      rfid: (s.RFID || "").toUpperCase(),
+      note: s.note || "",
+      location: [s.deviceName, s.trayIdName].filter(Boolean).join(" "),
+    })),
+  };
+}
+
+// Nettstedskartet til Bambu-butikken, for katalogskriptet når butikken avviser GitHub sine servere.
+async function sitemap(origin) {
+  const res = await fetch("https://eu.store.bambulab.com/sitemap_products_1.xml", {
+    headers: { "User-Agent": "Mozilla/5.0 (BambuFilament catalog)" },
+  });
+  return new Response(res.body, {
+    status: res.status,
+    headers: { "Content-Type": "application/xml; charset=utf-8", ...cors(origin) },
+  });
 }
 
 // ---------- AMS ----------

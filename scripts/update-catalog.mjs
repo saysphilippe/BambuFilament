@@ -76,10 +76,25 @@ const decode = (s) => s
   .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9+]/g, "");
 
+// Butikken avviser av og til GitHub sine servere, så proxyen på Cloudflare brukes som reserve.
+const SITEMAP_PROXY = "https://bambufilament-proxy.saysphilippe.workers.dev/sitemap";
+
+async function sitemapXml() {
+  try {
+    const res = await fetch(SITEMAP, { headers: { "User-Agent": "Mozilla/5.0 (BambuFilament catalog)" } });
+    const xml = await res.text();
+    if (res.ok && xml.includes("<url>")) return xml;
+    console.warn(`Nettstedskart direkte: ${res.status}, prøver proxyen`);
+  } catch (err) {
+    console.warn(`Nettstedskart direkte: ${err.message}, prøver proxyen`);
+  }
+  const res = await fetch(SITEMAP_PROXY, { method: "POST", headers: { Origin: "https://saysphilippe.github.io" } });
+  if (!res.ok) throw new Error(`sitemap via proxy: ${res.status}`);
+  return res.text();
+}
+
 async function products() {
-  const res = await fetch(SITEMAP, { headers: { "User-Agent": "Mozilla/5.0 (BambuFilament catalog)" } });
-  if (!res.ok) throw new Error(`sitemap: ${res.status}`);
-  const xml = await res.text();
+  const xml = await sitemapXml();
   return xml.split("<url>").slice(1)
     .map((b) => ({
       url: (b.match(/<loc>([^<]*)/) || [])[1] || "",

@@ -30,6 +30,7 @@ const state = {
   colorIndex: {},
   tab: "stock",
   amsLive: null,
+  libraryLive: null,
   amsBusy: false,
   amsError: "",
   catalog: null,
@@ -183,7 +184,7 @@ function enrich(spool) {
 }
 
 function setDoc(doc) {
-  state.doc = { ...doc, users: doc.users || [], spools: doc.spools || [], ams: doc.ams || {} };
+  state.doc = { ...doc, users: doc.users || [], spools: doc.spools || [], ams: doc.ams || {}, library: doc.library || {} };
   state.spools = state.doc.spools.map(enrich);
 }
 
@@ -320,7 +321,7 @@ function render() {
           <div class="card-type">${esc(s.typeName)}</div>
           <div class="card-meta">
             <span class="hex">${esc(s.tag?.colors.map((c) => c.slice(0, 7)).join(" / ") || "")}</span>
-            ${s.tag ? `<span>${s.tag.weight} g</span>` : ""}
+            ${weightLabel(s)}
           </div>
           ${s.note ? `<div class="card-note">${esc(s.note)}</div>` : ""}
         </div>
@@ -538,6 +539,7 @@ function setSession(value) {
   session = value;
   store("bf.session", value ? JSON.stringify(value) : "");
   state.amsLive = null;
+  state.libraryLive = null;
   state.amsError = "";
   renderAccount();
   render();
@@ -692,17 +694,22 @@ function saveBambuAuth(res, email) {
   }));
 }
 
-// Henter AMS. Ved utløpt nøkkel fornyes den én gang før brukeren må koble til på nytt.
-async function fetchAms() {
+// Kaller proxyen med Bambu-nøkkelen. Ved utløpt nøkkel fornyes den én gang
+// før brukeren må koble til på nytt. Samtidige kall deler samme fornyelse.
+let refreshing = null;
+async function bambuCall(path) {
   try {
-    return await proxy("/ams", {}, bambuToken());
+    return await proxy(path, {}, bambuToken());
   } catch (err) {
     const { refreshToken } = bambuAuth();
     if (err.status !== 401 || !refreshToken) throw err;
-    saveBambuAuth(await proxy("/refresh", { refreshToken }));
-    return proxy("/ams", {}, bambuToken());
+    refreshing ||= proxy("/refresh", { refreshToken }).then((res) => saveBambuAuth(res)).finally(() => (refreshing = null));
+    await refreshing;
+    return proxy(path, {}, bambuToken());
   }
 }
+const fetchAms = () => bambuCall("/ams");
+const fetchLibrary = () => bambuCall("/library");
 
 async function proxy(path, body, bambu) {
   if (!PROXY_URL) throw new Error("AMS-proxyen er ikke satt opp ennå.");
@@ -733,7 +740,12 @@ async function refreshAms() {
   state.amsError = "";
   renderAms();
   try {
-    state.amsLive = await fetchAms();
+    const [amsRes, libRes] = await Promise.allSettled([fetchAms(), fetchLibrary()]);
+    if (amsRes.status === "rejected" && libRes.status === "rejected") throw amsRes.reason;
+    if (amsRes.status === "fulfilled") state.amsLive = amsRes.value;
+    if (libRes.status === "fulfilled") state.libraryLive = libRes.value;
+    const failed = amsRes.status === "rejected" ? amsRes.reason : libRes.status === "rejected" ? libRes.reason : null;
+    if (failed) state.amsError = `${amsRes.status === "rejected" ? "AMS" : "Filamentbiblioteket"}: ${failed.message}`;
     await publishSnapshot();
   } catch (err) {
     state.amsError = err.message;
@@ -749,28 +761,34 @@ async function refreshAms() {
 // Lagrer øyeblikksbildet i repoet hvis brukeren deler og innholdet er endret.
 async function publishSnapshot() {
   const me = state.doc.users.find((u) => u.name === userName());
-  if (!me?.shareAms || !state.amsLive) return;
-  const snap = snapshot(state.amsLive);
-  const old = state.doc.ams?.[me.name];
-  const fresh = old && Date.now() - new Date(old.updated).getTime() < SNAPSHOT_MAX_AGE_MS;
-  if (sameSnapshot(old, snap) && fresh) return;
+  if (!me) return;
+  const age = (x) => (x ? Date.now() - new Date(x.updated).getTime() : Infinity);
+  const oldAms = state.doc.ams?.[me.name];
+  const oldLib = state.doc.library?.[me.name];
+  const amsChanged = me.shareAms && state.amsLive && (!sameSnapshot(oldAms, snapshot(state.amsLive)) || age(oldAms) > SNAPSHOT_MAX_AGE_MS);
+  const libChanged = me.shareLibrary && state.libraryLive && (JSON.stringify(oldLib?.spools) !== JSON.stringify(state.libraryLive.spools) || age(oldLib) > SNAPSHOT_MAX_AGE_MS);
+  if (!amsChanged && !libChanged) return;
   await saveDoc((doc) => {
-    doc.ams ||= {};
-    doc.ams[me.name] = snap;
-  }, `AMS-oppdatering (${me.name})`);
+    if (amsChanged) (doc.ams ||= {})[me.name] = snapshot(state.amsLive);
+    if (libChanged) (doc.library ||= {})[me.name] = state.libraryLive;
+  }, `AMS/bibliotek-oppdatering (${me.name})`);
 }
 
-async function setShare(share) {
+// Hver bruker velger for seg om AMS og/eller filamentbiblioteket deles med alle.
+async function setShare(kind, share) {
   state.amsError = "";
+  const label = kind === "library" ? "filamentbibliotek" : "AMS";
   try {
     await saveDoc((doc) => {
       const u = doc.users.find((x) => x.name === userName());
       if (!u) return "Brukeren din finnes ikke.";
-      u.shareAms = share;
-      doc.ams ||= {};
-      if (share && state.amsLive) doc.ams[u.name] = snapshot(state.amsLive);
-      if (!share) delete doc.ams[u.name];
-    }, `${share ? "Deler" : "Sluttet å dele"} AMS-data (${userName()})`);
+      const flag = kind === "library" ? "shareLibrary" : "shareAms";
+      const bucket = kind === "library" ? (doc.library ||= {}) : (doc.ams ||= {});
+      const live = kind === "library" ? state.libraryLive : state.amsLive && snapshot(state.amsLive);
+      u[flag] = share;
+      if (share && live) bucket[u.name] = live;
+      if (!share) delete bucket[u.name];
+    }, `${share ? "Deler" : "Sluttet å dele"} ${label} (${userName()})`);
   } catch (err) {
     state.amsError = err.message;
   }
@@ -851,9 +869,12 @@ function renderAms() {
       <div class="ams-me-row">
         <div>
           <b>Bambu-konto tilkoblet</b>${bambuAuth().email ? ` <span class="muted">(${esc(bambuAuth().email)})</span>` : ""}
-          <div class="muted">${state.amsBusy ? "Henter AMS-data…" : state.amsLive ? `Oppdatert ${fmtTime(state.amsLive.updated)}` : ""}</div>
+          <div class="muted">${state.amsBusy ? "Henter AMS og filamentbibliotek…" : state.amsLive || state.libraryLive ? `Oppdatert ${fmtTime((state.amsLive || state.libraryLive).updated)}` : ""}</div>
         </div>
-        <label class="switch"><input type="checkbox" data-ams="share" ${meUser?.shareAms ? "checked" : ""}> Del AMS-data med alle</label>
+        <div class="share-toggles">
+          <label class="switch"><input type="checkbox" data-ams="share-ams" ${meUser?.shareAms ? "checked" : ""}> Del AMS med alle</label>
+          <label class="switch"><input type="checkbox" data-ams="share-library" ${meUser?.shareLibrary ? "checked" : ""}> Del filamentbibliotek med alle</label>
+        </div>
         <button class="btn" data-ams="refresh" ${state.amsBusy ? "disabled" : ""}>Oppdater</button>
         <button class="btn btn-danger" data-ams="disconnect">Koble fra</button>
       </div>`;
@@ -861,16 +882,68 @@ function renderAms() {
   if (state.amsError) panel.innerHTML += `<p class="error">${esc(state.amsError)}</p>`;
 
   const sections = users().map((u) => {
-    const live = u.name === me && state.amsLive;
-    const data = live || state.doc.ams?.[u.name];
-    if (!data) return "";
-    const tag = live ? (u.shareAms ? "Ditt · deles med alle" : "Ditt · bare synlig for deg") : `Delt ${fmtTime(data.updated)}`;
+    const mine = u.name === me;
+    const data = (mine && state.amsLive) || state.doc.ams?.[u.name];
+    const lib = (mine && state.libraryLive) || state.doc.library?.[u.name];
+    if (!data && !lib) return "";
+    const live = mine && (state.amsLive || state.libraryLive);
+    const shared = [u.shareAms && "AMS", u.shareLibrary && "bibliotek"].filter(Boolean).join(" og ");
+    const tag = live ? `Ditt · ${shared ? `deler ${shared}` : "bare synlig for deg"}` : `Delt ${fmtTime((data || lib).updated)}`;
     return `<section class="ams-owner" style="--owner:${u.color}">
       <h2><span class="owner-dot"></span>${esc(u.name)} <span class="muted">${tag}</span></h2>
-      <div class="printers">${data.printers.map(renderPrinter).join("") || `<p class="muted">Ingen printere.</p>`}</div>
+      ${data ? `<div class="printers">${data.printers.map(renderPrinter).join("") || `<p class="muted">Ingen printere.</p>`}</div>` : ""}
+      ${lib ? renderLibrary(lib) : ""}
     </section>`;
   }).join("");
-  $("#ams-list").innerHTML = sections || `<p class="empty-msg">Ingen AMS-data er delt ennå.</p>`;
+  $("#ams-list").innerHTML = sections || `<p class="empty-msg">Ingen AMS-data eller filamentbibliotek er delt ennå.</p>`;
+}
+
+// Filamentbiblioteket fra Bambu Studio / Handy (Filament Manager).
+function libSwatch(x) {
+  const cols = (x.colors?.length ? x.colors : [x.color]).filter(Boolean).map((c) => "#" + c);
+  return cols.length ? swatch({ colors: cols }) : "var(--muted-bg)";
+}
+
+function renderLibrary(lib) {
+  const scanned = new Set(state.spools.map((s) => s.id.toUpperCase()));
+  const list = lib.spools.slice().sort((a, b) => (b.net > 0) - (a.net > 0) || a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
+  const left = list.filter((x) => x.net > 0);
+  const grams = left.reduce((sum, x) => sum + x.net, 0);
+  const items = list.map((x) => {
+    const pct = x.total > 0 ? Math.round((x.net / x.total) * 100) : null;
+    const n = trayName({ infoIdx: x.filamentId, color: x.color });
+    return `<div class="lib-item${x.net <= 0 ? " lib-empty" : ""}">
+      <span class="lib-swatch" style="background:${libSwatch(x)}"></span>
+      <div class="lib-text">
+        <b>${esc(n.color || x.name || x.type)}</b>
+        <span class="muted">${esc([x.vendor, n.color ? n.type : x.type].filter(Boolean).join(" · "))}</span>
+        ${x.total ? `<div class="remain"><span style="width:${pct}%"></span></div><span class="muted">${x.net} av ${x.total} g</span>` : ""}
+        ${x.location ? `<span class="lib-loc">${esc(x.location)}</span>` : ""}
+        ${x.rfid && scanned.has(x.rfid) ? `<span class="owned">Skannet inn i lageret</span>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+  const kg = (grams / 1000).toLocaleString("nb-NO", { maximumFractionDigits: 1 });
+  return `<details class="library" open>
+    <summary><b>Filamentbibliotek</b> <span class="muted">${left.length} spoler med filament · ${kg} kg igjen${list.length > left.length ? ` · ${list.length - left.length} tomme` : ""}</span></summary>
+    ${list.length ? `<div class="lib-grid">${items}</div>` : `<p class="muted">Biblioteket er tomt.</p>`}
+  </details>`;
+}
+
+// Gjenværende vekt fra Bambu-biblioteket for en spole i lageret (samme RFID som Tray UID).
+function libraryWeight(id) {
+  const key = (id || "").toUpperCase();
+  for (const lib of [state.libraryLive, ...Object.values(state.doc.library || {})]) {
+    const hit = lib?.spools.find((x) => x.rfid === key);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function weightLabel(s) {
+  const lib = libraryWeight(s.id);
+  if (lib && lib.total) return `<span class="lib-weight" title="Fra Bambu-filamentbiblioteket">${lib.net} av ${lib.total} g</span>`;
+  return s.tag ? `<span>${s.tag.weight} g</span>` : "";
 }
 
 // Tilkobling til Bambu: e-post + passord, deretter eventuelt kode fra e-post eller autentiseringsapp.
@@ -929,7 +1002,8 @@ async function bambuSubmit(e) {
 async function amsAction(action, el) {
   if (action === "connect") openBambu();
   if (action === "refresh") refreshAms();
-  if (action === "share") await setShare(el.checked);
+  if (action === "share-ams") await setShare("ams", el.checked);
+  if (action === "share-library") await setShare("library", el.checked);
   if (action === "disconnect") {
     if (!confirm("Koble fra Bambu-kontoen i denne nettleseren?")) return;
     store(bambuKey(), "");
@@ -1115,7 +1189,22 @@ function demoDoc() {
     ])] },
     Niklas: { updated: new Date(now - 3.6e6).toISOString(), printers: [printer("Garasjen", "P1S", [unit(0, ["GFA16-N0", "GFB01-W0", null, "GFA50-G7"], 31)])] },
   };
-  return { version: 1, users: ["Philippe", "Niklas", "Peter"].map((name, i) => ({ name, color: USER_COLORS[i], shareAms: i < 2 })), spools, ams };
+  const libSpool = (key, net, location = "") => {
+    const e = state.colorNames[key];
+    return e && { vendor: "Bambu Lab", name: e[0], type: e[1].split(" ")[0], filamentId: key.split("-")[0], color: e[2][0].slice(1).padEnd(8, "F"), colors: [], net, total: 1000, rfid: "", note: "", location };
+  };
+  const library = {
+    Philippe: { updated: new Date(now - 6e5).toISOString(), spools: [
+      libSpool("GFA00-A0", 820, "Verkstedet A1"), libSpool("GFA00-B3", 450, "Verkstedet A2"), libSpool("GFA01-D0", 1000),
+      libSpool("GFA05-P5", 640), libSpool("GFG02-G0", 300), libSpool("GFA00-K0", 0),
+    ].filter(Boolean) },
+    Peter: { updated: new Date(now - 8.6e7).toISOString(), spools: [libSpool("GFA08-Y1", 900), libSpool("GFU02-R0", 760), libSpool("GFA06-R0", 210)].filter(Boolean) },
+  };
+  return {
+    version: 1,
+    users: ["Philippe", "Niklas", "Peter"].map((name, i) => ({ name, color: USER_COLORS[i], shareAms: i < 2, shareLibrary: i !== 1 })),
+    spools, ams, library,
+  };
 }
 
 // ---------- Oppstart ----------
@@ -1166,7 +1255,7 @@ $("#su-done").addEventListener("click", setupDone);
 $("#users").addEventListener("close", () => (freshPasswords = []));
 $("#open-users").addEventListener("click", openUsers);
 $("#refresh").addEventListener("click", () => (state.tab === "ams" ? Promise.all([refresh(), refreshAms()]) : refresh()));
-$("#ams-me").addEventListener("change", (e) => e.target.dataset.ams === "share" && amsAction("share", e.target));
+$("#ams-me").addEventListener("change", (e) => e.target.dataset.ams?.startsWith("share") && amsAction(e.target.dataset.ams, e.target));
 $("#bambu form").addEventListener("submit", bambuSubmit);
 setInterval(() => document.visibilityState === "visible" && bambuToken() && refreshAms(), AMS_REFRESH_MS);
 if (DEMO) document.body.classList.add("demo");

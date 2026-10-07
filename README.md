@@ -66,6 +66,15 @@ npx wrangler deploy
 
 Sett så `PROXY_URL` i `app.js` til adressen `wrangler deploy` skriver ut.
 
+## Filamentbiblioteket
+
+Samme Bambu-tilkobling henter også brukerens **filamentbibliotek** (Filament Manager i Bambu Studio
+og Handy): spoler, farger, gjenværende vekt og hvor de står. Spoler med samme RFID (Tray UID) som
+en spole i lageret får gjenværende vekt vist på kortet i *Lager*.
+
+Hver bruker velger for seg om **AMS** og/eller **filamentbiblioteket** skal deles med alle
+(to separate brytere).
+
 ## Nytt fra Bambu
 
 Fanen viser nye filamenttyper og farger fra Bambu Lab, med lenke til produktsiden i

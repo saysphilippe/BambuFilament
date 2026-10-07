@@ -404,3 +404,14 @@ body.demo .demo-banner { display: block; }
 .all-type-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
 .all-type-head .btn { margin-left: auto; }
 a.btn { text-decoration: none; display: inline-block; }
+
+.library { margin-top: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--owner); border-radius: 14px; }
+.library summary { cursor: pointer; margin-bottom: 4px; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; margin-top: 10px; }
+.lib-item { display: flex; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg); }
+.lib-empty { opacity: .5; }
+.lib-swatch { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); }
+.lib-text { display: flex; flex-direction: column; min-width: 0; font-size: 13px; flex: 1; }
+.lib-loc { font-size: 12px; color: var(--accent); font-weight: 600; }
+.lib-weight { font-weight: 600; }
+.share-toggles { display: flex; flex-direction: column; gap: 6px; }
