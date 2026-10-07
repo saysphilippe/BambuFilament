@@ -17,6 +17,7 @@
 #include "mbedtls/md.h"
 #include "mbedtls/base64.h"
 #include "config.h"
+#include "github_roots.h"
 
 static const int SECTORS = 5;               // Bambu-dataene ligger i sektor 0–4 (blokk 0–19)
 static const int BLOCKS = SECTORS * 4;
@@ -136,6 +137,12 @@ String isoNow() {
   char buf[25];
   strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &t);
   return String(buf);
+}
+
+// Venter inntil 10 sekunder på at NTP har satt klokken.
+bool waitForTime() {
+  for (int i = 0; i < 100 && time(nullptr) < 1700000000; i++) delay(100);
+  return time(nullptr) >= 1700000000;
 }
 
 void connectWifi() {
@@ -258,8 +265,13 @@ bool uploadScan(const String &id, const String &blocksHex, bool checkOut, String
   connectWifi();
   if (WiFi.status() != WL_CONNECTED) return false;
 
+  // Sertifikatsjekk krever riktig klokke, så vent på NTP før tokenen sendes.
+  if (!waitForTime()) {
+    Serial.println("Klokken er ikke synkronisert (NTP) – kan ikke sjekke GitHub-sertifikatet.");
+    return false;
+  }
   WiFiClientSecure client;
-  client.setInsecure();                     // hobbyprosjekt: ingen sertifikatsjekk
+  client.setCACert(GITHUB_ROOT_CAS);        // sjekker at det faktisk er GitHub
 
   for (int attempt = 1; attempt <= MAX_TRIES; attempt++) {
     JsonDocument doc;

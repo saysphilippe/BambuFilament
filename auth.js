@@ -2,8 +2,27 @@
 // per bruker (AES-256-GCM, nøkkel fra passordet med PBKDF2-SHA256). Riktig
 // passord dekrypterer tokenen; feil passord feiler på GCM-sjekken.
 
-const ITERATIONS = 310000;
-export const MIN_PASSWORD = 10;
+// OWASP-anbefaling for PBKDF2-HMAC-SHA256 (2023). Eldre nøkler bruker antallet som er lagret i dem.
+const ITERATIONS = 600000;
+export const MIN_PASSWORD = 12;
+
+// De krypterte nøklene ligger i et offentlig repo og kan angripes offline,
+// så vanlige og lett gjettbare passord avvises.
+const COMMON = [
+  "password", "passord", "qwerty", "123456", "letmein", "welcome", "velkommen", "admin", "iloveyou",
+  "sommer", "vinter", "fotball", "bambulab", "bambu", "filament", "printer", "abc123", "monkey", "dragon",
+  "hemmelig", "norge", "oslo", "bergen", "trondheim",
+];
+
+export function passwordProblem(pw, user = "") {
+  if (pw.length < MIN_PASSWORD) return `Passordet må ha minst ${MIN_PASSWORD} tegn.`;
+  const low = pw.toLowerCase();
+  if (new Set(pw).size < 5) return "Passordet har for få forskjellige tegn.";
+  if (user && low.includes(user.toLowerCase())) return "Passordet kan ikke inneholde brukernavnet.";
+  if (COMMON.some((w) => low.includes(w))) return "Passordet inneholder et vanlig ord. Velg noe mindre forutsigbart, gjerne flere tilfeldige ord.";
+  if (/^(.)\1+$/.test(pw) || /^(0123456789|1234567890|abcdefghij)/.test(low)) return "Passordet er for enkelt.";
+  return "";
+}
 
 const b64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const unb64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
@@ -30,7 +49,10 @@ export async function encryptToken(token, password) {
 // Returnerer tokenen, eller null ved feil passord.
 export async function decryptToken(cred, password) {
   try {
-    const key = await deriveKey(password, unb64(cred.salt), cred.iter || ITERATIONS);
+    // Antall runder kommer fra delte data: avvis urimelige verdier (ellers kan nettleseren låses).
+    const iter = Number(cred.iter || ITERATIONS);
+    if (!Number.isInteger(iter) || iter < 100000 || iter > 2000000) return null;
+    const key = await deriveKey(password, unb64(cred.salt), iter);
     const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(cred.iv) }, key, unb64(cred.data));
     return new TextDecoder().decode(data);
   } catch {

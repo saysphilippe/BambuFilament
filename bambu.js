@@ -91,6 +91,8 @@ export function buildBlocks({ materialId, variantId, detailedType, colors, weigh
 
 // "#RRGGBBAA" -> CSS-farge
 export function cssColor(hex) {
+  // Fargene kan komme fra delte data, så bare gyldig hex slippes gjennom til CSS.
+  if (!/^#?[0-9a-f]{6}([0-9a-f]{2})?$/i.test(hex || "")) return "#cccccc";
   const h = hex.replace("#", "");
   const a = parseInt(h.substr(6, 2) || "FF", 16) / 255;
   return a >= 0.99 ? "#" + h.substr(0, 6) : `rgba(${parseInt(h.substr(0, 2), 16)},${parseInt(h.substr(2, 2), 16)},${parseInt(h.substr(4, 2), 16)},${a.toFixed(2)})`;

@@ -1,10 +1,13 @@
 import { parseTag, cssColor, buildBlocks } from "./bambu.js";
-import { encryptToken, decryptToken, randomPassword, MIN_PASSWORD } from "./auth.js";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js";
 
-const REPO = "saysphilippe/BambuFilament";
+// Dataene ligger i et eget repo. Den delte skrivetokenen gjelder bare det repoet,
+// så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
+const REPO = "saysphilippe/BambuFilament-data";
 const BRANCH = "main";
-const PATH = "data/spools.json";
+const PATH = "spools.json";
 const API = `https://api.github.com/repos/${REPO}/contents/${PATH}`;
+const RAW = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${PATH}`;
 const REFRESH_MS = 120000;
 // Cloudflare Worker som videresender til Bambu (se worker/). Tom = AMS-fanen er av.
 const PROXY_URL = ["127.0.0.1", "localhost"].includes(location.hostname) ? "http://127.0.0.1:8787" : "https://bambufilament-proxy.saysphilippe.workers.dev";
@@ -54,8 +57,29 @@ function store(key, value) {
   } catch { return ""; }
 }
 
+// Innloggingen lagres i sessionStorage (forsvinner når fanen lukkes), eller i
+// localStorage i 30 dager hvis brukeren velger «Husk meg».
+const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
+
 function loadSession() {
-  try { return JSON.parse(store("bf.session") || "null"); } catch { return null; }
+  try {
+    const temp = JSON.parse(sessionStorage.getItem("bf.session") || "null");
+    if (temp?.token) return temp;
+    const kept = JSON.parse(localStorage.getItem("bf.session") || "null");
+    if (kept?.token && kept.exp > Date.now()) return kept;
+    localStorage.removeItem("bf.session");
+  } catch { /* ingen lagring tilgjengelig */ }
+  return null;
+}
+
+function saveSession(value, remember) {
+  try {
+    sessionStorage.removeItem("bf.session");
+    localStorage.removeItem("bf.session");
+    if (!value) return;
+    if (remember) localStorage.setItem("bf.session", JSON.stringify({ ...value, exp: Date.now() + REMEMBER_MS }));
+    else sessionStorage.setItem("bf.session", JSON.stringify(value));
+  } catch { /* ingen lagring tilgjengelig */ }
 }
 
 // Innlogget bruker: { user, token }. Tokenen er dekryptert med brukerens passord.
@@ -94,8 +118,8 @@ async function loadDoc() {
     });
     if (res.ok) return await res.json();
     if (res.status === 404) return { version: 1, users: [], spools: [] };
-  } catch { /* faller tilbake til kopien på github.io */ }
-  const res = await fetch(`${PATH}?t=${Date.now()}`, { cache: "no-store" });
+  } catch { /* faller tilbake til raw.githubusercontent.com (uten API-grense) */ }
+  const res = await fetch(`${RAW}?t=${Date.now()}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`Kunne ikke hente ${PATH} (${res.status})`);
   return res.json();
 }
@@ -132,7 +156,7 @@ async function saveDoc(mutate, message) {
       throw new Error("Innloggingen er ikke lenger gyldig (tokenen er utløpt eller trukket tilbake). Logg inn på nytt.");
     }
     if (put.status === 403 || put.status === 404) {
-      throw new Error("GitHub-tokenen har ikke skrivetilgang. Den må gjelde repoet BambuFilament og ha rettigheten Contents: Read and write.");
+      throw new Error("GitHub-tokenen har ikke skrivetilgang. Den må gjelde repoet BambuFilament-data og ha rettigheten Contents: Read and write.");
     }
     if (put.status !== 409) throw new Error(`GitHub svarte ${put.status} ved lagring`);
   }
@@ -188,8 +212,67 @@ function enrich(spool) {
   };
 }
 
+// Alt i spools.json kan skrives av alle med skrivetoken, og vises for alle besøkende.
+// Farger og tall brukes i HTML og stilattributter, så de kontrolleres her før visning.
+// Fritekst escapes med esc() der den vises.
+const HEX = /^#?[0-9a-f]{6}([0-9a-f]{2})?$/i;
+const safeColor = (c, fallback = "#8a8f8b") => (HEX.test(c || "") ? (c.startsWith("#") ? c : "#" + c) : fallback);
+const hexOnly = (c) => (typeof c === "string" && HEX.test(c) ? c.replace("#", "").toUpperCase() : "");
+const num = (x) => (x === null || x === undefined || x === "" ? null : Number.isFinite(Number(x)) ? Number(x) : null);
+const str = (x) => (x === null || x === undefined ? "" : String(x));
+
+function cleanTray(t, i) {
+  const slot = num(t?.slot) ?? i;
+  if (!t || t.empty) return { slot, empty: true };
+  return {
+    slot, type: str(t.type), subBrand: str(t.subBrand), color: hexOnly(t.color),
+    cols: Array.isArray(t.cols) ? t.cols.map(hexOnly).filter(Boolean) : [],
+    infoIdx: str(t.infoIdx), remain: num(t.remain), weight: num(t.weight),
+    nozzleMin: num(t.nozzleMin), nozzleMax: num(t.nozzleMax), uuid: str(t.uuid),
+  };
+}
+
+function cleanAms(a) {
+  if (!a || !Array.isArray(a.printers)) return null;
+  return {
+    updated: str(a.updated),
+    printers: a.printers.map((p) => ({
+      ...(p.id ? { id: str(p.id) } : {}),
+      name: str(p.name), model: str(p.model), online: !!p.online, reported: !!p.reported,
+      ams: (Array.isArray(p.ams) ? p.ams : []).map((u) => ({
+        unit: Math.max(0, Math.min(25, num(u.unit) ?? 0)),
+        humidity: num(u.humidity), humidityLevel: num(u.humidityLevel), temp: num(u.temp),
+        trays: (Array.isArray(u.trays) ? u.trays : []).map(cleanTray),
+      })),
+      external: (Array.isArray(p.external) ? p.external : []).map(cleanTray),
+    })),
+  };
+}
+
+function cleanLibrary(l) {
+  if (!l || !Array.isArray(l.spools)) return null;
+  return {
+    updated: str(l.updated),
+    spools: l.spools.map((x) => ({
+      vendor: str(x.vendor), name: str(x.name), type: str(x.type), filamentId: str(x.filamentId),
+      color: hexOnly(x.color), colors: Array.isArray(x.colors) ? x.colors.map(hexOnly).filter(Boolean) : [],
+      net: num(x.net) ?? 0, total: num(x.total) ?? 0, rfid: str(x.rfid).toUpperCase(),
+      note: str(x.note), location: str(x.location),
+    })),
+  };
+}
+
+const cleanMap = (obj, fn) => Object.fromEntries(Object.entries(obj || {}).map(([k, v]) => [k, fn(v)]).filter(([, v]) => v));
+
 function setDoc(doc) {
-  state.doc = { ...doc, users: doc.users || [], spools: doc.spools || [], ams: doc.ams || {}, library: doc.library || {}, wishes: doc.wishes || {} };
+  state.doc = {
+    ...doc,
+    users: (doc.users || []).map((u) => ({ ...u, name: str(u.name), color: safeColor(u.color) })),
+    spools: doc.spools || [],
+    ams: cleanMap(doc.ams, cleanAms),
+    library: cleanMap(doc.library, cleanLibrary),
+    wishes: doc.wishes || {},
+  };
   state.spools = state.doc.spools.map(enrich);
 }
 
@@ -201,12 +284,12 @@ function addEvent(spool, action) {
 function users() {
   const list = state.doc.users.map((u) => ({ ...u, known: true }));
   for (const s of state.spools) {
-    if (s.owner && !list.some((u) => u.name === s.owner)) list.push({ name: s.owner, color: "#8a8f8b", known: false });
+    if (s.owner && !list.some((u) => u.name === s.owner)) list.push({ name: str(s.owner), color: "#8a8f8b", known: false });
   }
   return list;
 }
 
-const userColor = (name) => users().find((u) => u.name === name)?.color || "#8a8f8b";
+const userColor = (name) => safeColor(users().find((u) => u.name === name)?.color);
 
 async function refresh() {
   setSync("Henter…");
@@ -368,7 +451,7 @@ function openDetail(id) {
     ["Produsert", fmtDate(t.productionDate)],
     ["Bambu-ID", `${t.materialId} · ${t.variantId}`],
   ] : [["Data", "Kunne ikke tolke brikken"]];
-  rows.push(["Lagt inn", fmtDate(s.added)], ["Sist skannet", `${fmtDate(s.lastScan)} (${s.scans || 1}×)`]);
+  rows.push(["Lagt inn", fmtDate(s.added)], ["Sist skannet", `${fmtDate(s.lastScan)} (${num(s.scans) || 1}×)`]);
   $("#d-rows").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
   $("#d-history").innerHTML = (s.history || []).slice().reverse()
     .map((e) => `<li><span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span> ${esc(e.by || "")} · ${fmtTime(e.at)}</li>`)
@@ -568,9 +651,9 @@ function renderAccount() {
   $("#account").hidden = DEMO;
 }
 
-function setSession(value) {
-  session = value;
-  store("bf.session", value ? JSON.stringify(value) : "");
+function setSession(value, remember = !!session?.exp) {
+  session = value && { user: value.user, token: value.token };
+  saveSession(session, remember);
   state.amsLive = null;
   state.libraryLive = null;
   state.amsError = "";
@@ -607,7 +690,7 @@ async function login(e) {
     return;
   }
   store("bf.lastUser", name);
-  setSession({ user: name, token: tok });
+  setSession({ user: name, token: tok }, $("#l-remember").checked);
   $("#login").close();
   if (user.mustChange) openChangePassword(true);
 }
@@ -634,7 +717,8 @@ async function changePassword(e) {
   const dlg = $("#password");
   if (e.submitter?.value === "cancel" && !dlg.dataset.forced) return dlg.close();
   const pw = $("#p-new").value;
-  if (pw.length < MIN_PASSWORD) return ($("#p-error").textContent = `Passordet må ha minst ${MIN_PASSWORD} tegn.`);
+  const weak = passwordProblem(pw, userName());
+  if (weak) return ($("#p-error").textContent = weak);
   if (pw !== $("#p-repeat").value) return ($("#p-error").textContent = "Passordene er ikke like.");
   $("#p-error").textContent = "Lagrer…";
   try {
@@ -654,6 +738,8 @@ async function changePassword(e) {
 
 // Første oppsett: ingen brukere har innlogging ennå.
 function openSetup() {
+  const existing = [...state.doc.users].sort((a, b) => !!b.admin - !!a.admin).map((u) => u.name);
+  if (existing.length) $("#su-names").value = existing.join("\n");
   $("#setup-form").hidden = false;
   $("#setup-done").hidden = true;
   $("#su-error").textContent = "";
@@ -671,12 +757,13 @@ async function setup(e) {
     if (!/^(github_pat_|ghp_)/.test(tok)) throw new Error("Det ser ikke ut som en GitHub-token. Den skal starte med github_pat_.");
     const res = await fetch(`https://api.github.com/repos/${REPO}`, { headers: { Authorization: `Bearer ${tok}` } });
     if (res.status === 401) throw new Error("GitHub godtar ikke tokenen. Sjekk at hele tokenen er kopiert, og at den ikke er utløpt.");
-    if (!res.ok) throw new Error("Tokenen har ikke tilgang til repoet BambuFilament. Velg det under Repository access.");
+    if (!res.ok) throw new Error("Tokenen har ikke tilgang til repoet BambuFilament-data. Velg det under Repository access.");
     $("#su-error").textContent = "Krypterer og lagrer…";
     const created = [];
     for (const [i, name] of names.entries()) {
       const temp = randomPassword();
-      created.push({ name, color: USER_COLORS[i % USER_COLORS.length], cred: await encryptToken(tok, temp), temp, admin: i === 0 });
+      const color = state.doc.users.find((u) => u.name === name)?.color || USER_COLORS[i % USER_COLORS.length];
+      created.push({ name, color, cred: await encryptToken(tok, temp), temp, admin: i === 0 });
     }
     session = { user: names[0], token: tok };
     await saveDoc((doc) => {
@@ -775,8 +862,8 @@ async function refreshAms() {
   try {
     const [amsRes, libRes] = await Promise.allSettled([fetchAms(), fetchLibrary()]);
     if (amsRes.status === "rejected" && libRes.status === "rejected") throw amsRes.reason;
-    if (amsRes.status === "fulfilled") state.amsLive = amsRes.value;
-    if (libRes.status === "fulfilled") state.libraryLive = libRes.value;
+    if (amsRes.status === "fulfilled") state.amsLive = cleanAms(amsRes.value);
+    if (libRes.status === "fulfilled") state.libraryLive = cleanLibrary(libRes.value);
     const failed = amsRes.status === "rejected" ? amsRes.reason : libRes.status === "rejected" ? libRes.reason : null;
     if (failed) state.amsError = `${amsRes.status === "rejected" ? "AMS" : "Filamentbiblioteket"}: ${failed.message}`;
     await publishSnapshot();

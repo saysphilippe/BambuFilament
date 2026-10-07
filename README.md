@@ -9,17 +9,28 @@ Demo med eksempeldata: https://saysphilippe.github.io/BambuFilament/?demo
 ## Hvordan det henger sammen
 
 ```
-Bambu-spole ──RFID──> ESP32 + RC522 ──HTTPS──> data/spools.json i dette repoet
+Bambu-spole ──RFID──> ESP32 + RC522 ──HTTPS──> spools.json i BambuFilament-data
                                                        │
                               github.io-siden <────────┘  (leser og tolker)
 ```
 
 - Bambu-brikkene er MIFARE Classic 1K. Sektornøklene utledes fra brikkens UID
   med HKDF-SHA256 ([Bambu Research Group](https://github.com/Bambu-Research-Group/RFID-Tag-Guide)).
-- Leseren sender rådataene (blokk 0–19) til `data/spools.json`. Siden tolker dem
+- Leseren sender rådataene (blokk 0–19) til `spools.json` i [BambuFilament-data](https://github.com/saysphilippe/BambuFilament-data). Siden tolker dem
   og slår opp offisielle farge- og typenavn i `data/colors.json` (hentet fra
   Bambu Studio sin `filaments_color_codes.json`).
 - Hver spole identifiseres med Tray UID (blokk 9), så samme spole telles aldri to ganger.
+
+## Sikkerhet
+
+- **Data og kode er adskilt.** Brukere, spoler, AMS, bibliotek og venteliste ligger i
+  [saysphilippe/BambuFilament-data](https://github.com/saysphilippe/BambuFilament-data). Den delte
+  skrivetokenen og tokenene i leserne gjelder **bare** det repoet, så de kan ikke endre nettsidekoden.
+- **Delte data kontrolleres** før de vises: farger må være gyldig hex, tall må være tall, og all tekst escapes.
+- **Innloggingen** gjelder bare fanen, med mindre man velger «Husk meg» (30 dager).
+- **Passord:** minst 12 tegn, ikke vanlige ord eller brukernavnet. PBKDF2-SHA256 med 600 000 runder.
+- **Proxyen** har rate limiting per IP (innlogging 10 per minutt).
+- **ESP32** sjekker GitHub-sertifikatet (rotsertifikater i `github_roots.h`).
 
 ## Brukere og innlogging
 
@@ -27,12 +38,12 @@ Alle kan se oversikten. For å endre (sjekke inn og ut, redigere, administrere b
 må man logge inn.
 
 Siden har ingen server. En GitHub-token med skrivetilgang til dette repoet lagres derfor
-**kryptert per bruker** i `data/spools.json` (AES-256-GCM, nøkkel fra passordet med
-PBKDF2-SHA256, 310 000 runder). Riktig passord låser opp tokenen i nettleseren.
+**kryptert per bruker** i `spools.json` (BambuFilament-data) (AES-256-GCM, nøkkel fra passordet med
+PBKDF2-SHA256, 600 000 runder). Riktig passord låser opp tokenen i nettleseren.
 
 - **Første oppsett:** åpne siden, trykk *Logg inn* og lim inn tokenen. Brukerne
   (Philippe, Niklas, Peter) opprettes med midlertidige passord, som vises én gang.
-- Ved første innlogging må hver bruker velge sitt eget passord (minst 10 tegn).
+- Ved første innlogging må hver bruker velge sitt eget passord (minst 12 tegn).
 - Første bruker i oppsettet (Philippe) er **administrator**. Bare administrator kan legge til og fjerne brukere og lage nye midlertidige passord. Alle kan bytte sitt eget passord.
 - Admin-rollen håndheves i nettsiden. Alle innloggede deler samme skrivetoken, så den er en regel for vanlig bruk, ikke en sikkerhetsgrense.
 - Bruk sterke passord. De krypterte dataene ligger i et offentlig repo.
@@ -40,7 +51,7 @@ PBKDF2-SHA256, 310 000 runder). Riktig passord låser opp tokenen i nettleseren.
   eller tøm `users[].cred` og kjør første oppsett på nytt).
 
 Tokenen lages på https://github.com/settings/personal-access-tokens/new:
-*Only select repositories* → `BambuFilament`, *Repository permissions* → *Contents: Read and write*.
+*Only select repositories* → **`BambuFilament-data`** (ikke `BambuFilament`), *Repository permissions* → *Contents: Read and write*.
 
 ## AMS-fanen
 
@@ -140,8 +151,9 @@ Bruk:
 | `index.html`, `style.css`, `app.js` | Nettsiden |
 | `bambu.js` | Tolking av brikkedata |
 | `auth.js` | Kryptering av token og passord |
-| `worker/` | Cloudflare Worker som videresender til Bambu sitt sky-API (AMS) |
-| `data/spools.json` | Brukere og spoler (skrives av leseren og siden) |
+| `worker/` | Cloudflare Worker som videresender til Bambu sitt sky-API (AMS, bibliotek) og butikken |
+| `firmware/BambuFilament/github_roots.h` | Rotsertifikater for api.github.com |
+| `spools.json` i BambuFilament-data | Brukere, spoler, AMS, bibliotek og venteliste (skrives av leserne og siden) |
 | `data/colors.json` | Offisielle Bambu-fargenavn |
 | `data/catalog.json` | Bambu-katalogen med datoer og produktsider |
 | `scripts/update-catalog.mjs` | Henter filamentkatalogen (GitHub Actions, hver 6. time) |

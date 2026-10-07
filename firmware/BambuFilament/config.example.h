@@ -6,11 +6,12 @@
 #define WIFI_PASSWORD "passord"
 
 // Fine-grained token fra https://github.com/settings/personal-access-tokens
-// Kun repoet saysphilippe/BambuFilament, rettighet "Contents: Read and write".
+// KUN repoet saysphilippe/BambuFilament-data, rettighet "Contents: Read and write".
+// Lag en egen token for hver leser, så den kan trekkes tilbake alene.
 #define GITHUB_TOKEN  "github_pat_..."
-#define GITHUB_REPO   "saysphilippe/BambuFilament"
+#define GITHUB_REPO   "saysphilippe/BambuFilament-data"
 #define GITHUB_BRANCH "main"
-#define GITHUB_PATH   "data/spools.json"
+#define GITHUB_PATH   "spools.json"
 
 // Hvem spolene som skannes med denne leseren tilhører.
 #define OWNER         "Philippe"

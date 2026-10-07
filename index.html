@@ -193,6 +193,8 @@
       <h2>Logg inn</h2>
       <label>Bruker<select id="l-user"></select></label>
       <label>Passord<input id="l-password" type="password" autocomplete="current-password"></label>
+      <label class="switch"><input id="l-remember" type="checkbox"> Husk meg på denne enheten i 30 dager</label>
+      <p class="hint">Uten «Husk meg» logges du ut når du lukker fanen. Bruk det bare på din egen PC eller telefon.</p>
       <p id="l-error" class="error"></p>
       <div class="d-buttons">
         <span class="spacer"></span>
@@ -219,7 +221,7 @@
     <form method="dialog">
       <h2>Bytt passord</h2>
       <p id="p-forced" class="notice">Du er logget inn med et midlertidig passord. Velg ditt eget passord før du fortsetter.</p>
-      <label>Nytt passord (minst 10 tegn)<input id="p-new" type="password" autocomplete="new-password"></label>
+      <label>Nytt passord (minst 12 tegn, gjerne flere tilfeldige ord)<input id="p-new" type="password" autocomplete="new-password"></label>
       <label>Gjenta nytt passord<input id="p-repeat" type="password" autocomplete="new-password"></label>
       <p id="p-error" class="error"></p>
       <div class="d-buttons">
@@ -235,7 +237,7 @@
       <h2>Første oppsett</h2>
       <p class="hint">Ingen brukere har innlogging ennå. Lim inn en GitHub-token med skrivetilgang til repoet. Den lagres kryptert per bruker, og hver bruker låser den opp med sitt eget passord.</p>
       <label>GitHub-token<input id="su-token" type="password" autocomplete="off" placeholder="github_pat_…"></label>
-      <p class="hint">Lag en <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a> med tilgang kun til <b>saysphilippe/BambuFilament</b> og rettigheten <i>Contents: Read and write</i>.</p>
+      <p class="hint">Lag en <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a> med tilgang <b>kun</b> til <b>saysphilippe/BambuFilament-data</b> og rettigheten <i>Contents: Read and write</i>. Den skal <b>ikke</b> ha tilgang til BambuFilament (koden).</p>
       <label>Brukere (én per linje, administrator først)<textarea id="su-names" rows="3">Philippe
 Niklas
 Peter</textarea></label>

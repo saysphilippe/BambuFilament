@@ -53,14 +53,29 @@ async function bambu(path, { method = "GET", body, token } = {}) {
   return { status: res.status, data, headers: res.headers };
 }
 
+// Rate limiting per IP (Cloudflare Workers Rate Limiting, se wrangler.toml).
+// Origin-sjekken stopper bare nettlesere, så uten dette kunne hvem som helst
+// bruke proxyen til å prøve innlogginger mot Bambu.
+const LIMITS = {
+  "/login": "AUTH_LIMIT", "/send-code": "AUTH_LIMIT", "/tfa": "AUTH_LIMIT", "/refresh": "AUTH_LIMIT",
+  "/ams": "DATA_LIMIT", "/library": "DATA_LIMIT",
+  "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
+};
+
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
     if (request.method !== "POST") return json({ error: "Bruk POST" }, 405, origin);
     if (!ALLOWED_ORIGINS.includes(origin)) return json({ error: "Ukjent opprinnelse" }, 403, origin);
 
     const path = new URL(request.url).pathname;
+    const limiter = env?.[LIMITS[path]];
+    if (limiter) {
+      const ip = request.headers.get("CF-Connecting-IP") || "ukjent";
+      const { success } = await limiter.limit({ key: `${path}:${ip}` });
+      if (!success) return json({ error: "For mange forsøk. Vent et minutt og prøv igjen." }, 429, origin);
+    }
     const body = await request.json().catch(() => ({}));
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
 
@@ -76,8 +91,8 @@ export default {
         case "/library":
           if (!token) return json({ error: "Mangler Bambu-token" }, 401, origin);
           return json(await library(token), 200, origin);
-        case "/sitemap": return sitemap(origin);
-        case "/store-product": return storeProduct(body, origin);
+        case "/sitemap": return await sitemap(origin);
+        case "/store-product": return await storeProduct(body, origin);
         default: return json({ error: "Ukjent endepunkt" }, 404, origin);
       }
     } catch (err) {
