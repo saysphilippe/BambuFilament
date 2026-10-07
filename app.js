@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072244";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072244";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072250";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072250";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -415,10 +415,12 @@ function libName(x) {
 }
 
 // Hvor spoler står akkurat nå, ut fra AMS-dataene: { RFID/Tray UID: "Printer · AMS A1" }.
-function amsLocations() {
+// includeOwn: ta med egne AMS-data selv om de ikke deles (brukes i «AMS og bibliotek»).
+function amsLocations(includeOwn = false) {
   const where = {};
   for (const u of users()) {
-    for (const p of amsOf(u.name)?.printers || []) {
+    const ams = amsOf(u.name) || (includeOwn && u.name === userName() ? state.amsLive : null);
+    for (const p of ams?.printers || []) {
       for (const a of p.ams) {
         for (const t of a.trays) if (!t.empty && t.uuid) where[t.uuid.toUpperCase()] = `${p.name} · AMS ${String.fromCharCode(65 + a.unit)}${t.slot + 1}`;
       }
@@ -432,9 +434,13 @@ function amsLocations() {
 const amsCount = () => users().reduce((sum, u) => sum + (amsOf(u.name)?.printers || [])
   .reduce((n, p) => n + p.ams.reduce((m, a) => m + a.trays.filter((t) => !t.empty).length, 0) + p.external.filter((t) => !t.empty).length, 0), 0);
 
-// Bibliotek og AMS for en bruker: egne live-data hvis innlogget, ellers det brukeren deler.
-const libraryOf = (name) => (name === userName() && state.libraryLive) || state.doc.library?.[name] || null;
-const amsOf = (name) => (name === userName() && state.amsLive) || state.doc.ams?.[name] || null;
+// Bibliotek og AMS i «Våre lokale lager»: bare det brukeren deler, også for en selv.
+// For egen bruker brukes ferske live-data når delingen er på.
+const sharing = (name, flag) => !!state.doc.users.find((u) => u.name === name)?.[flag];
+const libraryOf = (name) => !sharing(name, "shareLibrary") ? null
+  : (name === userName() && state.libraryLive) || state.doc.library?.[name] || null;
+const amsOf = (name) => !sharing(name, "shareAms") ? null
+  : (name === userName() && state.amsLive) || state.doc.ams?.[name] || null;
 
 // Felles form for oppføringer som ikke er RFID-skannet, så filtre og kort kan behandle alt likt.
 function stockEntry({ kind, id, owner, status, cols, infoIdx, color, fallbackType, names, ...extra }) {
@@ -1426,7 +1432,7 @@ function libSwatch(x) {
 
 function renderLibrary(lib) {
   const scanned = new Set(state.spools.map((s) => s.id.toUpperCase()));
-  const where = amsLocations();
+  const where = amsLocations(true);
   const list = lib.spools.slice().sort((a, b) => (b.net > 0) - (a.net > 0) || a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
   const left = list.filter((x) => x.net > 0);
   const grams = left.reduce((sum, x) => sum + x.net, 0);
