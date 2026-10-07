@@ -1,0 +1,3120 @@
+{
+ "updated": "2026-10-07T20:44:45.080Z",
+ "source": {
+  "colors": "https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/filaments_color_codes.json",
+  "store": "https://eu.store.bambulab.com"
+ },
+ "baseline": "2025-07-17T06:55:52Z",
+ "types": [
+  {
+   "type": "ABS",
+   "materialId": "GFB00",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFB00-A0",
+     "name": "Orange",
+     "hex": [
+      "#FF6A13FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-B0",
+     "name": "Blue",
+     "hex": [
+      "#0A2CA5FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-B4",
+     "name": "Azure",
+     "hex": [
+      "#489FDFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-B6",
+     "name": "Navy Blue",
+     "hex": [
+      "#0C2340FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-B8",
+     "name": "Mint",
+     "hex": [
+      "#7AE1BFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-D1",
+     "name": "Silver",
+     "hex": [
+      "#87909AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-G6",
+     "name": "Bambu Green",
+     "hex": [
+      "#00AE42FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-G7",
+     "name": "Olive",
+     "hex": [
+      "#789D4AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-P4",
+     "name": "Lavender",
+     "hex": [
+      "#7248BDFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-P6",
+     "name": "Purple",
+     "hex": [
+      "#AF1685FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-R0",
+     "name": "Red",
+     "hex": [
+      "#D32941FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#FCE900FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-Y1",
+     "name": "Tangerine Yellow",
+     "hex": [
+      "#FFC72CFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB00-Y2",
+     "name": "Beige",
+     "hex": [
+      "#DFD1A7FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/abs-filament",
+    "title": "ABS",
+    "image": "https://store.bblcdn.eu/s8/default/5d297742b7744e58a742421ec967a0ea/ABSsilver.png"
+   }
+  },
+  {
+   "type": "ABS-GF",
+   "materialId": "GFB50",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFB50-A0",
+     "name": "Orange",
+     "hex": [
+      "#F48438FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB50-B0",
+     "name": "Blue",
+     "hex": [
+      "#0C3B95FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB50-D0",
+     "name": "Gray",
+     "hex": [
+      "#C6C6C6FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB50-G0",
+     "name": "Green",
+     "hex": [
+      "#61BF36FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB50-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB50-R0",
+     "name": "Red",
+     "hex": [
+      "#E83100FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB50-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB50-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#FFE133FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/abs-gf",
+    "title": "ABS-GF",
+    "image": "https://store.bblcdn.eu/s8/default/f10c8381233a457abfd61dd3c8bf5554/JP36183.png"
+   }
+  },
+  {
+   "type": "ASA",
+   "materialId": "GFB01",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFB01-B0",
+     "name": "Blue",
+     "hex": [
+      "#2140B4FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB01-D0",
+     "name": "Gray",
+     "hex": [
+      "#8A949EFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB01-G0",
+     "name": "Green",
+     "hex": [
+      "#00A6A0FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB01-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB01-R0",
+     "name": "Red",
+     "hex": [
+      "#E02928FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFB01-W0",
+     "name": "White",
+     "hex": [
+      "#FFFAF2FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/asa-filament",
+    "title": "ASA",
+    "image": "https://store.bblcdn.eu/s8/default/88ecadc1c1e748ec8af28233bfa132b5/ASA_White.jpg"
+   }
+  },
+  {
+   "type": "ASA Aero",
+   "materialId": "GFB02",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFB02-W0",
+     "name": "White",
+     "hex": [
+      "#F5F1DDFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/asa-aero",
+    "title": "ASA Aero",
+    "image": "https://store.bblcdn.eu/s8/default/b2516f844d3644a6b722b1238dfd63e2/asaaeroball.png"
+   }
+  },
+  {
+   "type": "ASA-CF",
+   "materialId": "GFB51",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFB51-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/asa-cf",
+    "title": "ASA-CF",
+    "image": "https://store.bblcdn.eu/s8/default/782c8db0e72b43799b3164741380111f/1_db8508ce-9151-474f-8fc4-e57ec533edc0.jpg"
+   }
+  },
+  {
+   "type": "PA6-CF",
+   "materialId": "GFN05",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFN05-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pa6-cf",
+    "title": "PA6-CF",
+    "image": "https://store.bblcdn.eu/s8/default/a73fe23577b84ea58c333a714eae4cad/PA6-CF.png"
+   }
+  },
+  {
+   "type": "PA6-GF",
+   "materialId": "GFN08",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFN08-B0",
+     "name": "Blue",
+     "hex": [
+      "#75AED8FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFN08-D0",
+     "name": "White",
+     "hex": [
+      "#EAEAE4FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFN08-D1",
+     "name": "Gray",
+     "hex": [
+      "#353533FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFN08-G0",
+     "name": "Lime",
+     "hex": [
+      "#C5ED48FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFN08-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFN08-N0",
+     "name": "Brown",
+     "hex": [
+      "#5B492FFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFN08-R0",
+     "name": "Orange",
+     "hex": [
+      "#FF4800FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFN08-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#FFCE00FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pa6-gf",
+    "title": "PA6-GF",
+    "image": "https://store.bblcdn.eu/s8/default/206b1f9df0a64848becdf721b2541936/JP35952.jpg"
+   }
+  },
+  {
+   "type": "PAHT-CF",
+   "materialId": "GFN04",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFN04-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/paht-cf",
+    "title": "PAHT-CF",
+    "image": "https://store.bblcdn.eu/s8/default/1adca385b4fd4502b492ed2651908f51/PAHTCFORIGINAL.png"
+   }
+  },
+  {
+   "type": "PC",
+   "materialId": "GFC00",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFC00-C0",
+     "name": "Clear Black",
+     "hex": [
+      "#68686580"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFC00-C1",
+     "name": "Transparent",
+     "hex": [
+      "#00000000"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFC00-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFC00-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pc-filament",
+    "title": "PC",
+    "image": "https://store.bblcdn.eu/s8/default/c6edead629b04fb48155d9e665c1e7d3/C00-C1-1.75-1000-spl.png"
+   }
+  },
+  {
+   "type": "PC FR",
+   "materialId": "GFC01",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFC01-D0",
+     "name": "Gray",
+     "hex": [
+      "#A8A8AAFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFC01-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFC01-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pc-fr",
+    "title": "PC FR",
+    "image": "https://store.bblcdn.eu/s8/default/d327d3a6a0514c6093a376e61551c11c/3_2bfbabcc-c211-415c-926b-f5891b308048.jpg"
+   }
+  },
+  {
+   "type": "PET-CF",
+   "materialId": "GFT01",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFT01-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pet-cf",
+    "title": "PET-CF",
+    "image": "https://store.bblcdn.eu/s8/default/c69a75229e824ec2a92b2e37f8510b01/pet-cr.png"
+   }
+  },
+  {
+   "type": "PETG Basic",
+   "materialId": "GFG00",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFG00-K00",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-W00",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-D00",
+     "name": "Gray",
+     "hex": [
+      "#7F7E83FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-Y00",
+     "name": "Yellow",
+     "hex": [
+      "#FCE300FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-R00",
+     "name": "Red",
+     "hex": [
+      "#D6001CFF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-B00",
+     "name": "Reflex Blue",
+     "hex": [
+      "#001489FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-N00",
+     "name": "Dark Brown",
+     "hex": [
+      "#4f2c1dFF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-G00",
+     "name": "Green",
+     "hex": [
+      "#009639FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-A00",
+     "name": "Orange",
+     "hex": [
+      "#FF671FFF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-G01",
+     "name": "Pine Green",
+     "hex": [
+      "#034638FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-B01",
+     "name": "Navy Blue",
+     "hex": [
+      "#0086d6FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-D01",
+     "name": "Misty Blue",
+     "hex": [
+      "#688197FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-Y01",
+     "name": "Dark Beige",
+     "hex": [
+      "#dbc8b6FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFG00-P01",
+     "name": "Purple",
+     "hex": [
+      "#8A75D1FF"
+     ],
+     "firstSeen": "2026-09-22T07:15:07Z"
+    },
+    {
+     "key": "GFG00-Y04",
+     "name": "Sunflower Yellow",
+     "hex": [
+      "#FFB81CFF"
+     ],
+     "firstSeen": "2026-09-22T07:15:07Z"
+    },
+    {
+     "key": "GFG00-G04",
+     "name": "Bright Green",
+     "hex": [
+      "#97D700FF"
+     ],
+     "firstSeen": "2026-09-22T07:15:07Z"
+    },
+    {
+     "key": "GFG00-P02",
+     "name": "Hot Pink",
+     "hex": [
+      "#F277C6FF"
+     ],
+     "firstSeen": "2026-09-22T07:15:07Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/petg-basic",
+    "title": "PETG Basic",
+    "image": "https://store.bblcdn.eu/s8/default/2aec282c1ec545f880a7aa75fbec8f95/PETG_Basic_orange.jpg"
+   }
+  },
+  {
+   "type": "PETG HF",
+   "materialId": "GFG02",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFG02-A0",
+     "name": "Orange",
+     "hex": [
+      "#F75403FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-B0",
+     "name": "Blue",
+     "hex": [
+      "#002E96FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-B1",
+     "name": "Lake Blue",
+     "hex": [
+      "#1F79E5FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-D0",
+     "name": "Gray",
+     "hex": [
+      "#ADB1B2FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-D1",
+     "name": "Dark Gray",
+     "hex": [
+      "#515151FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-G0",
+     "name": "Green",
+     "hex": [
+      "#00AE42FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-G1",
+     "name": "Lime Green",
+     "hex": [
+      "#6EE53CFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-G2",
+     "name": "Forest Green",
+     "hex": [
+      "#39541AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-N1",
+     "name": "Peanut Brown",
+     "hex": [
+      "#875718FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-R0",
+     "name": "Red",
+     "hex": [
+      "#BC0900FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#FFD00BFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG02-Y1",
+     "name": "Cream",
+     "hex": [
+      "#F9DFB9FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/petg-hf",
+    "title": "PETG HF",
+    "image": "https://store.bblcdn.eu/s8/default/588e1afe37284baaa4ee09fbff15a66d/5_87e53b22-3a47-4e93-adce-7f40106815c0.jpg"
+   }
+  },
+  {
+   "type": "PETG Matte",
+   "materialId": "GFG03",
+   "firstSeen": "2026-07-14T13:21:48Z",
+   "colors": [
+    {
+     "key": "GFG03-W00",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2026-07-14T13:21:48Z"
+    },
+    {
+     "key": "GFG03-K00",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2026-07-14T13:21:48Z"
+    },
+    {
+     "key": "GFG03-G00",
+     "name": "Lime",
+     "hex": [
+      "#c0df16FF"
+     ],
+     "firstSeen": "2026-07-14T13:21:48Z"
+    },
+    {
+     "key": "GFG03-D00",
+     "name": "Gray",
+     "hex": [
+      "#7F7E83FF"
+     ],
+     "firstSeen": "2026-07-14T13:21:48Z"
+    },
+    {
+     "key": "GFG03-P00",
+     "name": "Pink",
+     "hex": [
+      "#FABBCBFF"
+     ],
+     "firstSeen": "2026-07-14T13:21:48Z"
+    },
+    {
+     "key": "GFG03-B00",
+     "name": "Baby Blue",
+     "hex": [
+      "#B9D9EBFF"
+     ],
+     "firstSeen": "2026-07-14T13:21:48Z"
+    },
+    {
+     "key": "GFG03-P02",
+     "name": "Violet",
+     "hex": [
+      "#A7A4E0FF"
+     ],
+     "firstSeen": "2026-07-14T13:21:48Z"
+    },
+    {
+     "key": "GFG03-G01",
+     "name": "Avocado Green",
+     "hex": [
+      "#bce194FF"
+     ],
+     "firstSeen": "2026-07-14T13:21:48Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/petg-matte",
+    "title": "PETG Matte",
+    "image": "https://store.bblcdn.eu/s8/default/d70a3897529942a9b9ef310ee10112d0/black.png"
+   }
+  },
+  {
+   "type": "PETG Translucent",
+   "materialId": "GFG01",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFG01-A0",
+     "name": "Translucent Orange",
+     "hex": [
+      "#FF911A80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG01-B0",
+     "name": "Translucent Light Blue",
+     "hex": [
+      "#61B0FF80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG01-C0",
+     "name": "Clear",
+     "hex": [
+      "#00000000"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG01-D0",
+     "name": "Translucent Gray",
+     "hex": [
+      "#8E8E8E80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG01-G0",
+     "name": "Translucent Olive",
+     "hex": [
+      "#748C4580"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG01-G1",
+     "name": "Translucent Teal",
+     "hex": [
+      "#77EDD780"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG01-N0",
+     "name": "Translucent Brown",
+     "hex": [
+      "#C9A38180"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG01-P0",
+     "name": "Translucent Purple",
+     "hex": [
+      "#D6ABFF80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG01-P1",
+     "name": "Translucent Pink",
+     "hex": [
+      "#F9C1BD80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/petg-translucent",
+    "title": "PETG Translucent",
+    "image": "https://store.bblcdn.eu/s8/default/e39842a1bdb243a2bbb809444d83ad94/JP34951_dfb10fec-368d-47a7-8bd8-bb506498a9bd.jpg"
+   }
+  },
+  {
+   "type": "PETG-CF",
+   "materialId": "GFG50",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFG50-B6",
+     "name": "Indigo Blue",
+     "hex": [
+      "#324585FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG50-D6",
+     "name": "Titan Gray",
+     "hex": [
+      "#565656FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG50-G7",
+     "name": "Malachite Green",
+     "hex": [
+      "#16b08eFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG50-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG50-P7",
+     "name": "Violet Purple",
+     "hex": [
+      "#583061FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFG50-R4",
+     "name": "Brick Red",
+     "hex": [
+      "#9f332aFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/petg-cf",
+    "title": "PETG-CF",
+    "image": "https://store.bblcdn.eu/s8/default/7e67cea6705a4709a7452e1b0fb113e4/PETG-CFpurp_37ad5532-5d64-4eb9-90b0-d183f2511e9e.png"
+   }
+  },
+  {
+   "type": "PLA Aero",
+   "materialId": "GFA11",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA11-D0",
+     "name": "Gray",
+     "hex": [
+      "#CDCECAFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA11-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA11-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-aero",
+    "title": "PLA Aero",
+    "image": "https://store.bblcdn.eu/s8/default/c2e94607bb684af49bcaa25ec9dac8da/AERO_bc503e27-6fed-4b8e-a505-342f6050dc27.png"
+   }
+  },
+  {
+   "type": "PLA Basic",
+   "materialId": "GFA00",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA00-A0",
+     "name": "Orange",
+     "hex": [
+      "#FF6A13FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-A1",
+     "name": "Pumpkin Orange",
+     "hex": [
+      "#FF9016FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-B1",
+     "name": "Blue Gray",
+     "hex": [
+      "#5B6579FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-B3",
+     "name": "Cobalt Blue",
+     "hex": [
+      "#0056B8FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-B5",
+     "name": "Turquoise",
+     "hex": [
+      "#00B1B7FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-B8",
+     "name": "Cyan",
+     "hex": [
+      "#0086D6FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-B9",
+     "name": "Blue",
+     "hex": [
+      "#0A2989FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-D0",
+     "name": "Gray",
+     "hex": [
+      "#8E9089FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-D1",
+     "name": "Silver",
+     "hex": [
+      "#A6A9AAFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-D2",
+     "name": "Light Gray",
+     "hex": [
+      "#D1D3D5FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-D3",
+     "name": "Dark Gray",
+     "hex": [
+      "#545454FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-G2",
+     "name": "Mistletoe Green",
+     "hex": [
+      "#3F8E43FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-G3",
+     "name": "Bright Green",
+     "hex": [
+      "#BECF00FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-G6",
+     "name": "Bambu Green",
+     "hex": [
+      "#00AE42FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-M0",
+     "name": "Arctic Whisper",
+     "hex": [
+      "#9CDBD9FF",
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-M1",
+     "name": "Solar Breeze",
+     "hex": [
+      "#E94B3CFF",
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-M2",
+     "name": "Ocean to Meadow",
+     "hex": [
+      "#307FE2FF",
+      "#54FF9BFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-M3",
+     "name": "Pink Citrus",
+     "hex": [
+      "#F78F77FF",
+      "#E4505AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-M4",
+     "name": "Mint Lime",
+     "hex": [
+      "#B6FF43FF",
+      "#4EC939FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-M5",
+     "name": "Blueberry Bubblegum",
+     "hex": [
+      "#6FCAEFFF",
+      "#8573DDFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-M6",
+     "name": "Dusk Glare",
+     "hex": [
+      "#CE4406FF",
+      "#ED9558FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-M7",
+     "name": "Cotton Candy Cloud",
+     "hex": [
+      "#E7C1D5FF",
+      "#8EC9E9FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-N0",
+     "name": "Brown",
+     "hex": [
+      "#9D432CFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-N1",
+     "name": "Cocoa Brown",
+     "hex": [
+      "#6F5034FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-P0",
+     "name": "Beige",
+     "hex": [
+      "#F7E6DEFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-P1",
+     "name": "Pink",
+     "hex": [
+      "#F55A74FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-P2",
+     "name": "Indigo Purple",
+     "hex": [
+      "#482960FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-P5",
+     "name": "Purple",
+     "hex": [
+      "#5E43B7FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-P6",
+     "name": "Magenta",
+     "hex": [
+      "#EC008CFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-R0",
+     "name": "Red",
+     "hex": [
+      "#C12E1FFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-R2",
+     "name": "Maroon Red",
+     "hex": [
+      "#9D2235FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-R3",
+     "name": "Hot Pink",
+     "hex": [
+      "#F5547CFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-W1",
+     "name": "Jade White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#F4EE2AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-Y2",
+     "name": "Sunflower Yellow",
+     "hex": [
+      "#FEC600FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-Y3",
+     "name": "Bronze",
+     "hex": [
+      "#847D48FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA00-Y4",
+     "name": "Gold",
+     "hex": [
+      "#E4BD68FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-basic-filament",
+    "title": "PLA Basic",
+    "image": "https://store.bblcdn.eu/s8/default/0e0f2442945b482eac4ecb20182faf6b/pla_baisc_white.jpg"
+   }
+  },
+  {
+   "type": "PLA Dynamic",
+   "materialId": "GFA13",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA13-W0",
+     "name": "UV Color Changing - White to Coral",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": null
+  },
+  {
+   "type": "PLA Galaxy",
+   "materialId": "GFA15",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA15-B0",
+     "name": "Purple",
+     "hex": [
+      "#594177FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA15-G0",
+     "name": "Green",
+     "hex": [
+      "#3B665EFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA15-G1",
+     "name": "Nebulae",
+     "hex": [
+      "#424379FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA15-R0",
+     "name": "Brown",
+     "hex": [
+      "#684A43FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-galaxy",
+    "title": "PLA Galaxy",
+    "image": "https://store.bblcdn.eu/s8/default/5a46d227df6e4ed4bbe44dd87d31d069/purle.jpg"
+   }
+  },
+  {
+   "type": "PLA Glow",
+   "materialId": "GFA12",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA12-A0",
+     "name": "Glow Orange",
+     "hex": [
+      "#FF9D5BFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA12-B0",
+     "name": "Glow Blue",
+     "hex": [
+      "#7AC0E9FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA12-G0",
+     "name": "Glow Green",
+     "hex": [
+      "#A1FFACFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA12-R0",
+     "name": "Glow Pink",
+     "hex": [
+      "#F17B8FFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA12-Y0",
+     "name": "Glow Yellow",
+     "hex": [
+      "#F8FF80FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-glow",
+    "title": "PLA Glow",
+    "image": "https://store.bblcdn.eu/s8/default/3c41198f191c4fda907f0c820a370813/glow.jpg"
+   }
+  },
+  {
+   "type": "PLA Lite",
+   "materialId": "GFA18",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA18-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA18-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#EFE255FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA18-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA18-B0",
+     "name": "Cyan",
+     "hex": [
+      "#4DAFDAFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA18-R0",
+     "name": "Red",
+     "hex": [
+      "#C6001AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA18-D0",
+     "name": "Gray",
+     "hex": [
+      "#999D9DFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA18-B1",
+     "name": "Blue",
+     "hex": [
+      "#004EA8FF"
+     ],
+     "firstSeen": "2025-07-17T06:57:58Z"
+    },
+    {
+     "key": "GFA18-Y1",
+     "name": "Sunflower Yellow",
+     "hex": [
+      "#FFB549FF"
+     ],
+     "firstSeen": "2025-07-17T06:57:58Z"
+    },
+    {
+     "key": "GFA18-G1",
+     "name": "Green",
+     "hex": [
+      "#00BB31FF"
+     ],
+     "firstSeen": "2025-07-17T06:57:58Z"
+    },
+    {
+     "key": "GFA18-A1",
+     "name": "Orange",
+     "hex": [
+      "#FF671FFF"
+     ],
+     "firstSeen": "2025-07-17T06:57:58Z"
+    },
+    {
+     "key": "GFA18-P0",
+     "name": "Matte Beige",
+     "hex": [
+      "#ECC3B2FF"
+     ],
+     "firstSeen": "2025-07-17T06:57:58Z"
+    },
+    {
+     "key": "GFA18-N0",
+     "name": "Cocoa Brown",
+     "hex": [
+      "#745335FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFA18-D1",
+     "name": "Dark Gray",
+     "hex": [
+      "#8c8b8cFF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    }
+   ],
+   "product": null
+  },
+  {
+   "type": "PLA Marble",
+   "materialId": "GFA07",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA07-D4",
+     "name": "White Marble",
+     "hex": [
+      "#F7F3F0FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA07-R5",
+     "name": "Red Granite",
+     "hex": [
+      "#AD4E38FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-marble",
+    "title": "PLA Marble",
+    "image": "https://store.bblcdn.eu/s8/default/403434f58f2e4ba8a72159a24315dd2b/A07-R5-1.75-1000-spl.jpg"
+   }
+  },
+  {
+   "type": "PLA Matte",
+   "materialId": "GFA01",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA01-A2",
+     "name": "Mandarin Orange",
+     "hex": [
+      "#F99963FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-B0",
+     "name": "Sky Blue",
+     "hex": [
+      "#56B7E6FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-B3",
+     "name": "Marine Blue",
+     "hex": [
+      "#0078BFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-B4",
+     "name": "Ice Blue",
+     "hex": [
+      "#A3D8E1FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-B6",
+     "name": "Dark Blue",
+     "hex": [
+      "#042F56FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-D0",
+     "name": "Nardo Gray",
+     "hex": [
+      "#757575FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-D3",
+     "name": "Ash Gray",
+     "hex": [
+      "#9B9EA0FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-G0",
+     "name": "Apple Green",
+     "hex": [
+      "#C2E189FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-G1",
+     "name": "Grass Green",
+     "hex": [
+      "#61C680FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-G7",
+     "name": "Dark Green",
+     "hex": [
+      "#68724DFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-K1",
+     "name": "Charcoal",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-N0",
+     "name": "Dark Chocolate",
+     "hex": [
+      "#4D3324FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-N1",
+     "name": "Latte Brown",
+     "hex": [
+      "#D3B7A7FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-N2",
+     "name": "Dark Brown",
+     "hex": [
+      "#7D6556FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-N3",
+     "name": "Caramel",
+     "hex": [
+      "#AE835BFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-P3",
+     "name": "Sakura Pink",
+     "hex": [
+      "#E8AFCFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-P4",
+     "name": "Lilac Purple",
+     "hex": [
+      "#AE96D4FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-R1",
+     "name": "Scarlet Red",
+     "hex": [
+      "#DE4343FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-R2",
+     "name": "Terracotta",
+     "hex": [
+      "#B15533FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-R3",
+     "name": "Plum",
+     "hex": [
+      "#950051FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-R4",
+     "name": "Dark Red",
+     "hex": [
+      "#BB3D43FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-W2",
+     "name": "Ivory White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-W3",
+     "name": "Bone White",
+     "hex": [
+      "#CBC6B8FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-Y2",
+     "name": "Lemon Yellow",
+     "hex": [
+      "#F7D959FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA01-Y3",
+     "name": "Desert Tan",
+     "hex": [
+      "#E8DBB7FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-matte",
+    "title": "PLA Matte",
+    "image": "https://store.bblcdn.eu/s8/default/8221709b8311467cb756b4325da9c5a2/PLA_Matte_white.jpg"
+   }
+  },
+  {
+   "type": "PLA Metal",
+   "materialId": "GFA02",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA02-D2",
+     "name": "Iron Gray Metallic",
+     "hex": [
+      "#43403DFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA02-Y1",
+     "name": "Iridium Gold Metallic",
+     "hex": [
+      "#B39B84FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA02-G2",
+     "name": "Oxide Green Metallic",
+     "hex": [
+      "#1D7C6AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA02-B2",
+     "name": "Cobalt Blue Metallic",
+     "hex": [
+      "#39699EFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA02-N3",
+     "name": "Copper Brown Metallic",
+     "hex": [
+      "#AA6443FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-metal",
+    "title": "PLA Metal",
+    "image": "https://store.bblcdn.eu/s8/default/a8cb6b37d9d8430b88743d1784093c1a/A02-B2-1.75-1000-spl.png"
+   }
+  },
+  {
+   "type": "PLA Pure",
+   "materialId": "GFA19",
+   "firstSeen": "2026-05-13T14:02:55Z",
+   "colors": [
+    {
+     "key": "GFA19-W00",
+     "name": "Pure White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFA19-K00",
+     "name": "Absolute Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFA19-P00",
+     "name": "Milky Pink",
+     "hex": [
+      "#f7ced7FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFA19-B00",
+     "name": "Baby Blue",
+     "hex": [
+      "#a4dbe8FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFA19-A00",
+     "name": "Apricot",
+     "hex": [
+      "#ffb673FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-pure",
+    "title": "PLA Pure",
+    "image": "https://store.bblcdn.eu/s8/default/ddad17bc01ba4519965ad3d8ada7fa42/PLA_purePLA_pure.jpg"
+   }
+  },
+  {
+   "type": "PLA Silk",
+   "materialId": "GFA05",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA05-B0",
+     "name": "Blue",
+     "hex": [
+      "#147BD1FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-D1",
+     "name": "Silver",
+     "hex": [
+      "#EAECEBFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-G1",
+     "name": "Green",
+     "hex": [
+      "#4CE4A0FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-N4",
+     "name": "Copper",
+     "hex": [
+      "#5E4B3CFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-P3",
+     "name": "Pink",
+     "hex": [
+      "#EEB1C1FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-P5",
+     "name": "Purple",
+     "hex": [
+      "#854CE4FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-T1",
+     "name": "Gilded Rose",
+     "hex": [
+      "#FF9425FF",
+      "#C16784FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-T2",
+     "name": "Midnight Blaze",
+     "hex": [
+      "#0047BBFF",
+      "#7D1B49FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-T3",
+     "name": "Neon City",
+     "hex": [
+      "#0047BBFF",
+      "#BB22A3FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-T4",
+     "name": "Blue Hawaii",
+     "hex": [
+      "#418FDEFF",
+      "#70C884FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-T5",
+     "name": "Velvet Eclipse (Black-Red)",
+     "hex": [
+      "#000000FF",
+      "#A34342FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-Y4",
+     "name": "Gold",
+     "hex": [
+      "#E5B03DFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-M1",
+     "name": "South Beach",
+     "hex": [
+      "#F772A4FF",
+      "#00918BFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-M4",
+     "name": "Aurora Purple",
+     "hex": [
+      "#7F3696FF",
+      "#006EC9FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-M8",
+     "name": "Dawn Radiance",
+     "hex": [
+      "#EC984CFF",
+      "#6CD4BCFF",
+      "#A66EB9FF",
+      "#D87694FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA05-T7",
+     "name": "Mystic Magenta",
+     "hex": [
+      "#720062FF",
+      "#3a913fFF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFA05-T9",
+     "name": "Phantom Blue",
+     "hex": [
+      "#00629bFF",
+      "#000000FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-silk-upgrade",
+    "title": "PLA Silk+",
+    "image": "https://store.bblcdn.eu/s8/default/9aaebe748b88497387f3c159307aa5bf/cf2723db072c4371b3606938b8cccdb9.jpg"
+   }
+  },
+  {
+   "type": "PLA Silk+",
+   "materialId": "GFA06",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA06-B0",
+     "name": "Baby Blue",
+     "hex": [
+      "#A8C6EEFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-B1",
+     "name": "Blue",
+     "hex": [
+      "#008BDAFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-D0",
+     "name": "Titan Gray",
+     "hex": [
+      "#5F6367FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-D1",
+     "name": "Silver",
+     "hex": [
+      "#C8C8C8FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-G0",
+     "name": "Candy Green",
+     "hex": [
+      "#018814FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-G1",
+     "name": "Mint",
+     "hex": [
+      "#96DCB9FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-P0",
+     "name": "Purple",
+     "hex": [
+      "#8671CBFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-R0",
+     "name": "Candy Red",
+     "hex": [
+      "#D02727FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-R1",
+     "name": "Rose Gold",
+     "hex": [
+      "#BA9594FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-R2",
+     "name": "Pink",
+     "hex": [
+      "#F7ADA6FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-Y0",
+     "name": "Champagne",
+     "hex": [
+      "#F3CFB2FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA06-Y1",
+     "name": "Gold",
+     "hex": [
+      "#F4A925FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-silk-upgrade",
+    "title": "PLA Silk+",
+    "image": "https://store.bblcdn.eu/s8/default/9aaebe748b88497387f3c159307aa5bf/cf2723db072c4371b3606938b8cccdb9.jpg"
+   }
+  },
+  {
+   "type": "PLA Sparkle",
+   "materialId": "GFA08",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA08-B7",
+     "name": "Royal Purple Sparkle",
+     "hex": [
+      "#483D8BFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA08-D5",
+     "name": "Slate Gray Sparkle",
+     "hex": [
+      "#8E9089FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA08-G3",
+     "name": "Alpine Green Sparkle",
+     "hex": [
+      "#3F5443FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA08-K2",
+     "name": "Onyx Black Sparkle",
+     "hex": [
+      "#2D2B28FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA08-R2",
+     "name": "Crimson Red Sparkle",
+     "hex": [
+      "#792B36FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA08-Y1",
+     "name": "Classic Gold Sparkle",
+     "hex": [
+      "#CEA629FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-sparkle",
+    "title": "PLA Sparkle",
+    "image": "https://store.bblcdn.eu/s8/default/7407fc887147448bbbf89189c9539952/Sparklegreen.png"
+   }
+  },
+  {
+   "type": "PLA Tough",
+   "materialId": "GFA09",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA09-A0",
+     "name": "Orange",
+     "hex": [
+      "#FF7F41FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-B4",
+     "name": "Light Blue",
+     "hex": [
+      "#0085ADFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-B5",
+     "name": "Lavender Blue",
+     "hex": [
+      "#6667ABFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-D0",
+     "name": "Gray",
+     "hex": [
+      "#515A6CFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-D1",
+     "name": "Silver",
+     "hex": [
+      "#898D8DFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-G4",
+     "name": "Pine Green",
+     "hex": [
+      "#00482BFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-K0",
+     "name": "Black",
+     "hex": [
+      "#25282AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-R3",
+     "name": "Vermilion Red",
+     "hex": [
+      "#DD3C22FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-W3",
+     "name": "White",
+     "hex": [
+      "#F9F7F4FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA09-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#FEDB00FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-tough-upgrade",
+    "title": "PLA Tough+",
+    "image": "https://store.bblcdn.eu/s8/default/76a53975eaab4238ab610612c4efdc5f/PLA_Tough_(3).jpg"
+   }
+  },
+  {
+   "type": "PLA Tough+",
+   "materialId": "GFA10",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA10-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA10-D0",
+     "name": "Gray",
+     "hex": [
+      "#AFB1AEFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA10-D1",
+     "name": "Silver",
+     "hex": [
+      "#959698FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA10-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA10-A0",
+     "name": "Orange",
+     "hex": [
+      "#DC3A27FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA10-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#F4D53FFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA10-B0",
+     "name": "Cyan",
+     "hex": [
+      "#009BD8FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-tough-upgrade",
+    "title": "PLA Tough+",
+    "image": "https://store.bblcdn.eu/s8/default/76a53975eaab4238ab610612c4efdc5f/PLA_Tough_(3).jpg"
+   }
+  },
+  {
+   "type": "PLA Translucent",
+   "materialId": "GFA17",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA17-R0",
+     "name": "Red",
+     "hex": [
+      "#B5001180"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-R1",
+     "name": "Cherry Pink",
+     "hex": [
+      "#F5B6CD80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-A0",
+     "name": "Orange",
+     "hex": [
+      "#F74E0280"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-Y0",
+     "name": "Mellow Yellow",
+     "hex": [
+      "#F5DBAB80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-G0",
+     "name": "Light Jade",
+     "hex": [
+      "#96D8AF80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-B0",
+     "name": "Ice Blue",
+     "hex": [
+      "#B8CDE980"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-B1",
+     "name": "Blue",
+     "hex": [
+      "#0047BB80"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-B2",
+     "name": "Teal",
+     "hex": [
+      "#009FA180"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-P0",
+     "name": "Purple",
+     "hex": [
+      "#8344B080"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA17-P1",
+     "name": "Lavender",
+     "hex": [
+      "#B8ACD680"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-translucent",
+    "title": "PLA Translucent",
+    "image": "https://store.bblcdn.eu/s8/default/18aacd2b879441cd80c2cd067b2ad0a1/teal_4dc29df4-13e2-4c00-9e6a-7dbf9183952a.jpg"
+   }
+  },
+  {
+   "type": "PLA Wood",
+   "materialId": "GFA16",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA16-G0",
+     "name": "Classic Birch",
+     "hex": [
+      "#918669FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA16-K0",
+     "name": "Black Walnut",
+     "hex": [
+      "#4F3F24FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA16-N0",
+     "name": "Clay Brown",
+     "hex": [
+      "#995F11FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA16-R0",
+     "name": "Rosewood",
+     "hex": [
+      "#4C241CFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA16-W0",
+     "name": "White Oak",
+     "hex": [
+      "#D6CCA3FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA16-Y0",
+     "name": "Ochre Yellow",
+     "hex": [
+      "#C98935FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-wood",
+    "title": "PLA Wood",
+    "image": "https://store.bblcdn.eu/s8/default/11c1ab483b664ebbbfcf7414c1ec0167/4_4f1d41bd-761c-4ac8-bea1-540852b7334d.jpg"
+   }
+  },
+  {
+   "type": "PLA-CF",
+   "materialId": "GFA50",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFA50-B6",
+     "name": "Royal Blue",
+     "hex": [
+      "#2842ADFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA50-B9",
+     "name": "Jeans Blue",
+     "hex": [
+      "#6e88bcFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA50-D6",
+     "name": "Lava Gray",
+     "hex": [
+      "#4d5054FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA50-G7",
+     "name": "Matcha Green",
+     "hex": [
+      "#5c9748FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA50-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA50-P7",
+     "name": "Iris Purple",
+     "hex": [
+      "#69398EFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFA50-R4",
+     "name": "Burgundy Red",
+     "hex": [
+      "#951e23FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pla-cf",
+    "title": "PLA-CF",
+    "image": "https://store.bblcdn.eu/s8/default/6c62179718bc473c94f3e629543e001b/c0f99c4f6c04f5422dcd8db2da060392.png"
+   }
+  },
+  {
+   "type": "PPA-CF",
+   "materialId": "GFN06",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFN06-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/ppa-cf",
+    "title": "PPA-CF",
+    "image": "https://store.bblcdn.eu/s8/default/0db74d6bbfd54a3f9756c4395a519457/PPA1.jpg"
+   }
+  },
+  {
+   "type": "PPS-CF",
+   "materialId": "GFT02",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFT02-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pps-cf",
+    "title": "PPS-CF",
+    "image": "https://store.bblcdn.eu/s8/default/b9b9f671b9754c84b45ecd4c9e58f7e5/Mainimage.png"
+   }
+  },
+  {
+   "type": "PVA",
+   "materialId": "GFS04",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFS04-Y0",
+     "name": "Clear",
+     "hex": [
+      "#F0F1A880"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/pva",
+    "title": "PVA",
+    "image": "https://store.bblcdn.eu/s8/default/151690be785849e88d3d926351a85a6b/pvasupport12.jpg"
+   }
+  },
+  {
+   "type": "Support for ABS",
+   "materialId": "GFS06",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFS06-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/support-for-abs",
+    "title": "Support for ABS",
+    "image": "https://store.bblcdn.eu/s8/default/1037a943c71d40e99da4609bb4934b61/20240704-172034.png"
+   }
+  },
+  {
+   "type": "Support for PA/PET",
+   "materialId": "GFS03",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFS03-G1",
+     "name": "Green",
+     "hex": [
+      "#C0DF16FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/support-for-pa-pet",
+    "title": "Support for PA/PET",
+    "image": "https://store.bblcdn.eu/s8/default/51c284b0cc7b4dc8ba24601c4b35d9c7/SupportforPAPET.png"
+   }
+  },
+  {
+   "type": "Support for PLA",
+   "materialId": "GFS02",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFS02-W1",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/support-for-pla-petg",
+    "title": "Support for PLA/PETG",
+    "image": "https://store.bblcdn.eu/s8/default/bae39a0960be4a41b09d800b8add0176/3_333e81ce-72cf-4643-a79a-19afd5ac5866.jpg"
+   }
+  },
+  {
+   "type": "Support for PLA/PETG",
+   "materialId": "GFS05",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFS05-C0",
+     "name": "Nature",
+     "hex": [
+      "#00000000"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFS05-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/support-for-pla-petg",
+    "title": "Support for PLA/PETG",
+    "image": "https://store.bblcdn.eu/s8/default/bae39a0960be4a41b09d800b8add0176/3_333e81ce-72cf-4643-a79a-19afd5ac5866.jpg"
+   }
+  },
+  {
+   "type": "TPU 85A",
+   "materialId": "GFU04",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFU04-A1",
+     "name": "Neon Orange",
+     "hex": [
+      "#F68B1BFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU04-G0",
+     "name": "Light Cyan",
+     "hex": [
+      "#C3E2D6FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU04-P0",
+     "name": "Rose Beige/Flesh",
+     "hex": [
+      "#F3CFB2FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFU04-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFU04-G1",
+     "name": "Lime Green",
+     "hex": [
+      "#CDEA80FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/tpu-85a-tpu-90a",
+    "title": "TPU 85A / TPU 90A",
+    "image": "https://store.bblcdn.eu/s8/default/a6a50e4e7a4b42c2bc7b430dfb5cafd4/silver_2.png"
+   }
+  },
+  {
+   "type": "TPU 90A",
+   "materialId": "GFU03",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFU03-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU03-W1",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU03-M0",
+     "name": "Frozen",
+     "hex": [
+      "#40B6E4FF",
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU03-M1",
+     "name": "Blaze",
+     "hex": [
+      "#D21B3CFF",
+      "#F1AAA8FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU03-B1",
+     "name": "Crystal Blue",
+     "hex": [
+      "#7eb4e180"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFU03-D0",
+     "name": "Quicksilver",
+     "hex": [
+      "#9ea2a2FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFU03-P1",
+     "name": "Grape Jelly",
+     "hex": [
+      "#D6ABFF80"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    },
+    {
+     "key": "GFU03-N0",
+     "name": "Cocoa Brown",
+     "hex": [
+      "#5C4738FF"
+     ],
+     "firstSeen": "2026-05-13T14:02:55Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/tpu-85a-tpu-90a",
+    "title": "TPU 85A / TPU 90A",
+    "image": "https://store.bblcdn.eu/s8/default/a6a50e4e7a4b42c2bc7b430dfb5cafd4/silver_2.png"
+   }
+  },
+  {
+   "type": "TPU 95A",
+   "materialId": "GFU01",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFU01-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU01-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/tpu-95a-hf",
+    "title": "TPU 95A HF",
+    "image": "https://store.bblcdn.eu/s8/default/59379e6c40124c21bc7dd55245fb1ebe/TPUHF_1.png"
+   }
+  },
+  {
+   "type": "TPU 95A HF",
+   "materialId": "GFU00",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFU00-B0",
+     "name": "Blue",
+     "hex": [
+      "#0072CEFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU00-D0",
+     "name": "Gray",
+     "hex": [
+      "#898D8DFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU00-K0",
+     "name": "Black",
+     "hex": [
+      "#101820FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU00-R0",
+     "name": "Red",
+     "hex": [
+      "#C8102EFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU00-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU00-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#F3E600FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/tpu-95a-hf",
+    "title": "TPU 95A HF",
+    "image": "https://store.bblcdn.eu/s8/default/59379e6c40124c21bc7dd55245fb1ebe/TPUHF_1.png"
+   }
+  },
+  {
+   "type": "TPU for AMS",
+   "materialId": "GFU02",
+   "firstSeen": "2025-07-17T06:55:52Z",
+   "colors": [
+    {
+     "key": "GFU02-B0",
+     "name": "Blue",
+     "hex": [
+      "#5898DDFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU02-D0",
+     "name": "Gray",
+     "hex": [
+      "#939393FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU02-G0",
+     "name": "Neon Green",
+     "hex": [
+      "#90FF1AFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU02-K0",
+     "name": "Black",
+     "hex": [
+      "#000000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU02-R0",
+     "name": "Red",
+     "hex": [
+      "#ED0000FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU02-W0",
+     "name": "White",
+     "hex": [
+      "#FFFFFFFF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    },
+    {
+     "key": "GFU02-Y0",
+     "name": "Yellow",
+     "hex": [
+      "#F9EF41FF"
+     ],
+     "firstSeen": "2025-07-17T06:55:52Z"
+    }
+   ],
+   "product": {
+    "url": "https://eu.store.bambulab.com/products/tpu-for-ams",
+    "title": "TPU for AMS",
+    "image": "https://store.bblcdn.eu/s8/default/5b848554718b444faa29355ce6f54264/d4fb1dd751904e1ea09d142c68d7ec36.jpg"
+   }
+  }
+ ]
+}

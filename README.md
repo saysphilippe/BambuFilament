@@ -66,6 +66,19 @@ npx wrangler deploy
 
 Sett så `PROXY_URL` i `app.js` til adressen `wrangler deploy` skriver ut.
 
+## Nytt fra Bambu
+
+Fanen viser nye filamenttyper og farger fra Bambu Lab, med lenke til produktsiden i
+nettbutikken og en markering av om noen av oss allerede har fargen.
+
+Workflowen `.github/workflows/catalog.yml` kjører `scripts/update-catalog.mjs` daglig. Skriptet
+- leser `filaments_color_codes.json` i Bambu Studio-repoet og historikken dens. Det gir
+  datoen hver farge og type kom, med juli 2025 som utgangspunkt, og
+- leser nettstedskartet til eu.store.bambulab.com for å finne produktsiden til hver type.
+
+Resultatet lagres i `data/catalog.json` og `data/colors.json`. Workflowen kan også kjøres
+manuelt under *Actions* → *Oppdater Bambu-katalog* → *Run workflow*.
+
 ## Leseren
 
 | Del | Kobles til ESP32 |
@@ -106,4 +119,6 @@ Bruk:
 | `worker/` | Cloudflare Worker som videresender til Bambu sitt sky-API (AMS) |
 | `data/spools.json` | Brukere og spoler (skrives av leseren og siden) |
 | `data/colors.json` | Offisielle Bambu-fargenavn |
+| `data/catalog.json` | Bambu-katalogen med datoer og produktsider |
+| `scripts/update-catalog.mjs` | Henter katalogen (kjøres daglig av GitHub Actions) |
 | `firmware/BambuFilament/` | ESP32-firmware |

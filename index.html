@@ -34,6 +34,7 @@
   <nav class="tabs" aria-label="Visning">
     <button class="tab active" data-tab="stock">Lager</button>
     <button class="tab" data-tab="ams">AMS</button>
+    <button class="tab" data-tab="news">Nytt fra Bambu</button>
   </nav>
 
   <main>
@@ -54,7 +55,6 @@
           <option value="empty">Brukt opp</option>
           <option value="">Alle</option>
         </select>
-        <select id="type" aria-label="Type"></select>
         <select id="sort" aria-label="Sortering">
           <option value="type">Sorter: type</option>
           <option value="color">Sorter: farge</option>
@@ -66,9 +66,12 @@
       <div class="chip-row"><span class="chip-label">Farge</span><div id="family-chips" class="chips"></div></div>
     </section>
 
+    <div id="type-tabs" class="type-tabs" role="tablist" aria-label="Filamenttype"></div>
     <div id="count" class="count"></div>
     <section id="grid" class="grid"></section>
    </div>
+
+   <div id="tab-news" hidden></div>
 
    <div id="tab-ams" hidden>
     <section id="ams-me" class="panel"></section>

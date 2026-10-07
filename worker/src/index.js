@@ -69,6 +69,7 @@ export default {
         case "/login": return json(await login(body), 200, origin);
         case "/send-code": return json(await sendCode(body), 200, origin);
         case "/tfa": return json(await tfa(body), 200, origin);
+        case "/refresh": return json(await refresh(body), 200, origin);
         case "/ams":
           if (!token) return json({ error: "Mangler Bambu-token" }, 401, origin);
           return json(await ams(token), 200, origin);
@@ -91,7 +92,7 @@ async function login({ account, password, code }) {
   if (!account || (!password && !code)) throw fail("Mangler e-post og passord eller kode");
   const body = code ? { account, code } : { account, password, apiError: "" };
   const { status, data } = await bambu("/v1/user-service/user/login", { method: "POST", body });
-  if (data.accessToken) return { token: data.accessToken, expiresIn: data.expiresIn || null };
+  if (data.accessToken) return { token: data.accessToken, refreshToken: data.refreshToken || "", expiresIn: data.expiresIn || null };
   if (data.loginType === "verifyCode") return { step: "code" };
   if (data.loginType === "tfa") return { step: "tfa", tfaKey: data.tfaKey };
   throw fail(data.error || data.message || `Innlogging feilet (${status})`, status === 200 ? 400 : status);
@@ -116,9 +117,19 @@ async function tfa({ tfaKey, tfaCode }) {
     body: JSON.stringify({ tfaKey, tfaCode }),
   });
   const cookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get("Set-Cookie") || ""];
-  const match = cookies.join(";").match(/(?:^|[;,\s])token=([^;]+)/);
+  const all = cookies.join(";");
+  const match = all.match(/(?:^|[;,\s])token=([^;]+)/);
   if (!match) throw fail(`Feil kode (${res.status})`, 401);
-  return { token: match[1] };
+  const refreshMatch = all.match(/(?:^|[;,\s])refreshToken=([^;]+)/);
+  return { token: match[1], refreshToken: refreshMatch ? refreshMatch[1] : "" };
+}
+
+// Fornyer tilgangsnøkkelen uten ny innlogging.
+async function refresh({ refreshToken }) {
+  if (!refreshToken) throw fail("Mangler refresh-token", 401);
+  const { status, data } = await bambu("/v1/user-service/user/refreshtoken", { method: "POST", body: { refreshToken } });
+  if (!data.accessToken) throw fail(data.error || data.message || `Kunne ikke fornye innloggingen (${status})`, 401);
+  return { token: data.accessToken, refreshToken: data.refreshToken || refreshToken, expiresIn: data.expiresIn || null };
 }
 
 // ---------- AMS ----------

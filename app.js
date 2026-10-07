@@ -32,6 +32,9 @@ const state = {
   amsLive: null,
   amsBusy: false,
   amsError: "",
+  catalog: null,
+  newsDays: store("bf.newsDays") || "180",
+  newsOnlyMissing: false,
   filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type" },
   selected: null,
 };
@@ -233,8 +236,9 @@ function swatch(tag) {
 const title = (s) => s.name || s.colorName || s.tag?.colors[0].slice(0, 7) || "Ukjent spole";
 const hueOf = (s) => (s.tag ? FAMILIES.findIndex((f) => f[0] === s.family) * 1000 + hsl(s.tag.colors[0]).h : 1e9);
 
-function filtered() {
-  const { q, owner, type, family: fam, status, sort } = state.filters;
+function filtered({ ignoreType = false } = {}) {
+  const { q, owner, family: fam, status, sort } = state.filters;
+  const type = ignoreType ? "" : state.filters.type;
   const needle = q.trim().toLowerCase();
   const list = state.spools.filter((s) =>
     (!owner || s.owner === owner) &&
@@ -259,6 +263,7 @@ function chip(group, value, label, active, dot) {
 
 function render() {
   renderAms();
+  if (state.tab === "news") renderNews();
   const all = users();
   const inStock = state.spools.filter((s) => s.status === "in");
   const kg = inStock.reduce((sum, s) => sum + (s.tag?.weight || 0), 0) / 1000;
@@ -275,9 +280,16 @@ function render() {
   const presentFamilies = new Set(state.spools.map((s) => s.family));
   $("#family-chips").innerHTML = chip("family", "", "Alle farger", !f.family) +
     FAMILIES.filter(([k]) => presentFamilies.has(k)).map(([k, label, c]) => chip("family", k, label, f.family === k, c)).join("");
+  // Én fane per filamenttype som finnes i lageret. Antallet følger de andre filtrene.
+  const typeCounts = {};
+  for (const s of filtered({ ignoreType: true })) typeCounts[s.typeName] = (typeCounts[s.typeName] || 0) + 1;
   const types = [...new Set(state.spools.map((s) => s.typeName))].sort();
-  $("#type").innerHTML = `<option value="">Alle typer</option>` +
-    types.map((t) => `<option${t === f.type ? " selected" : ""}>${esc(t)}</option>`).join("");
+  if (f.type && !types.includes(f.type)) f.type = "";
+  const total = Object.values(typeCounts).reduce((a, b) => a + b, 0);
+  $("#type-tabs").innerHTML =
+    `<button class="type-tab${!f.type ? " active" : ""}" data-type="">Alle <span>${total}</span></button>` +
+    types.filter((t) => typeCounts[t] || f.type === t)
+      .map((t) => `<button class="type-tab${f.type === t ? " active" : ""}" data-type="${esc(t)}">${esc(t)} <span>${typeCounts[t] || 0}</span></button>`).join("");
 
   // Siste bevegelser
   const events = state.spools
@@ -662,9 +674,34 @@ function setupDone() {
 const AMS_REFRESH_MS = 5 * 60 * 1000;          // Bambu anbefaler ikke hyppigere "pushall"
 const SNAPSHOT_MAX_AGE_MS = 6 * 60 * 60 * 1000; // delt øyeblikksbilde fornyes minst så ofte
 
+// Bambu-tilkoblingen lagres i denne nettleseren per bruker, og overlever ut- og innlogging
+// på siden. Tilgangsnøkkelen fornyes automatisk med refresh-tokenen når den utløper.
 const bambuKey = () => `bf.bambu.${userName()}`;
-function bambuToken() {
-  try { return JSON.parse(store(bambuKey()) || "null")?.token || ""; } catch { return ""; }
+function bambuAuth() {
+  try { return JSON.parse(store(bambuKey()) || "null") || {}; } catch { return {}; }
+}
+const bambuToken = () => bambuAuth().token || "";
+
+function saveBambuAuth(res, email) {
+  const old = bambuAuth();
+  store(bambuKey(), JSON.stringify({
+    token: res.token,
+    refreshToken: res.refreshToken || old.refreshToken || "",
+    email: email || old.email || "",
+    at: new Date().toISOString(),
+  }));
+}
+
+// Henter AMS. Ved utløpt nøkkel fornyes den én gang før brukeren må koble til på nytt.
+async function fetchAms() {
+  try {
+    return await proxy("/ams", {}, bambuToken());
+  } catch (err) {
+    const { refreshToken } = bambuAuth();
+    if (err.status !== 401 || !refreshToken) throw err;
+    saveBambuAuth(await proxy("/refresh", { refreshToken }));
+    return proxy("/ams", {}, bambuToken());
+  }
 }
 
 async function proxy(path, body, bambu) {
@@ -696,11 +733,14 @@ async function refreshAms() {
   state.amsError = "";
   renderAms();
   try {
-    state.amsLive = await proxy("/ams", {}, tok);
+    state.amsLive = await fetchAms();
     await publishSnapshot();
   } catch (err) {
     state.amsError = err.message;
-    if (err.status === 401) store(bambuKey(), "");
+    if (err.status === 401) {
+      store(bambuKey(), "");
+      state.amsError = "Bambu-innloggingen er utløpt og kunne ikke fornyes. Koble til på nytt.";
+    }
   }
   state.amsBusy = false;
   renderAms();
@@ -803,14 +843,14 @@ function renderAms() {
   } else if (!connected) {
     panel.innerHTML = `
       <div class="ams-me-row">
-        <div><b>Koble til Bambu-kontoen din</b><p class="hint">Innloggingen gjelder bare denne nettleseren. Bambu-passordet lagres ikke.</p></div>
+        <div><b>Koble til Bambu-kontoen din</b><p class="hint">Du kobler til én gang per nettleser. Tilkoblingen huskes også når du logger ut og inn på siden, og fornyes automatisk. Bambu-passordet lagres ikke.</p></div>
         <button class="btn btn-primary" data-ams="connect">Koble til</button>
       </div>`;
   } else {
     panel.innerHTML = `
       <div class="ams-me-row">
         <div>
-          <b>Bambu-konto tilkoblet</b>
+          <b>Bambu-konto tilkoblet</b>${bambuAuth().email ? ` <span class="muted">(${esc(bambuAuth().email)})</span>` : ""}
           <div class="muted">${state.amsBusy ? "Henter AMS-data…" : state.amsLive ? `Oppdatert ${fmtTime(state.amsLive.updated)}` : ""}</div>
         </div>
         <label class="switch"><input type="checkbox" data-ams="share" ${meUser?.shareAms ? "checked" : ""}> Del AMS-data med alle</label>
@@ -872,7 +912,7 @@ async function bambuSubmit(e) {
       res = await proxy("/tfa", { tfaKey: bambuLogin.tfaKey, tfaCode: $("#b-code").value.trim() });
     }
     if (res.token) {
-      store(bambuKey(), JSON.stringify({ token: res.token, email: bambuLogin.email, at: new Date().toISOString() }));
+      saveBambuAuth(res, bambuLogin.email);
       $("#b-password").value = "";
       $("#bambu").close();
       refreshAms();
@@ -898,15 +938,140 @@ async function amsAction(action, el) {
   }
 }
 
+// ---------- Nytt fra Bambu ----------
+
+const DAY = 864e5;
+
+async function loadCatalog() {
+  try {
+    const res = await fetch(`data/catalog.json?t=${Date.now()}`, { cache: "no-store" });
+    if (res.ok) state.catalog = await res.json();
+  } catch { /* fanen viser en melding */ }
+}
+
+// Hvem som har en gitt farge: { "GFA00-A0": ["Philippe", ...] } (spoler på lager eller tatt ut).
+function ownedKeys() {
+  const map = {};
+  for (const s of state.spools) {
+    if (!s.tag || s.status === "empty") continue;
+    const key = `${s.tag.materialId}-${s.tag.variantId.split("-")[1]}`;
+    (map[key] ||= []).includes(s.owner) || map[key].push(s.owner);
+  }
+  return map;
+}
+
+const fmtDay = (d) => new Date(d).toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric" });
+
+function productLink(t, label = "Se i Bambu-butikken") {
+  return t.product
+    ? `<a class="btn btn-small" href="${esc(t.product.url)}" target="_blank" rel="noopener">${label} ↗</a>`
+    : `<a class="btn btn-small" href="${esc(state.catalog.source.store)}/collections/filament" target="_blank" rel="noopener">Alle filamenter ↗</a>`;
+}
+
+function ownedBadge(owners) {
+  if (!owners?.length) return "";
+  return `<span class="owned">${owners.map((o) => `<span class="owner-dot" style="--owner:${userColor(o)}" title="${esc(o)}"></span>`).join("")}Har: ${esc(owners.join(", "))}</span>`;
+}
+
+function renderNews() {
+  const box = $("#tab-news");
+  const c = state.catalog;
+  if (!c) {
+    box.innerHTML = `<p class="empty-msg">Katalogen er ikke hentet ennå.</p>`;
+    return;
+  }
+  const days = Number(state.newsDays);
+  const since = Math.max(new Date(c.baseline).getTime() + DAY, days ? Date.now() - days * DAY : 0);
+  const owned = ownedKeys();
+  const isNew = (d) => d && new Date(d).getTime() > since;
+
+  const newTypes = c.types.filter((t) => isNew(t.firstSeen)).sort((a, b) => b.firstSeen.localeCompare(a.firstSeen));
+  let newColors = c.types
+    .flatMap((t) => t.colors.filter((x) => isNew(x.firstSeen)).map((x) => ({ ...x, t })))
+    .sort((a, b) => b.firstSeen.localeCompare(a.firstSeen) || a.t.type.localeCompare(b.t.type));
+  if (state.newsOnlyMissing) newColors = newColors.filter((x) => !owned[x.key]);
+
+  const byDay = {};
+  for (const x of newColors) (byDay[x.firstSeen.slice(0, 10)] ||= []).push(x);
+
+  const colorCard = (x) => `
+    <a class="news-color" href="${esc(x.t.product?.url || c.source.store + "/collections/filament")}" target="_blank" rel="noopener">
+      <span class="news-swatch" style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}"></span>
+      <span class="news-color-text">
+        <b>${esc(x.name || x.key)}</b>
+        <span>${esc(x.t.type)}</span>
+        ${ownedBadge(owned[x.key])}
+      </span>
+      <span class="ext">↗</span>
+    </a>`;
+
+  box.innerHTML = `
+    <section class="panel news-head">
+      <div>
+        <b>Nye farger og typer fra Bambu Lab</b>
+        <p class="hint">Hentes daglig fra Bambu Lab sin offisielle fargeliste (Bambu Studio) og nettbutikken.
+        ${c.updated ? `Sist sjekket ${fmtTime(c.updated)}.` : ""} Lenkene går til produktsiden i Bambu-butikken.</p>
+      </div>
+      <div class="news-controls">
+        <select id="news-days" aria-label="Periode">
+          ${[[30, "Siste 30 dager"], [90, "Siste 3 måneder"], [180, "Siste 6 måneder"], [365, "Siste år"], [0, "Alt siden juli 2025"]]
+            .map(([v, l]) => `<option value="${v}"${Number(state.newsDays) === v ? " selected" : ""}>${l}</option>`).join("")}
+        </select>
+        <label class="switch"><input type="checkbox" id="news-missing" ${state.newsOnlyMissing ? "checked" : ""}> Bare farger ingen av oss har</label>
+      </div>
+    </section>
+
+    <h2 class="section-title">Nye typer <span class="muted">${newTypes.length}</span></h2>
+    ${newTypes.length ? `<div class="news-types">${newTypes.map((t) => `
+      <div class="news-type">
+        ${t.product?.image ? `<img src="${esc(t.product.image)}" alt="" loading="lazy">` : `<div class="img-ph"></div>`}
+        <div class="news-type-body">
+          <b>${esc(t.type)}</b>
+          <span class="muted">Ny ${fmtDay(t.firstSeen)} · ${t.colors.length} farger</span>
+          <div class="strip">${t.colors.slice(0, 14).map((x) => `<span style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}" title="${esc(x.name)}"></span>`).join("")}</div>
+          ${productLink(t)}
+        </div>
+      </div>`).join("")}</div>` : `<p class="muted">Ingen nye typer i perioden.</p>`}
+
+    <h2 class="section-title">Nye farger <span class="muted">${newColors.length}</span></h2>
+    ${Object.keys(byDay).length ? Object.entries(byDay).map(([day, list]) => `
+      <h3>${fmtDay(day)}</h3>
+      <div class="news-colors">${list.map(colorCard).join("")}</div>`).join("")
+      : `<p class="muted">Ingen nye farger i perioden.</p>`}
+
+    <h2 class="section-title">Alle typer fra Bambu <span class="muted">${c.types.length}</span></h2>
+    <div class="all-types">${c.types.map((t) => {
+      const have = t.colors.filter((x) => owned[x.key]).length;
+      return `<div class="all-type">
+        <div class="all-type-head"><b>${esc(t.type)}</b><span class="muted">${have ? `${have} av ${t.colors.length} farger hos oss` : `${t.colors.length} farger`}</span>${productLink(t, "Produktside")}</div>
+        <div class="strip big">${t.colors.map((x) => `<a href="${esc(t.product?.url || c.source.store + "/collections/filament")}" target="_blank" rel="noopener"
+          class="${owned[x.key] ? "have" : ""}" style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}"
+          title="${esc(x.name)}${owned[x.key] ? " – har: " + esc(owned[x.key].join(", ")) : ""}"></a>`).join("")}</div>
+      </div>`;
+    }).join("")}</div>`;
+
+  $("#news-days").addEventListener("input", (e) => {
+    state.newsDays = e.target.value;
+    store("bf.newsDays", state.newsDays);
+    renderNews();
+  });
+  $("#news-missing").addEventListener("change", (e) => {
+    state.newsOnlyMissing = e.target.checked;
+    renderNews();
+  });
+}
+
 // ---------- Faner ----------
 
+const TABS = ["stock", "ams", "news"];
+
 function showTab(tab) {
-  state.tab = tab === "ams" ? "ams" : "stock";
+  state.tab = TABS.includes(tab) ? tab : "stock";
   store("bf.tab", state.tab);
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === state.tab));
-  $("#tab-stock").hidden = state.tab !== "stock";
-  $("#tab-ams").hidden = state.tab !== "ams";
+  for (const t of TABS) $(`#tab-${t}`).hidden = state.tab !== t;
   if (state.tab === "ams" && !state.amsLive && !state.amsBusy) refreshAms();
+  if (state.tab === "news") renderNews();
 }
 
 // ---------- Demo ----------
@@ -955,7 +1120,7 @@ function demoDoc() {
 
 // ---------- Oppstart ----------
 
-for (const key of ["q", "type", "status", "sort"]) {
+for (const key of ["q", "status", "sort"]) {
   const el = $("#" + key);
   const saved = store("bf." + key);
   if ((key === "status" || key === "sort") && saved !== "") state.filters[key] = saved === "all" ? "" : saved;
@@ -970,6 +1135,11 @@ for (const key of ["q", "type", "status", "sort"]) {
 document.addEventListener("click", (e) => {
   const tab = e.target.closest(".tab");
   if (tab) return showTab(tab.dataset.tab);
+  const typeTab = e.target.closest(".type-tab");
+  if (typeTab) {
+    state.filters.type = typeTab.dataset.type;
+    return render();
+  }
   const ams = e.target.closest("button[data-ams]");
   if (ams) return amsAction(ams.dataset.ams, ams);
   const c = e.target.closest(".chip");
@@ -998,7 +1168,7 @@ $("#open-users").addEventListener("click", openUsers);
 $("#refresh").addEventListener("click", () => (state.tab === "ams" ? Promise.all([refresh(), refreshAms()]) : refresh()));
 $("#ams-me").addEventListener("change", (e) => e.target.dataset.ams === "share" && amsAction("share", e.target));
 $("#bambu form").addEventListener("submit", bambuSubmit);
-setInterval(() => document.visibilityState === "visible" && state.tab === "ams" && bambuToken() && refreshAms(), AMS_REFRESH_MS);
+setInterval(() => document.visibilityState === "visible" && bambuToken() && refreshAms(), AMS_REFRESH_MS);
 if (DEMO) document.body.classList.add("demo");
 renderAccount();
 if (!DEMO) setInterval(() => document.visibilityState === "visible" && refresh(), REFRESH_MS);
@@ -1012,5 +1182,9 @@ fetch("data/colors.json")
       const idx = key.split("-")[0];
       if (colors[0]) state.colorIndex[`${idx}|${colors[0].toUpperCase()}`] ||= [name, type];
     }
-    refresh().then(() => showTab(location.hash === "#ams" ? "ams" : store("bf.tab")));
+    Promise.all([refresh(), loadCatalog()]).then(() => {
+      showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store("bf.tab"));
+      // Hent AMS i bakgrunnen, så et delt øyeblikksbilde holdes oppdatert uansett fane.
+      if (bambuToken() && state.tab !== "ams") refreshAms();
+    });
   });
