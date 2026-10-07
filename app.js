@@ -122,6 +122,9 @@ async function saveDoc(mutate, message) {
       setSession(null);
       throw new Error("Innloggingen er ikke lenger gyldig (tokenen er utløpt eller trukket tilbake). Logg inn på nytt.");
     }
+    if (put.status === 403 || put.status === 404) {
+      throw new Error("GitHub-tokenen har ikke skrivetilgang. Den må gjelde repoet BambuFilament og ha rettigheten Contents: Read and write.");
+    }
     if (put.status !== 409) throw new Error(`GitHub svarte ${put.status} ved lagring`);
   }
   throw new Error("Noen andre lagret samtidig. Prøv igjen.");
@@ -618,9 +621,10 @@ async function setup(e) {
   if (!tok || !names.length) return ($("#su-error").textContent = "Fyll inn token og minst én bruker.");
   $("#su-error").textContent = "Sjekker tokenen…";
   try {
+    if (!/^(github_pat_|ghp_)/.test(tok)) throw new Error("Det ser ikke ut som en GitHub-token. Den skal starte med github_pat_.");
     const res = await fetch(`https://api.github.com/repos/${REPO}`, { headers: { Authorization: `Bearer ${tok}` } });
-    const repo = res.ok ? await res.json() : null;
-    if (!repo?.permissions?.push) throw new Error("Tokenen har ikke skrivetilgang til repoet.");
+    if (res.status === 401) throw new Error("GitHub godtar ikke tokenen. Sjekk at hele tokenen er kopiert, og at den ikke er utløpt.");
+    if (!res.ok) throw new Error("Tokenen har ikke tilgang til repoet BambuFilament. Velg det under Repository access.");
     $("#su-error").textContent = "Krypterer og lagrer…";
     const created = [];
     for (const [i, name] of names.entries()) {
