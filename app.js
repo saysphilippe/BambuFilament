@@ -288,10 +288,13 @@ function cleanLibrary(l) {
       vendor: str(x.vendor), name: str(x.name), type: str(x.type), filamentId: str(x.filamentId),
       color: hexOnly(x.color), colors: Array.isArray(x.colors) ? x.colors.map(hexOnly).filter(Boolean) : [],
       net: num(x.net) ?? 0, total: num(x.total) ?? 0, rfid: str(x.rfid).toUpperCase(),
-      note: str(x.note), location: str(x.location),
+      note: str(x.note), variant: str(x.variant) || libVariantFromLocation(str(x.location)), device: str(x.device),
     })),
   };
 }
+
+// Eldre delte data hadde variant-ID-en (f.eks. "A01-G7") bakerst i location.
+const libVariantFromLocation = (loc) => (loc.match(/([A-Z]\d\d-[A-Z0-9]{2,3})$/) || [])[1] || "";
 
 const cleanMap = (obj, fn) => Object.fromEntries(Object.entries(obj || {}).map(([k, v]) => [k, fn(v)]).filter(([, v]) => v));
 
@@ -354,18 +357,110 @@ function swatch(tag) {
 }
 
 const title = (s) => s.name || s.colorName || s.tag?.colors[0].slice(0, 7) || "Ukjent spole";
+
+const SOURCE = { rfid: "RFID", library: "Bambu-bibliotek", ams: "I AMS" };
+
+function libName(x) {
+  const official = x.variant && state.colorNames[`GF${x.variant}`];
+  return official ? { color: official[0], type: official[1] } : trayName({ infoIdx: x.filamentId, color: x.color });
+}
+
+// Hvor spoler står akkurat nå, ut fra AMS-dataene: { RFID/Tray UID: "Printer · AMS A1" }.
+function amsLocations() {
+  const where = {};
+  for (const u of users()) {
+    for (const p of amsOf(u.name)?.printers || []) {
+      for (const a of p.ams) {
+        for (const t of a.trays) if (!t.empty && t.uuid) where[t.uuid.toUpperCase()] = `${p.name} · AMS ${String.fromCharCode(65 + a.unit)}${t.slot + 1}`;
+      }
+      for (const t of p.external) if (!t.empty && t.uuid) where[t.uuid.toUpperCase()] = `${p.name} · ekstern spole`;
+    }
+  }
+  return where;
+}
+
+// Antall spoler som står i en AMS akkurat nå (fra delte og egne AMS-data).
+const amsCount = () => users().reduce((sum, u) => sum + (amsOf(u.name)?.printers || [])
+  .reduce((n, p) => n + p.ams.reduce((m, a) => m + a.trays.filter((t) => !t.empty).length, 0) + p.external.filter((t) => !t.empty).length, 0), 0);
+
+// Bibliotek og AMS for en bruker: egne live-data hvis innlogget, ellers det brukeren deler.
+const libraryOf = (name) => (name === userName() && state.libraryLive) || state.doc.library?.[name] || null;
+const amsOf = (name) => (name === userName() && state.amsLive) || state.doc.ams?.[name] || null;
+
+// Felles form for oppføringer som ikke er RFID-skannet, så filtre og kort kan behandle alt likt.
+function stockEntry({ kind, id, owner, status, cols, infoIdx, color, fallbackType, names, ...extra }) {
+  const n = names || trayName({ infoIdx, color });
+  const colors = cols.length ? cols : ["#CCCCCC"];
+  const tag = { colors, weight: extra.total || 0 };
+  return {
+    kind, id, owner, status, tag, name: "", note: extra.note || "",
+    colorName: n.color,
+    typeName: n.color ? n.type : fallbackType || "Ukjent type",
+    family: cols.length ? family(tag) : "",
+    ...extra,
+  };
+}
+
+// Alt som finnes i lagrene våre. En spole som finnes flere steder (samme RFID / Tray UID)
+// vises bare én gang: RFID-skannet først, så biblioteket, så AMS.
+function stockItems() {
+  const where = amsLocations();
+  const items = state.spools.map((s) => ({ ...s, kind: "rfid", location: where[s.id.toUpperCase()] || "" }));
+  const seen = new Set(state.spools.map((s) => s.id.toUpperCase()));
+  for (const u of users()) {
+    const lib = libraryOf(u.name);
+    for (const [i, x] of (lib?.spools || []).entries()) {
+      if (x.rfid && seen.has(x.rfid)) continue;
+      if (x.rfid) seen.add(x.rfid);
+      items.push(stockEntry({
+        kind: "library", id: `lib:${u.name}:${x.rfid || i}`, owner: u.name, status: x.net > 0 ? "in" : "empty",
+        cols: (x.colors.length ? x.colors : [x.color]).filter(Boolean).map((c) => "#" + c),
+        infoIdx: x.filamentId, color: x.color, names: libName(x),
+        fallbackType: [x.vendor && x.vendor !== "Bambu Lab" ? x.vendor : "", x.name || x.type].filter(Boolean).join(" "),
+        net: x.net, total: x.total, location: (x.rfid && where[x.rfid]) || "", note: x.note,
+      }));
+    }
+    for (const p of amsOf(u.name)?.printers || []) {
+      const slots = [
+        ...p.ams.flatMap((a) => a.trays.map((t) => [t, `${p.name} · AMS ${String.fromCharCode(65 + a.unit)}${t.slot + 1}`])),
+        ...p.external.map((t) => [t, `${p.name} · ekstern spole`]),
+      ];
+      for (const [t, where] of slots) {
+        if (t.empty) continue;
+        const uuid = (t.uuid || "").toUpperCase();
+        if (uuid && seen.has(uuid)) continue;
+        if (uuid) seen.add(uuid);
+        items.push(stockEntry({
+          kind: "ams", id: `ams:${u.name}:${where}`, owner: u.name, status: "in",
+          cols: (t.cols.length ? t.cols : [t.color]).filter(Boolean).map((c) => "#" + c),
+          infoIdx: t.infoIdx, color: t.color, fallbackType: t.subBrand || t.type,
+          remain: t.remain !== null && t.remain >= 0 ? t.remain : null, total: t.weight || 0, location: where,
+        }));
+      }
+    }
+  }
+  return items;
+}
+
+// Omtrentlig gram igjen, for summen øverst.
+function gramsLeft(s) {
+  if (s.kind === "library") return s.net || 0;
+  if (s.kind === "ams") return s.remain !== null ? Math.round(((s.total || 1000) * s.remain) / 100) : 0;
+  const lib = libraryWeight(s.id);
+  return lib && lib.total ? lib.net : s.tag?.weight || 0;
+}
 const hueOf = (s) => (s.tag ? FAMILIES.findIndex((f) => f[0] === s.family) * 1000 + hsl(s.tag.colors[0]).h : 1e9);
 
 function filtered({ ignoreType = false } = {}) {
   const { q, owner, family: fam, status, sort } = state.filters;
   const type = ignoreType ? "" : state.filters.type;
   const needle = q.trim().toLowerCase();
-  const list = state.spools.filter((s) =>
+  const list = stockItems().filter((s) =>
     (!owner || s.owner === owner) &&
     (!type || s.typeName === type) &&
     (!fam || s.family === fam) &&
     (!status || s.status === status) &&
-    (!needle || [title(s), s.typeName, s.colorName, s.tag?.colors.join(" "), s.owner, s.note].join(" ").toLowerCase().includes(needle))
+    (!needle || [title(s), s.typeName, s.colorName, s.tag?.colors.join(" "), s.owner, s.note, s.location, SOURCE[s.kind]].join(" ").toLowerCase().includes(needle))
   );
   const by = {
     type: (a, b) => a.typeName.localeCompare(b.typeName) || hueOf(a) - hueOf(b),
@@ -385,25 +480,28 @@ function render() {
   renderAms();
   if (state.tab === "news") renderNews();
   const all = users();
-  const inStock = state.spools.filter((s) => s.status === "in");
-  const kg = inStock.reduce((sum, s) => sum + (s.tag?.weight || 0), 0) / 1000;
+  const items = stockItems();
+  const inStock = items.filter((s) => s.status === "in");
+  const kg = inStock.reduce((sum, s) => sum + gramsLeft(s), 0) / 1000;
+  const inAms = amsCount();
   $("#stats").innerHTML =
-    `<div class="stat"><b>${inStock.length}</b><span>på lager</span></div>` +
-    `<div class="stat"><b>${state.spools.filter((s) => s.status === "out").length}</b><span>tatt ut</span></div>` +
-    `<div class="stat"><b>${kg.toLocaleString("nb-NO", { maximumFractionDigits: 1 })} kg</b><span>på lager (nominelt)</span></div>` +
+    `<div class="stat"><b>${inStock.length}</b><span>spoler på lager</span></div>` +
+    `<div class="stat"><b>${kg.toLocaleString("nb-NO", { maximumFractionDigits: 1 })} kg</b><span>filament igjen (ca.)</span></div>` +
+    `<div class="stat"><b>${inAms}</b><span>i AMS nå</span></div>` +
+    `<div class="stat"><b>${items.filter((s) => s.status === "out").length}</b><span>tatt ut</span></div>` +
     all.map((u) => `<div class="stat owner-stat" style="--owner:${u.color}"><b>${inStock.filter((s) => s.owner === u.name).length}</b><span>${esc(u.name)}</span></div>`).join("");
 
   // Filtre
   const f = state.filters;
   $("#owner-chips").innerHTML = chip("owner", "", "Alle", !f.owner) +
     all.map((u) => chip("owner", u.name, u.name, f.owner === u.name, u.color)).join("");
-  const presentFamilies = new Set(state.spools.map((s) => s.family));
+  const presentFamilies = new Set(items.map((s) => s.family));
   $("#family-chips").innerHTML = chip("family", "", "Alle farger", !f.family) +
     FAMILIES.filter(([k]) => presentFamilies.has(k)).map(([k, label, c]) => chip("family", k, label, f.family === k, c)).join("");
   // Én fane per filamenttype som finnes i lageret. Antallet følger de andre filtrene.
   const typeCounts = {};
   for (const s of filtered({ ignoreType: true })) typeCounts[s.typeName] = (typeCounts[s.typeName] || 0) + 1;
-  const types = [...new Set(state.spools.map((s) => s.typeName))].sort();
+  const types = [...new Set(items.map((s) => s.typeName))].sort();
   if (f.type && !types.includes(f.type)) f.type = "";
   const total = Object.values(typeCounts).reduce((a, b) => a + b, 0);
   $("#type-tabs").innerHTML =
@@ -428,11 +526,15 @@ function render() {
   // Spoler
   const list = filtered();
   $("#count").textContent = `${list.length} ${list.length === 1 ? "spole" : "spoler"}`;
+  // RFID-spoler kan åpnes og redigeres. Bibliotek- og AMS-oppføringer kommer fra Bambu og vises som de er.
   $("#grid").innerHTML = list.length
-    ? list.map((s) => `
-      <button class="card status-${s.status}" data-id="${esc(s.id)}" style="--owner:${userColor(s.owner)}">
+    ? list.map((s) => {
+      const tagName = s.kind === "rfid" ? "button" : "div";
+      return `
+      <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""} style="--owner:${userColor(s.owner)}">
         <div class="swatch" style="background:${swatch(s.tag)}">
           ${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}
+          <span class="source source-${s.kind}">${SOURCE[s.kind]}</span>
         </div>
         <div class="owner-bar"><span class="owner-dot"></span>${esc(s.owner || "Ingen eier")}</div>
         <div class="card-body">
@@ -442,10 +544,12 @@ function render() {
             <span class="hex">${esc(s.tag?.colors.map((c) => c.slice(0, 7)).join(" / ") || "")}</span>
             ${weightLabel(s)}
           </div>
+          ${s.location ? `<div class="card-loc">${esc(s.location)}</div>` : ""}
           ${s.note ? `<div class="card-note">${esc(s.note)}</div>` : ""}
         </div>
-      </button>`).join("")
-    : `<p class="empty-msg">${state.spools.length ? "Ingen spoler passer filteret." : `Ingen spoler ennå. Skann en spole med leseren${DEMO ? "" : `, eller <a href="?demo">se demo med eksempeldata</a>`}.`}</p>`;
+      </${tagName}>`;
+    }).join("")
+    : `<p class="empty-msg">${items.length ? "Ingen spoler passer filteret." : `Ingen spoler ennå. Skann en spole med leseren, eller del Bambu-biblioteket ditt under «AMS og bibliotek»${DEMO ? "" : `, eller <a href="?demo">se demo med eksempeldata</a>`}.`}</p>`;
 }
 
 // ---------- Detaljer og redigering ----------
@@ -1070,19 +1174,21 @@ function libSwatch(x) {
 
 function renderLibrary(lib) {
   const scanned = new Set(state.spools.map((s) => s.id.toUpperCase()));
+  const where = amsLocations();
   const list = lib.spools.slice().sort((a, b) => (b.net > 0) - (a.net > 0) || a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
   const left = list.filter((x) => x.net > 0);
   const grams = left.reduce((sum, x) => sum + x.net, 0);
   const items = list.map((x) => {
     const pct = x.total > 0 ? Math.round((x.net / x.total) * 100) : null;
-    const n = trayName({ infoIdx: x.filamentId, color: x.color });
+    const n = libName(x);
+    const loc = x.rfid && where[x.rfid];
     return `<div class="lib-item${x.net <= 0 ? " lib-empty" : ""}">
       <span class="lib-swatch" style="background:${libSwatch(x)}"></span>
       <div class="lib-text">
         <b>${esc(n.color || x.name || x.type)}</b>
         <span class="muted">${esc([x.vendor, n.color ? n.type : x.type].filter(Boolean).join(" · "))}</span>
         ${x.total ? `<div class="remain"><span style="width:${pct}%"></span></div><span class="muted">${x.net} av ${x.total} g</span>` : ""}
-        ${x.location ? `<span class="lib-loc">${esc(x.location)}</span>` : ""}
+        ${loc ? `<span class="lib-loc">${esc(loc)}</span>` : ""}
         ${x.rfid && scanned.has(x.rfid) ? `<span class="owned">Skannet inn i lageret</span>` : ""}
       </div>
     </div>`;
@@ -1105,6 +1211,8 @@ function libraryWeight(id) {
 }
 
 function weightLabel(s) {
+  if (s.kind === "library") return s.total ? `<span class="lib-weight">${s.net} av ${s.total} g</span>` : "";
+  if (s.kind === "ams") return s.remain !== null ? `<span class="lib-weight">${s.remain} % igjen</span>` : "";
   const lib = libraryWeight(s.id);
   if (lib && lib.total) return `<span class="lib-weight" title="Fra Bambu-filamentbiblioteket">${lib.net} av ${lib.total} g</span>`;
   return s.tag ? `<span>${s.tag.weight} g</span>` : "";

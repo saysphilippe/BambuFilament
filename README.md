@@ -86,6 +86,17 @@ npx wrangler deploy
 
 Sett så `PROXY_URL` i `app.js` til adressen `wrangler deploy` skriver ut.
 
+## Våre lokale lager
+
+Fanen samler alt som finnes i lagrene våre:
+
+- **RFID**: spoler skannet inn med leseren. Kan sjekkes inn og ut og redigeres.
+- **Bambu-bibliotek**: spoler fra Filament Manager til brukere som deler biblioteket.
+- **I AMS**: spoler i AMS-ene til brukere som deler AMS, men som ikke finnes i biblioteket eller er skannet.
+
+En spole som finnes flere steder (samme RFID / Tray UID) vises bare én gang. Plassering
+(«Printer · AMS A1») hentes fra AMS-dataene.
+
 ## Butikk
 
 Fanen **Butikk** viser alle produktene i Bambu Lab sin EU-butikk (rundt 1100): filament, printere,

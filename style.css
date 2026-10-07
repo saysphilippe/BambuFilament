@@ -80,7 +80,7 @@ h3 { margin: 18px 0 6px; font-size: 13px; text-transform: uppercase; letter-spac
 
 main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 
-.stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
 .stat {
   flex: 1 1 130px;
   padding: 12px 14px;
@@ -466,3 +466,10 @@ details.all-type > .news-colors { margin-top: 10px; }
 .variants li span:last-child { flex: none; color: var(--in); font-weight: 600; }
 .variants li.v-out span:last-child { color: var(--out); }
 .shop-more { display: block; margin: 16px auto; }
+
+.source { position: absolute; left: 8px; bottom: 8px; padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, .88); color: #333; }
+.source-library { color: #1d4ed8; }
+.source-ams { color: #047857; }
+.card.kind-library, .card.kind-ams { cursor: default; }
+.card.kind-library:hover, .card.kind-ams:hover { transform: none; }
+.card-loc { font-size: 12px; font-weight: 600; color: var(--accent); }

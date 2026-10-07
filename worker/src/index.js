@@ -228,7 +228,9 @@ async function library(token) {
       total: Number(s.totalNetWeight) || 0,
       rfid: (s.RFID || "").toUpperCase(),
       note: s.note || "",
-      location: [s.deviceName, s.trayIdName].filter(Boolean).join(" "),
+      // trayIdName er Bambu sin variant-ID (f.eks. "A01-G7"), ikke plasseringen.
+      variant: s.trayIdName || "",
+      device: s.deviceName || "",
     })),
   };
 }
