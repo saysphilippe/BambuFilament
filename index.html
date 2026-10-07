@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=202610072236">
+  <link rel="stylesheet" href="style.css?v=202610072244">
 </head>
 <body>
   <header>
@@ -254,6 +254,27 @@
     </form>
   </dialog>
 
+  <dialog id="rekey">
+    <form id="rk-form" method="dialog">
+      <h2>Ny GitHub-token</h2>
+      <p class="notice">Passordet ditt er riktig, men GitHub-tokenen som er lagret er utløpt eller generert på nytt. Lim inn den nye tokenen.</p>
+      <label>Ny GitHub-token<input id="rk-token" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+      <p class="hint">Tokenen må ha tilgang <b>kun</b> til <b>BambuFilament-data</b> og <b>BambuFilament-auth</b>, med <i>Contents: Read and write</i>. Velg gjerne lang utløpstid. Din innlogging fornyes med passordet du nettopp brukte. De andre brukerne får nye midlertidige passord.</p>
+      <p id="rk-error" class="error"></p>
+      <div class="d-buttons">
+        <span class="spacer"></span>
+        <button value="cancel" class="btn">Avbryt</button>
+        <button value="save" class="btn btn-primary">Lagre ny token</button>
+      </div>
+    </form>
+    <div id="rk-done" hidden>
+      <h2>Ny token er lagret</h2>
+      <p>Gi disse midlertidige passordene til brukerne. De vises <b>bare nå</b>. Hver bruker velger nytt passord ved neste innlogging.</p>
+      <table id="rk-list" class="pw-table"></table>
+      <div class="d-buttons"><span class="spacer"></span><button id="rk-close" class="btn btn-primary">Ferdig</button></div>
+    </div>
+  </dialog>
+
   <dialog id="setup">
     <form id="setup-form" method="dialog">
       <h2>Første oppsett</h2>
@@ -279,6 +300,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=202610072236"></script>
+  <script type="module" src="app.js?v=202610072244"></script>
 </body>
 </html>

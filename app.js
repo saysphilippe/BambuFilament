@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072236";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072236";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072244";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072244";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -998,11 +998,84 @@ async function login(e) {
     $("#l-error").textContent = "Feil passord.";
     return;
   }
+  // Sjekk at tokenen fortsatt virker (den kan være utløpt eller generert på nytt).
+  const check = await fetch(`https://api.github.com/repos/${AUTH_REPO}`, { headers: { Authorization: `Bearer ${tok}` } }).catch(() => null);
+  if (check?.status === 401) {
+    if (user.admin) {
+      $("#login").close();
+      return openRekey(name, $("#l-password").value, $("#l-remember").checked);
+    }
+    $("#l-error").textContent = "GitHub-tokenen er utløpt eller byttet. Administrator må logge inn og legge inn en ny token.";
+    return;
+  }
   store("bf.lastUser", name);
   setSession({ user: name, token: tok }, $("#l-remember").checked);
   recordLogin(name, $("#l-remember").checked);
   $("#login").close();
   if (user.mustChange) openChangePassword(true);
+}
+
+// ---------- Ny GitHub-token (når den gamle er utløpt eller generert på nytt) ----------
+//
+// Innloggingsnøklene inneholder tokenen kryptert per bruker, så en ny token må krypteres
+// på nytt. Administrator har nettopp skrevet passordet sitt og får sin nøkkel fornyet med det.
+// De andre får nye midlertidige passord, siden siden ikke kjenner passordene deres.
+let rekey = null;
+
+function openRekey(name, password, remember) {
+  rekey = { name, password, remember };
+  $("#rk-token").value = "";
+  $("#rk-error").textContent = "";
+  $("#rk-form").hidden = false;
+  $("#rk-done").hidden = true;
+  $("#rekey").showModal();
+}
+
+async function saveRekey(e) {
+  e.preventDefault();
+  if (e.submitter?.value === "cancel") {
+    rekey = null;
+    return $("#rekey").close();
+  }
+  const tok = $("#rk-token").value.trim();
+  const err = $("#rk-error");
+  try {
+    if (!/^(github_pat_|ghp_)/.test(tok)) throw new Error("Det ser ikke ut som en GitHub-token. Den skal starte med github_pat_.");
+    err.textContent = "Sjekker tokenen…";
+    for (const repo of [DATA_REPO, AUTH_REPO]) {
+      const res = await fetch(`https://api.github.com/repos/${repo}`, { headers: { Authorization: `Bearer ${tok}` } });
+      if (res.status === 401) throw new Error("GitHub godtar ikke tokenen. Sjekk at hele tokenen er kopiert.");
+      if (!res.ok) throw new Error(`Tokenen har ikke tilgang til ${repo.split("/")[1]}. Velg både BambuFilament-data og BambuFilament-auth under Repository access.`);
+    }
+    err.textContent = "Krypterer og lagrer…";
+    const mine = await encryptToken(tok, rekey.password);
+    const others = [];
+    for (const u of state.doc.users) {
+      if (u.name === rekey.name || !u.cred) continue;
+      const temp = randomPassword();
+      others.push({ name: u.name, temp, cred: await encryptToken(tok, temp) });
+    }
+    session = { user: rekey.name, token: tok };
+    await saveDoc((doc) => {
+      for (const u of doc.users) {
+        if (u.name === rekey.name) Object.assign(u, { cred: mine, mustChange: false });
+        const o = others.find((x) => x.name === u.name);
+        if (o) Object.assign(u, { cred: o.cred, mustChange: true });
+      }
+    }, `Ny GitHub-token (${rekey.name})`, "users");
+    session = null;
+    setSession({ user: rekey.name, token: tok }, rekey.remember);
+    recordLogin(rekey.name, rekey.remember);
+    $("#rk-list").innerHTML = others.map((o) => `<tr><td>${esc(o.name)}</td><td><code class="pw">${esc(o.temp)}</code></td></tr>`).join("")
+      || "<tr><td class='muted'>Ingen andre brukere har innlogging.</td></tr>";
+    $("#rk-form").hidden = true;
+    $("#rk-done").hidden = false;
+    rekey = null;
+    err.textContent = "";
+  } catch (ex) {
+    session = null;
+    err.textContent = ex.message;
+  }
 }
 
 function accountAction(e) {
@@ -1979,6 +2052,8 @@ $("#d-form").addEventListener("submit", saveDetail);
 $("#u-form").addEventListener("submit", addUser);
 $("#account").addEventListener("click", openAccount);
 $("#gate-login").addEventListener("click", openLogin);
+$("#rk-form").addEventListener("submit", saveRekey);
+$("#rk-close").addEventListener("click", () => $("#rekey").close());
 $("#login form").addEventListener("submit", login);
 $("#account-dialog form").addEventListener("submit", accountAction);
 $("#password form").addEventListener("submit", changePassword);

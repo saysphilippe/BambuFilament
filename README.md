@@ -64,8 +64,8 @@ PBKDF2-SHA256, 600 000 runder). Riktig passord låser opp tokenen i nettleseren.
 - Første bruker i oppsettet (Philippe) er **administrator**. Bare administrator kan legge til og fjerne brukere og lage nye midlertidige passord. Alle kan bytte sitt eget passord.
 - Admin-rollen håndheves i nettsiden. Alle innloggede deler samme skrivetoken, så den er en regel for vanlig bruk, ikke en sikkerhetsgrense.
 - Bruk sterke passord. De krypterte dataene ligger i et offentlig repo.
-- Bytter du GitHub-token, må alle få nye midlertidige passord (*Nytt passord* per bruker,
-  eller tøm `users[].cred` og kjør første oppsett på nytt).
+- **Utløpt eller ny GitHub-token:** logg inn som administrator. Siden oppdager at tokenen ikke virker
+  og ber om den nye. Din innlogging fornyes med passordet ditt, og de andre får nye midlertidige passord.
 
 Tokenen lages på https://github.com/settings/personal-access-tokens/new:
 *Only select repositories* → **`BambuFilament-data`** og **`BambuFilament-auth`** (ikke `BambuFilament`), *Repository permissions* → *Contents: Read and write*.
