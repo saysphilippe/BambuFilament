@@ -677,8 +677,9 @@ async function sendMail(env, to, subject, text) {
   const talk = async () => {
     await step(null, "220");
     await step("EHLO bambufilament", "250");
-    // Google viser app-passordet med mellomrom ("abcd efgh ..."), men de er ikke en del av det.
-    const pass = String(env.GMAIL_APP_PASSWORD).replace(/\s/g, "");
+    // Google-app-passord er 16 bokstaver, vist med mellomrom ("abcd efgh ..."). Innliming kan
+    // få med mellomrom, anførselstegn og usynlige tegn, så bare bokstaver og tall beholdes.
+    const pass = String(env.GMAIL_APP_PASSWORD).replace(/[^a-zA-Z0-9]/g, "");
     await step(`AUTH PLAIN ${toB64(utf8(`\0${from}\0${pass}`))}`, "235");
     await step(`MAIL FROM:<${from}>`, "250");
     await step(`RCPT TO:<${to}>`, "250");
