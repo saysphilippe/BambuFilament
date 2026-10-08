@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008142303";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008142303";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008142423";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008142423";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -743,7 +743,7 @@ function spoolCard(s, showType = true) {
         <span class="swatch-tags"><span class="source source-${s.kind}">${SOURCE[s.kind]}</span></span>
         ${productionTip(s) ? `<span class="tip">${productionTip(s)}</span>` : ""}
       </div>
-      <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${left.g} av ${left.total}g igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
+      <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${amountText(left.g, left.total)} igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
       <div class="card-body">
         <div class="card-title">${esc(title(s))}</div>
         ${showType ? `<div class="card-type">${esc(s.typeName)}</div>` : ""}
@@ -2400,7 +2400,7 @@ function renderLibrary(lib, owner = "") {
       <div class="lib-text">
         <b>${esc(n.color || x.name || x.type)}</b>
         <span class="muted">${esc([x.vendor, n.color ? n.type : x.type].filter(Boolean).join(" · "))}</span>
-        ${x.total ? `<div class="remain"><span style="width:${pct}%"></span></div><span class="muted">${x.net} av ${x.total}g</span>` : ""}
+        ${x.total ? `<div class="remain"><span style="width:${pct}%"></span></div><span class="muted">${amountText(x.net, x.total)}</span>` : ""}
         ${loc ? `<span class="lib-loc">${esc(loc)}</span>` : ""}
         ${x.rfid && scanned.has(x.rfid) ? `<span class="owned">Skannet inn i lageret</span>` : ""}
       </div>
@@ -2431,6 +2431,9 @@ function fmtProduction(d) {
   return `${d.toLocaleDateString("nb-NO", opts)} kl. ${time}`;
 }
 
+// «450 av 1000g», eller bare «1000g» når rullen er full.
+const amountText = (g, total) => (total && g >= total ? `${total}g` : `${g} av ${total}g`);
+
 function productionTip(s) {
   const d = s.tag?.productionDate;
   // Bare når datoen er kjent; ellers vises ingen boks over fargen.
@@ -2439,10 +2442,10 @@ function productionTip(s) {
 }
 
 function weightLabel(s) {
-  if (s.kind === "library") return s.total ? `<span class="lib-weight">${s.net} av ${s.total}g</span>` : "";
+  if (s.kind === "library") return s.total ? `<span class="lib-weight">${amountText(s.net, s.total)}</span>` : "";
   if (s.kind === "ams") return s.remain !== null ? `<span class="lib-weight">${s.remain} % igjen</span>` : "";
   const lib = libraryWeight(s.id);
-  if (lib && lib.total) return `<span class="lib-weight" title="Fra Bambu-filamentbiblioteket">${lib.net} av ${lib.total}g</span>`;
+  if (lib && lib.total) return `<span class="lib-weight" title="Fra Bambu-filamentbiblioteket">${amountText(lib.net, lib.total)}</span>`;
   return s.tag ? `<span>${s.tag.weight}g</span>` : "";
 }
 
