@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610080918";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610080918";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610080930";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610080930";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -769,8 +769,9 @@ function renderUsers() {
         : email && isAdmin() ? `<span class="u-email-text muted">${esc(email)}</span>` : ""}
       <span class="muted">${count} ${count === 1 ? "spole" : "spoler"}</span>
       ${u.known ? `
-        ${email ? `<button type="button" class="btn btn-small" data-send="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Send midlertidig passord til ${esc(email)}">Send passord</button>` : ""}
-        <button type="button" class="btn btn-small" data-reset="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Lag midlertidig passord som vises her">${u.cred ? "Nytt passord" : "Lag passord"}</button>
+        ${email
+          ? `<button type="button" class="btn btn-small" data-send="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Send midlertidig passord til ${esc(email)}">Send passord</button>`
+          : `<button type="button" class="btn btn-small" data-reset="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Lag midlertidig passord som vises her, og som du gir brukeren selv">Vis nytt passord</button>`}
         <button type="button" class="btn btn-danger btn-small" data-remove="${esc(u.name)}" ${!canEdit || why !== "Fjern bruker" ? "disabled" : ""} title="${why}">Fjern</button>` : ""}
     </li>`;
   }).join("") || "<li class='muted'>Ingen brukere ennå</li>";
