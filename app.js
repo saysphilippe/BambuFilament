@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008142423";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008142423";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008142957";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008142957";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -771,22 +771,52 @@ function leftOnSpool(s) {
   return { g: now.g, total: now.src === "lib" ? libraryWeight(s.id)?.total || total : total, estimate: now.src === "new" };
 }
 
-// Siste bevegelser (vises nederst i «Lånt filament»).
-function activityHtml(limit = 15) {
-  const events = state.spools
+// Siste bevegelser (vises nederst i «Lånt filament»), med filter på hendelse, hvem og kilde.
+const actFilter = { action: "", who: "", src: "", q: "" };
+const ACT_LIMIT = 50;
+
+function allEvents() {
+  return state.spools
     .flatMap((s) => (s.history || []).map((e) => ({ ...e, spool: s })))
-    .sort((a, b) => (b.at || "").localeCompare(a.at || ""))
-    .slice(0, limit);
-  if (!events.length) return "";
-  return `<section class="panel activity">
-    <h2>Siste bevegelser</h2>
-    <ul id="activity-list">${events.map((e) => `
+    .sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+}
+
+function filteredEvents() {
+  const q = actFilter.q.trim().toLowerCase();
+  return allEvents().filter((e) =>
+    (!actFilter.action || e.action === actFilter.action) &&
+    (!actFilter.who || (e.by || "") === actFilter.who) &&
+    (!actFilter.src || (actFilter.src === "reader") === fromReader(e.spool, e)) &&
+    (!q || [title(e.spool), e.spool.typeName, e.by, e.to, eventDetails(e)].join(" ").toLowerCase().includes(q)));
+}
+
+function activityItems() {
+  const list = filteredEvents();
+  return (list.slice(0, ACT_LIMIT).map((e) => `
     <li data-id="${esc(e.spool.id)}">
       <span class="dot" style="background:${swatch(e.spool.tag)}"></span>
       <span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span>
       <span class="what">${esc(title(e.spool))} <span class="muted">${esc(e.spool.typeName)}</span>${actDetail(e)}</span>
       <span class="who">${fmtTime(e.at)}</span>
-    </li>`).join("")}</ul>
+    </li>`).join("") || `<li class="muted">Ingen bevegelser passer filteret.</li>`)
+    + (list.length > ACT_LIMIT ? `<li class="muted">Viser ${ACT_LIMIT} av ${list.length}. Bruk filteret for å se flere.</li>` : "");
+}
+
+function activityHtml() {
+  const events = allEvents();
+  if (!events.length) return "";
+  const who = [...new Set(events.map((e) => e.by || ""))].filter(Boolean).sort();
+  const chipRow = (key, label, options) => `<div class="chip-row"><span class="chip-label">${label}</span><div class="chips">${
+    options.map(([v, text]) => `<button type="button" class="chip${actFilter[key] === v ? " active" : ""}" data-act-key="${key}" data-act-value="${esc(v)}">${esc(text)}</button>`).join("")}</div></div>`;
+  return `<section class="panel activity">
+    <h2>Siste bevegelser</h2>
+    <div class="act-filters">
+      <input id="act-q" type="search" placeholder="Søk på farge, type eller navn…" value="${esc(actFilter.q)}" aria-label="Søk i bevegelser">
+      ${chipRow("action", "Hendelse", [["", "Alle"], ["out", "Sjekket ut"], ["in", "Sjekket inn"], ["empty", "Brukt opp"]])}
+      ${chipRow("who", "Hvem", [["", "Alle"], ...who.map((n) => [n, n])])}
+      ${chipRow("src", "Kilde", [["", "Alle"], ["reader", "RFID-leser"], ["web", "Nettsiden"]])}
+    </div>
+    <ul id="activity-list">${activityItems()}</ul>
   </section>`;
 }
 
@@ -3036,6 +3066,11 @@ document.addEventListener("click", (e) => {
   }
   const ams = e.target.closest("button[data-ams]");
   if (ams) return amsAction(ams.dataset.ams, ams);
+  const actChip = e.target.closest("[data-act-key]");
+  if (actChip) {
+    actFilter[actChip.dataset.actKey] = actChip.dataset.actValue;
+    return renderLoans();
+  }
   const c = e.target.closest(".chip");
   if (c) {
     state.filters[c.dataset.group] = state.filters[c.dataset.group] === c.dataset.value ? "" : c.dataset.value;
@@ -3097,6 +3132,12 @@ $("#login form").addEventListener("submit", login);
 $("#forgot form").addEventListener("submit", forgot);
 $("#register form").addEventListener("submit", registerUser);
 $("#u-list").addEventListener("change", (e) => e.target.matches(".u-email") && saveEmail(e.target.dataset.email, e.target));
+// Søk i siste bevegelser: bare listen tegnes på nytt, så feltet beholder markøren.
+$("#tab-loans").addEventListener("input", (e) => {
+  if (e.target.id !== "act-q") return;
+  actFilter.q = e.target.value;
+  $("#activity-list").innerHTML = activityItems();
+});
 $("#tab-settings").addEventListener("change", (e) => e.target.dataset.setting && saveSetting(e.target.dataset.setting, e.target));
 $("#tab-cards").addEventListener("change", (e) => {
   const t = e.target;
