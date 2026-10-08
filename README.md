@@ -35,6 +35,11 @@ samling + nøkkel → JSON, se `worker/schema.sql` og `worker/src/records.js`). 
   GitHub og husker svaret i 10–15 minutter.
 - Sikkerhetskopi: hver natt kl. 03 UTC skriver Workeren hele databasen til `backup/*.json` i
   BambuFilament-data. D1 har i tillegg egen gjenoppretting 30 dager tilbake.
+- Butikken: GitHub Actions (`scripts/update-store.mjs`, kl. 05 og 17 UTC) henter alle produkter med
+  pris og lagerstatus per variant og eurokurs fra Norges Bank, og sender dem til `/store/ingest`
+  (nøkkel `STORE_INGEST_KEY`, secret både i Workeren og i GitHub). Tabellene `store_products`,
+  `store_meta` og `price_history` (én rad per prisendring per variant). Siden viser kroner og euro,
+  og «Prisutvikling» per produkt.
 - Flytte data fra JSON-filer på nytt: `node scripts/import-d1.mjs ../BambuFilament-data > import.sql`,
   så `npx wrangler d1 execute filament-universet --remote --file import.sql` i `worker/`.
 

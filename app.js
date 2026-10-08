@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008191018";
-import { toRecords } from "./worker/src/records.js?v=20261008191018";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008191018";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008193317";
+import { toRecords } from "./worker/src/records.js?v=20261008193317";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008193317";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -527,6 +527,7 @@ async function refresh() {
   try {
     setDoc(DEMO ? demoDoc() : await loadDoc());
     if (token()) {
+      if (!state.store) loadStore().then(() => state.tab === "shop" && renderShop());
       setTimeout(openVippsFromUrl);
       recordSeen();
       shareToken();
@@ -1233,7 +1234,7 @@ function spoolPrice(typeName) {
   const norm = (t) => String(t || "").toLowerCase().replace(/\s+filament$/, "").replace(/[^a-z0-9+]+/g, " ").trim();
   const want = norm(typeName);
   const p = (state.store?.products || []).find((x) => x.category === "filament" && norm(x.name) === want);
-  const kr = (eur) => Math.round(eur * st.eurRate);
+  const kr = (eur) => Math.round(eur * eurRate());
   // Spoletillegg: forskjellen mellom med spole og refill (ca. 3 €), ellers fra Innstillinger.
   const spool = p?.withSpool && p?.refill && p.withSpool > p.refill
     ? { kr: Math.round(kr(p.withSpool - p.refill) / 5) * 5, src: `${String(p.withSpool).replace(".", ",")} € med spole − ${String(p.refill).replace(".", ",")} € refill` }
@@ -1243,9 +1244,9 @@ function spoolPrice(typeName) {
   const fmt = (x) => String(x).replace(".", ",");
   // Filamentet prises uten spole: refill-prisen når den finnes. Selges typen bare med spole,
   // trekkes spoletillegget fra, så spolen ikke betales to ganger når rullen er brukt opp.
-  if (p?.refill) return { kr: Math.round(kr(p.refill) / 10) * 10, spool, src: `Bambu-butikken: ${fmt(p.refill)} € refill × ${fmt(st.eurRate)}` };
+  if (p?.refill) return { kr: Math.round(kr(p.refill) / 10) * 10, spool, src: `Bambu-butikken: ${fmt(p.refill)} € refill × ${fmt(eurRate())}` };
   const eur = p?.withSpool || p?.price;
-  if (eur) return { kr: Math.max(0, Math.round((kr(eur) - spool.kr) / 10) * 10), spool, src: `Bambu-butikken: ${fmt(eur)} € med spole × ${fmt(st.eurRate)} − spoletillegg ${spool.kr} kr` };
+  if (eur) return { kr: Math.max(0, Math.round((kr(eur) - spool.kr) / 10) * 10), spool, src: `Bambu-butikken: ${fmt(eur)} € med spole × ${fmt(eurRate())} − spoletillegg ${spool.kr} kr` };
   return { kr: st.spoolPrice, spool, src: "standardpris" };
 }
 
@@ -1787,7 +1788,7 @@ function renderSettings() {
     <h3>Gjøre opp lån</h3>
     ${field("spoolPrice", "Standardpris per spole", "Brukes når prisen ikke finnes i Bambu-butikken.", "kr")}
     ${field("emptySpoolPrice", "Spoletillegg", "Legges til når hele rullen er brukt opp og spolen ikke er levert tilbake. Hentes fra butikken som forskjellen mellom «med spole» og «refill» når begge finnes.", "kr")}
-    ${field("eurRate", "Eurokurs", "Bambu-butikken oppgir priser i euro. Prisen regnes om til kroner med denne kursen og rundes av til nærmeste 10 kr.", "kr per euro")}
+    ${field("eurRate", "Eurokurs (reserve)", `Brukes bare når eurokursen fra Norges Bank mangler. Nå brukes ${state.store?.fx ? `Norges Banks kurs ${String(state.store.fx.eurNok).replace(".", ",")}` : "denne"}.`, "kr per euro")}
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;
 }
@@ -3221,14 +3222,20 @@ const SHOP_STATUS = {
   unknown: ["Ukjent lagerstatus", "stock-missing"],
 };
 
+// Butikkdata (pris per variant, lagerstatus, eurokurs) ligger i databasen; GitHub Actions fyller
+// den to ganger i døgnet. Prishistorikken hentes per produkt når grafen åpnes.
 async function loadStore() {
+  if (DEMO || !token()) return;
   try {
-    const res = await fetch(`data/store.json?t=${Date.now()}`, { cache: "no-store" });
-    if (res.ok) state.store = await res.json();
+    const st = await dbCall("/store/load", {});
+    if (st?.products) state.store = st;
   } catch { /* fanen viser en melding */ }
 }
 
-const fmtPrice = (x) => (x === null || x === undefined ? "" : `€ ${x.toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+// Kroner per euro: Norges Bank (fra butikkdataene), ellers Innstillinger.
+const eurRate = () => state.store?.fx?.eurNok || state.doc.settings?.eurRate || 11.5;
+const fmtEur = (x) => `€ ${x.toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtPrice = (x) => (x === null || x === undefined ? "" : `${Math.round(x * eurRate()).toLocaleString("nb-NO")} kr · ${fmtEur(x)}`);
 
 function shopFiltered({ ignoreCat = false } = {}) {
   const { q, cat, status } = state.shop;
@@ -3246,7 +3253,7 @@ function renderShop() {
     $("#shop-grid").innerHTML = `<p class="empty-msg">Butikkdata er ikke hentet ennå.</p>`;
     return;
   }
-  $("#shop-updated").textContent = `Hentet fra EU-butikken ${fmtTime(st.updated)}. ${st.products.length} produkter, priser i euro.`;
+  $("#shop-updated").textContent = `Hentet fra EU-butikken ${fmtTime(st.updated)}. ${st.products.length} produkter. Kroner regnet om med ${st.fx ? `Norges Banks eurokurs ${String(st.fx.eurNok).replace(".", ",")} (${fmtDay(st.fx.date)})` : `eurokurs ${String(eurRate()).replace(".", ",")} fra Innstillinger`}.`;
 
   const forCats = shopFiltered({ ignoreCat: true });
   const counts = {};
@@ -3282,14 +3289,64 @@ function renderShop() {
           <span class="stock ${cls}">${label}${p.status === "partial" ? ` (${soldOut} av ${p.variants.length})` : ""}</span>
         </div>
         ${p.variants.length > 1 ? `<details class="variants"><summary>${p.variants.length} varianter</summary>
-          <ul>${p.variants.map(([name, out]) => `<li class="${out ? "v-out" : ""}"><span>${esc(name)}</span><span>${out ? "Utsolgt" : "På lager"}</span></li>`).join("")}</ul>
+          <ul>${p.variants.map(([name, out, price]) => `<li class="${out ? "v-out" : ""}"><span>${esc(name)}</span><span class="v-price">${price ? fmtPrice(price) : ""}</span><span>${out ? "Utsolgt" : "På lager"}</span></li>`).join("")}</ul>
         </details>` : ""}
+        ${st.changed?.[p.handle] ? `<details class="price-chart" data-history="${esc(p.handle)}"><summary>Prisutvikling</summary><div class="chart-box muted">Henter …</div></details>` : ""}
         ${p.status === "out" || p.status === "partial" || wishersOf(key).length ? wishButton(key) : ""}
       </div>
     </div>`;
   }).join("") || `<p class="empty-msg">Ingen produkter passer filteret.</p>`;
   $("#shop-more").hidden = list.length <= shown.length;
   $("#shop-more").textContent = `Vis flere (${list.length - shown.length} til)`;
+}
+
+// Prisutvikling for et produkt: én linje per gruppe varianter med samme prishistorikk.
+async function showPriceHistory(details) {
+  const box = details.querySelector(".chart-box");
+  if (details.dataset.loaded) return;
+  details.dataset.loaded = "1";
+  try {
+    const { history } = await dbCall("/store/history", { handle: details.dataset.history });
+    box.classList.remove("muted");
+    box.innerHTML = priceChart(history);
+  } catch (err) {
+    box.textContent = err.message;
+  }
+}
+
+function priceChart(rows) {
+  const byVariant = {};
+  for (const r of rows) (byVariant[r.variant] ||= []).push([r.at, r.price]);
+  // Varianter med lik historikk slås sammen (f.eks. alle farger som refill).
+  const groups = {};
+  for (const [v, pts] of Object.entries(byVariant)) (groups[JSON.stringify(pts)] ||= { pts, names: [] }).names.push(v);
+  const label = (names) => names.every((n) => /refill/i.test(n)) ? "Refill" : names.every((n) => /with spool/i.test(n)) ? "Med spole"
+    : names.length === 1 ? names[0] : `${names[0].split(" / ")[0]} m.fl.`;
+  const series = Object.values(groups).map((g) => ({ pts: g.pts, name: `${label(g.names)}${g.names.length > 1 ? ` (${g.names.length})` : ""}` }))
+    .sort((a, b) => a.pts.at(-1)[1] - b.pts.at(-1)[1]).slice(0, 6);
+  const dates = [...new Set(rows.map((r) => r.at))].sort();
+  const today = new Date().toISOString().slice(0, 10);
+  if (dates.at(-1) < today) dates.push(today);
+  const prices = series.flatMap((s) => s.pts.map((p) => p[1]));
+  const lo = Math.min(...prices) * 0.95, hi = Math.max(...prices) * 1.05;
+  const W = 300, H = 140, L = 44, R = 8, T = 10, B = 22;
+  const t0 = new Date(dates[0]).getTime(), t1 = Math.max(new Date(dates.at(-1)).getTime(), t0 + 864e5);
+  const x = (d) => L + ((new Date(d).getTime() - t0) / (t1 - t0)) * (W - L - R);
+  const y = (v) => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
+  const colors = ["var(--accent)", "#2563eb", "#db2777", "#ca8a04", "#7c3aed", "#0891b2"];
+  const lines = series.map((s, i) => {
+    // Trappelinje: prisen gjelder til neste endring, og til i dag.
+    let d = "";
+    s.pts.forEach(([at, v], j) => { d += j ? ` H${x(at).toFixed(1)} V${y(v).toFixed(1)}` : `M${x(at).toFixed(1)},${y(v).toFixed(1)}`; });
+    d += ` H${x(dates.at(-1)).toFixed(1)}`;
+    return `<path d="${d}" fill="none" stroke="${colors[i]}" stroke-width="2"/>` +
+      s.pts.map(([at, v]) => `<circle cx="${x(at).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" fill="${colors[i]}"><title>${esc(s.name)}: ${fmtPrice(v)} fra ${fmtDay(at)}</title></circle>`).join("");
+  }).join("");
+  const ticks = [lo, (lo + hi) / 2, hi].map((v) => `<text x="${L - 4}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--muted)">€${v.toFixed(0)}</text>
+    <line x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="var(--border)"/>`).join("");
+  const axis = `<text x="${L}" y="${H - 6}" font-size="10" fill="var(--muted)">${fmtDay(dates[0])}</text><text x="${W - R}" y="${H - 6}" text-anchor="end" font-size="10" fill="var(--muted)">i dag</text>`;
+  const legend = series.map((s, i) => `<span><i style="background:${colors[i]}"></i>${esc(s.name)}: ${fmtPrice(s.pts.at(-1)[1])}</span>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Prisutvikling">${ticks}${lines}${axis}</svg><div class="chart-legend">${legend}</div>`;
 }
 
 // ---------- Faner ----------
@@ -3462,6 +3519,7 @@ document.addEventListener("click", (e) => {
 // Husk hvilke typer som er åpne i «Alle typer», så de ikke lukkes ved oppdatering.
 document.addEventListener("toggle", (e) => {
   const d = e.target;
+  if (d.matches?.("details[data-history]") && d.open) return showPriceHistory(d);
   if (d.matches?.("details[data-fold]")) return setFolded(d.dataset.fold, !d.open);
   if (!d.matches?.("details.all-type")) return;
   if (d.open) state.openTypes.add(d.dataset.type); else state.openTypes.delete(d.dataset.type);

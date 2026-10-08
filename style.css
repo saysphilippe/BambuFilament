@@ -606,6 +606,12 @@ details.all-type > .news-colors { margin-top: 10px; }
 
 .shop-head { display: flex; flex-direction: column; gap: 10px; }
 .shop-head .hint { margin: 0; }
+.v-price { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+.price-chart { margin-top: 6px; font-size: 13px; }
+.price-chart summary { cursor: pointer; color: var(--accent); }
+.price-chart svg { display: block; width: 100%; height: auto; margin-top: 6px; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.chart-legend i { display: inline-block; width: 10px; height: 3px; margin-right: 5px; vertical-align: middle; border-radius: 2px; }
 .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
 .shop-card { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
 .shop-card.is-out .shop-img img { opacity: .5; }
@@ -619,7 +625,8 @@ details.all-type > .news-colors { margin-top: 10px; }
 .variants { font-size: 13px; }
 .variants summary { cursor: pointer; color: var(--muted); }
 .variants ul { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow-y: auto; }
-.variants li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px solid var(--border); }
+.variants li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; padding: 4px 0; border-top: 1px solid var(--border); }
+.variants li span:first-child { flex: 1 1 100%; }
 .variants li span:last-child { flex: none; color: var(--in); font-weight: 600; }
 .variants li.v-out span:last-child { color: var(--out); }
 .shop-more { display: block; margin: 16px auto; }

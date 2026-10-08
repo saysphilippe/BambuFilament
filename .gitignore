@@ -5,3 +5,4 @@ node_modules/
 .local-data/
 worker/sett-gmail-passord.cmd
 worker/sett-callmebot-nokkel.cmd
+data/store.json
