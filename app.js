@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008173513";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008173513";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008173806";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008173806";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1018,18 +1018,30 @@ function renderLoans() {
   const done = loans.filter((l) => l.state === "returned" || l.state === "settled")
     .sort((a, b) => (b.settledAt || b.returnedAt || b.at).localeCompare(a.settledAt || a.returnedAt || a.at)).slice(0, 25);
 
-  // Hvem skylder hvem: én linje per låntaker → eier.
+  // Hvem skylder hvem: én linje per låntaker → eier, med beløp. «Du»/«deg» når det gjelder meg.
+  const me = userName();
   const debts = {};
   for (const l of owes) {
     const k = `${l.to}\u0000${l.owner}`;
-    debts[k] = (debts[k] || 0) + 1;
+    const d = (debts[k] ||= { n: 0, kr: 0 });
+    d.n++;
+    d.kr += loanAmount(l).kr;
   }
-  const debtChips = Object.entries(debts).map(([k, n]) => {
+  const who = (n) => (n === me ? "deg" : esc(n || "ukjent eier"));
+  const debtChips = Object.entries(debts).sort(([a], [b]) => (b.includes(me) - a.includes(me))).map(([k, d]) => {
     const [to, owner] = k.split("\u0000");
-    return `<span class="loan-debt"><span class="owner-dot" style="--owner:${userColor(to)}"></span><b>${esc(to)}</b> skylder <b>${esc(owner || "ukjent eier")}</b> ${n} ${n === 1 ? "spole" : "spoler"}</span>`;
+    const text = to === me ? `<b>Du skylder ${esc(owner || "ukjent eier")}</b>` : `<b>${esc(to)}</b> skylder <b>${who(owner)}</b>`;
+    return `<span class="loan-debt${to === me ? " mine-owe" : owner === me ? " mine-get" : ""}"><span class="owner-dot" style="--owner:${userColor(to)}"></span>${text} <b>${d.kr} kr</b> <span class="muted">(${d.n} ${d.n === 1 ? "spole" : "spoler"})</span></span>`;
   }).join("");
 
   const spoolOf = (l) => state.spools.find((x) => x.id === l.spool);
+  // Hvem som har lånt fra hvem, med ord (og beløp når det skyldes).
+  const name = (n) => (n === me ? "deg" : esc(n || "ukjent eier"));
+  const subj = (n) => (n === me ? "Du" : esc(n));
+  const dot = (n) => `<span class="owner-dot" style="--owner:${userColor(n)}"></span>`;
+  const loanWho = (l) => l.state === "owes" ? `${dot(l.to)}<b>${subj(l.to)}</b>&nbsp;skylder ${name(l.owner)}&nbsp;<b>ca. ${loanAmount(l).kr} kr</b>`
+    : l.state === "out" ? `${dot(l.to)}<b>${subj(l.to)}</b>&nbsp;har lånt fra ${name(l.owner)}`
+    : `${dot(l.to)}${subj(l.to)} lånte fra ${name(l.owner)}`;
   const row = (l) => {
     const s = spoolOf(l);
     const color = s?.tag ? swatch(s.tag) : l.color ? "#" + l.color : "var(--muted-bg)";
@@ -1049,7 +1061,7 @@ function renderLoans() {
     return `<li>
       <span class="dot" style="background:${color}"></span>
       <span class="loan-what"><b>${esc(s ? title(s) : l.title || "Slettet spole")}</b><span class="muted">${esc(s?.typeName || l.type)}${use?.kind === "ams" ? ` · i AMS hos ${esc(use.user)}` : ""}</span></span>
-      <span class="loan-who"><span class="owner-dot" style="--owner:${userColor(l.owner)}"></span>${esc(l.owner || "Ingen eier")} → <span class="owner-dot" style="--owner:${userColor(l.to)}"></span><b>${esc(l.to)}</b></span>
+      <span class="loan-who">${loanWho(l)}</span>
       <span class="loan-state ${l.state}">${LOAN_STATE[l.state]}</span>
       <span class="muted">${when}${grams ? ` · ${grams}` : ""}</span>
       <span class="loan-actions">${actions}</span>
@@ -1065,7 +1077,7 @@ function renderLoans() {
     return `<li>
       <span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
       <span class="loan-what"><b>Tom spole: ${esc(s ? title(s) : l.title || "spole")}</b><span class="muted">${esc(s?.typeName || l.type)}</span></span>
-      <span class="loan-who"><span class="owner-dot" style="--owner:${userColor(l.to)}"></span><b>${esc(l.to)}</b> → <span class="owner-dot" style="--owner:${userColor(l.owner)}"></span>${esc(l.owner || "Ingen eier")}</span>
+      <span class="loan-who">${dot(l.to)}<b>${subj(l.to)}</b>&nbsp;skal levere spolen til ${name(l.owner)}</span>
       <span class="muted">lovet ${fmtTime(l.spoolReturn.promisedAt)}</span>
       <span class="loan-actions">${canConfirm ? `<button class="btn btn-primary btn-small" data-spool-received="${esc(l.id)}">Mottatt</button>` : `<span class="muted">venter på at ${esc(l.owner)} bekrefter</span>`}</span>
     </li>`;
@@ -1196,22 +1208,27 @@ function setVippsAmount() {
   const how = back ? p.how.replace(/ \+ spole .*$/, "") + " (spolen leveres tilbake)" : p.how;
   $("#v-price").textContent = `(${how}; pris fra ${p.src})`;
 }
-function openVipps(loanId) {
-  const l = state.loans.find((x) => x.id === loanId);
-  if (!l) return;
-  vippsLoan = l;
+// Hva et lån koster å gjøre opp: brukt mengde av en full rull, pluss spoletillegg når
+// rullen er brukt opp og spolen ikke er levert tilbake.
+function loanAmount(l) {
   const s = state.spools.find((x) => x.id === l.spool);
-  const what = s ? `${title(s)} ${s.typeName}` : l.title || "spole";
   const price = spoolPrice(s?.typeName || l.type);
-  // Beløpet følger mengden: brukt mengde (utlånt minus levert tilbake) av en full rull.
   const total = s?.tag?.weight || 1000;
   const used = l.gramsOut === null ? null : Math.max(0, l.gramsOut - (l.gramsIn ?? 0));
   const filamentKr = used === null ? price.kr : Math.max(5, Math.round((price.kr * used) / total / 5) * 5);
-  // Brukt opp og ikke levert tilbake: låntakeren har også beholdt (eller kastet) spolen.
   const spoolKr = loanState(l) === "owes" ? price.spool.kr : 0;
   const kr = filamentKr + spoolKr;
   const how = (used === null ? `${price.kr} kr for en full rull; mengden er ukjent`
     : `${used}g av ${total}g × ${price.kr} kr = ${filamentKr} kr`) + (spoolKr ? ` + spole ${spoolKr} kr (${price.spool.src}) = ${kr} kr` : "");
+  return { kr, filamentKr, spoolKr, how, price, total, used, spool: s };
+}
+
+function openVipps(loanId) {
+  const l = state.loans.find((x) => x.id === loanId);
+  if (!l) return;
+  vippsLoan = l;
+  const { kr, filamentKr, spoolKr, how, price, total, used, spool: s } = loanAmount(l);
+  const what = s ? `${title(s)} ${s.typeName}` : l.title || "spole";
   const phone = state.contacts.phones?.[l.owner] || "";
   $("#v-what").textContent = `${l.to} gjør opp for ${what}, lånt av ${l.owner || "ukjent eier"}.`;
   $("#v-to").textContent = l.owner || "Ukjent eier";

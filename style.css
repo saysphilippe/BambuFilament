@@ -299,6 +299,8 @@ dialog label input, dialog label select, dialog label textarea { margin-top: 4px
 .loan-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .loan-debt { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--out) 15%, transparent); font-size: 14px; }
 .loan-debt.clear { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.loan-debt.mine-owe { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+.loan-debt.mine-get { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .loans h2 { font-size: 16px; margin: 18px 0 8px; }
 .loan-list { list-style: none; margin: 0; padding: 0; }
 .loan-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
