@@ -637,4 +637,4 @@ dialog.wide-dialog { width: min(820px, calc(100vw - 32px)); }
   opacity: 0; transform: translateY(4px); transition: opacity .12s ease, transform .12s ease; pointer-events: none;
 }
 .card:hover .swatch .tip, .card:focus-visible .swatch .tip { opacity: 1; transform: none; }
-.card:hover .swatch .swatch-tags { opacity: 0; }
+.card:hover .swatch:has(.tip) .swatch-tags { opacity: 0; }

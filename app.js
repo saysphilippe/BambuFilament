@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008142005";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008142005";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008142303";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008142303";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -741,7 +741,7 @@ function spoolCard(s, showType = true) {
       <div class="swatch" style="background:${swatch(s.tag)}">
         ${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}
         <span class="swatch-tags"><span class="source source-${s.kind}">${SOURCE[s.kind]}</span></span>
-        <span class="tip">${productionTip(s)}</span>
+        ${productionTip(s) ? `<span class="tip">${productionTip(s)}</span>` : ""}
       </div>
       <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${left.g} av ${left.total}g igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
       <div class="card-body">
@@ -2433,9 +2433,9 @@ function fmtProduction(d) {
 
 function productionTip(s) {
   const d = s.tag?.productionDate;
+  // Bare når datoen er kjent; ellers vises ingen boks over fargen.
   if (s.kind === "rfid" && d instanceof Date && !isNaN(d)) return `Produsert ${esc(fmtProduction(d))}`;
-  if (s.kind === "rfid") return "Produksjonsdato mangler på brikken";
-  return "Produksjonsdato er bare kjent for spoler skannet med RFID-leseren";
+  return "";
 }
 
 function weightLabel(s) {
