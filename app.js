@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008120600";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008120600";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008120633";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008120633";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -932,7 +932,7 @@ async function sendPassword(name, btn) {
   try {
     await shareToken(true);
     await proxy("/reset", { who: name });
-    $("#u-error").textContent = `Midlertidig passord er sendt til ${email}. Det virker i én time.`;
+    $("#u-error").textContent = `Midlertidig passord er sendt til ${email}. Det virker i 4 timer.`;
     setTimeout(refresh, 2000);
   } catch (err) {
     $("#u-error").textContent = `Kunne ikke sende e-post: ${err.message}`;
@@ -1220,7 +1220,7 @@ async function login(e) {
   $("#l-error").textContent = "Sjekker…";
   const pw = $("#l-password").value;
   // Nøkkelpar (vanlig), eldre innlogging (tokenen kryptert direkte med passordet) eller
-  // midlertidig passord fra e-post (gjelder i én time).
+  // midlertidig passord fra e-post (gjelder i 4 timer).
   let tok = user?.kp && (await openKeys(user.kp, pw));
   let legacy = false;
   if (!tok && user?.cred) {

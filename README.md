@@ -75,7 +75,7 @@ PBKDF2-SHA256, 600 000 runder). Riktig passord låser opp tokenen i nettleseren.
 ### E-post og registrering
 
 - **Glemt passord:** på innloggingssiden skriver brukeren brukernavn eller e-post. Workeren lager et
-  midlertidig passord (16 tilfeldige tegn, gyldig i én time) og sender det fra Gmail. Det lagres som
+  midlertidig passord (16 tilfeldige tegn, gyldig i 4 timer) og sender det fra Gmail. Det lagres som
   `users[].reset` ved siden av det vanlige passordet, som fortsatt virker, så ingen kan stenge andre ute.
   Etter innlogging med det må brukeren velge nytt passord, og `reset` fjernes.
 - **Be om tilgang:** nye brukere oppgir brukernavn og e-post. Forespørselen vises under *Brukere*

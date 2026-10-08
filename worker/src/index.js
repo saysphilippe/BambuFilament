@@ -465,7 +465,7 @@ async function fetchReports(user, token, serials) {
 const DATA_REPO = "saysphilippe/BambuFilament-data";
 const AUTH_REPO = "saysphilippe/BambuFilament-auth";
 const SITE_URL = "https://saysphilippe.github.io/BambuFilament/";
-const RESET_TTL_MS = 3600e3;
+const RESET_TTL_MS = 4 * 3600e3; // 4 timer
 const MAX_PENDING = 20;
 const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
 const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,38}[\p{L}\p{N}]$/u;
@@ -585,7 +585,7 @@ async function sendReset(who, env) {
     "",
     `    ${password}`,
     "",
-    `Logg inn på ${SITE_URL} som ${name} innen én time. Du blir bedt om å velge ditt eget passord.`,
+    `Logg inn på ${SITE_URL} som ${name} innen 4 timer. Du blir bedt om å velge ditt eget passord.`,
     "",
     "Ba du ikke om dette, kan du se bort fra e-posten. Et passord du har fra før, virker fortsatt.",
   ].join("\n"));
