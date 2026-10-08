@@ -10,7 +10,7 @@
   <title>Filament Universet</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008174937">
+  <link rel="stylesheet" href="style.css?v=20261008175223">
 </head>
 <body>
   <header>
@@ -143,7 +143,8 @@
 
       <div class="d-quick">
         <button id="d-checkin" value="in" class="btn btn-in">Sjekk inn</button>
-        <label id="d-borrow-label" class="d-borrow">Sjekk ut til<select id="d-borrower"></select></label>
+        <label id="d-borrow-label" class="d-borrow">Sjekk ut til<select id="d-borrower"></select>
+          <span id="d-refill-wrap" class="d-refill"><input id="d-refill" type="checkbox"> Kjøp: refill uten spole (leveres ikke tilbake)</span></label>
         <button id="d-checkout" value="out" class="btn btn-out">Sjekk ut</button>
       </div>
 
@@ -387,6 +388,6 @@ Peter</textarea></label>
   </dialog>
 
   <script src="vendor/qrcode.js"></script>
-  <script type="module" src="app.js?v=20261008174937"></script>
+  <script type="module" src="app.js?v=20261008175223"></script>
 </body>
 </html>

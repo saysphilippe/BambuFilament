@@ -294,6 +294,10 @@ dialog label input, dialog label select, dialog label textarea { margin-top: 4px
 .d-quick .btn { flex: 1; padding: 10px; font-size: 15px; }
 .d-quick .d-borrow { flex: 1; margin: 0; }
 .d-quick .d-borrow select { width: 100%; }
+.d-refill { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.d-refill[hidden] { display: none; }
+.d-refill input { width: auto; margin: 0; }
+.pending-refill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 
 /* Lånt filament */
 .loan-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }

@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008174937";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008174937";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008175223";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008175223";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -401,7 +401,7 @@ function cleanLoans(d) {
       : null,
     // Kopi av spolens navn, så lånet kan vises også om spolen slettes.
     title: clip(l.title, MAX.name), type: clip(l.type, MAX.name), color: hexOnly(l.color),
-    pending: !!l.pending, own: !!l.own,
+    pending: !!l.pending, own: !!l.own, purchase: !!l.purchase,
     gramsOut: num(l.gramsOut), gramsSrc: l.gramsSrc === "new" ? "new" : l.gramsSrc === "lib" ? "lib" : "", gramsIn: num(l.gramsIn),
   })).filter((l) => l.id && l.spool && (l.to || l.pending) && l.at);
 }
@@ -848,6 +848,8 @@ function usage(s) {
     if (wait) return { kind: "pending", user: wait.by, at: wait.at };
     const loan = openLoan(s.id);
     if (loan) return { kind: "loan", user: loan.to, at: loan.at };
+    const bought = state.loans.find((l) => l.spool === s.id && loanState(l) === "bought");
+    if (bought) return { kind: "bought", user: bought.to, at: bought.at };
     const out = [...history].reverse().find((e) => e.action === "out");
     if (out?.by) return { kind: "out", user: out.by, at: out.at };
   }
@@ -857,7 +859,7 @@ function usage(s) {
 function usageLine(s) {
   const u = usage(s);
   if (!u) return "";
-  const text = { ams: `I AMS hos ${u.user}`, loan: `Utlånt til ${u.user}`, pending: `Tatt ut av ${u.user} · venter på godkjenning` }[u.kind] || `Tatt ut av ${u.user}`;
+  const text = { ams: `I AMS hos ${u.user}`, loan: `Utlånt til ${u.user}`, bought: `Kjøpt av ${u.user} (refill)`, pending: `Tatt ut av ${u.user} · venter på godkjenning` }[u.kind] || `Tatt ut av ${u.user}`;
   const tip = u.kind === "ams" ? `Sist sett i AMS-en ${fmtTime(u.at)}` : fmtTime(u.at);
   return `<div class="card-use" style="--owner:${userColor(u.user)}" title="${esc(tip)}"><span class="owner-dot"></span>${esc(text)}</div>`;
 }
@@ -870,7 +872,7 @@ function usageLine(s) {
 // skylder (brukt opp) → gjort opp.
 
 const MAX_LOANS = 300;
-const LOAN_STATE = { out: "Har rullen", owes: "Brukt opp", returned: "Levert tilbake", settled: "Gjort opp" };
+const LOAN_STATE = { out: "Har rullen", owes: "Brukt opp", bought: "Kjøpt (refill)", returned: "Levert tilbake", settled: "Gjort opp" };
 
 function loanState(l) {
   if (l.own) return "own";
@@ -880,6 +882,8 @@ function loanState(l) {
     return !s || s.status !== "out" || (s.history || []).some((e) => e.at > l.at) ? "void" : "pending";
   }
   if (l.settledAt) return "settled";
+  // Refill uten spole: et kjøp som aldri leveres tilbake, bare betales.
+  if (l.purchase) return "bought";
   if (l.returnedAt) return "returned";
   if (l.usedAt) return "owes";
   const s = state.spools.find((x) => x.id === l.spool);
@@ -893,8 +897,9 @@ function loanState(l) {
 
 const openLoan = (spoolId) => [...state.loans].reverse().find((l) => l.spool === spoolId && loanState(l) === "out");
 
-function loanFor(spool, to, at, by, left = gramsLeftNow(spool, { beforeAt: at })) {
+function loanFor(spool, to, at, by, left = gramsLeftNow(spool, { beforeAt: at }), purchase = false) {
   return {
+    ...(purchase ? { purchase: true } : {}),
     id: `${spool.id}:${at}`, spool: spool.id, owner: spool.owner || "", to, by, at,
     title: title(spool), type: spool.typeName || "", color: spool.tag?.colors[0]?.slice(1, 7) || "",
     ...(left ? { gramsOut: left.g, gramsSrc: left.src } : {}),
@@ -909,8 +914,8 @@ function trimLoans(doc) {
   }
 }
 
-async function addLoan(spool, to, at, by, left) {
-  const loan = loanFor(spool, to, at, by, left || undefined);
+async function addLoan(spool, to, at, by, left, purchase = false) {
+  const loan = loanFor(spool, to, at, by, left || undefined, purchase);
   await saveDoc((doc) => {
     if (doc.loans.some((l) => l.id === loan.id)) return;
     doc.loans.push(loan);
@@ -962,7 +967,7 @@ async function syncReaderCheckouts() {
 }
 
 // Godkjenner en utsjekk fra leseren: til eieren = eget forbruk, ellers et lån.
-async function approveCheckout(loanId, to, btn) {
+async function approveCheckout(loanId, to, btn, purchase = false) {
   if (!to) return ($("#loan-error").textContent = "Velg hvem spolen ble sjekket ut til.");
   btn.disabled = true;
   try {
@@ -973,6 +978,7 @@ async function approveCheckout(loanId, to, btn) {
       l.to = to;
       l.approvedBy = userName();
       if (to === l.owner) l.own = true;
+      else if (purchase) l.purchase = true;
     }, `Godkjente utsjekk til ${to} (${userName()})`, "loans");
     $("#loan-error").textContent = "";
   } catch (err) {
@@ -1014,7 +1020,7 @@ function renderLoans() {
   const todos = waiting.filter((l) => mine.has(l.id));
   const others = waiting.filter((l) => !mine.has(l.id));
   // Utestående: både de som fortsatt har rullen og de som har brukt den opp skylder den.
-  const open = loans.filter((l) => l.state === "out" || l.state === "owes");
+  const open = loans.filter((l) => l.state === "out" || l.state === "owes" || l.state === "bought");
   const done = loans.filter((l) => l.state === "returned" || l.state === "settled")
     .sort((a, b) => (b.settledAt || b.returnedAt || b.at).localeCompare(a.settledAt || a.returnedAt || a.at)).slice(0, 25);
 
@@ -1039,7 +1045,7 @@ function renderLoans() {
   const name = (n) => (n === me ? "deg" : esc(n || "ukjent eier"));
   const subj = (n) => (n === me ? "Du" : esc(n));
   const dot = (n) => `<span class="owner-dot" style="--owner:${userColor(n)}"></span>`;
-  const loanWho = (l) => l.state === "owes" || l.state === "out" ? `${dot(l.to)}<b>${subj(l.to)}</b>&nbsp;skylder ${name(l.owner)}&nbsp;<b>ca. ${loanAmount(l).kr} kr</b>`
+  const loanWho = (l) => ["owes", "out", "bought"].includes(l.state) ? `${dot(l.to)}<b>${subj(l.to)}</b>&nbsp;skylder ${name(l.owner)}&nbsp;<b>ca. ${loanAmount(l).kr} kr</b>${l.purchase ? "&nbsp;for refill" : ""}`
     : `${dot(l.to)}${subj(l.to)} lånte fra ${name(l.owner)}`;
   const row = (l) => {
     const s = spoolOf(l);
@@ -1054,7 +1060,7 @@ function renderLoans() {
     ].filter(Boolean).join(" · ");
     const vipps = l.to === me ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Betal med Vipps</button>`
       : l.owner === me ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Be om penger med Vipps</button>` : "";
-    const actions = !token() || (l.state !== "out" && l.state !== "owes") ? ""
+    const actions = !token() || !["out", "owes", "bought"].includes(l.state) ? ""
       : `${l.state === "out" ? `<button class="btn btn-small" data-loan="returned" data-spool="${esc(l.spool)}">Levert tilbake</button>
           <button class="btn btn-small" data-loan="used" data-spool="${esc(l.spool)}">Brukt opp</button>` : ""}
           ${vipps}<button class="btn btn-primary btn-small" data-loan="settled" data-spool="${esc(l.spool)}">Gjort opp</button>`;
@@ -1094,6 +1100,7 @@ function renderLoans() {
       <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span>
       <span class="muted">Sjekket ut med RFID-leseren${l.by ? ` av ${esc(l.by)}` : " (ukjent – ingen kort tappet)"} · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut}g` : ""}</span>
       <span class="loan-actions">${canApprove(l) ? `<select data-pending-to="${esc(l.id)}" aria-label="Sjekket ut til">${l.by ? "" : `<option value="">Sjekket ut til …</option>`}${opts}</select>
+        ${ownStock ? "" : `<label class="pending-refill" title="Refill uten spole som ikke leveres tilbake"><input type="checkbox" data-pending-refill="${esc(l.id)}"> Kjøp (refill)</label>`}
         <button class="btn btn-primary btn-small" data-approve-out="${esc(l.id)}">${ownStock ? "OK" : "Godkjenn"}</button>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
     </li>`;
   };
@@ -1130,7 +1137,7 @@ function eventDetails(e) {
   if (e.action === "out") {
     const to = loan?.to || e.to || "";
     if (st === "pending") parts.push("venter på godkjenning");
-    else if (to && to !== s.owner) parts.push(`lånt til ${to}${st && st !== "out" ? ` (${LOAN_STATE[st].toLowerCase()})` : ""}`);
+    else if (to && to !== s.owner) parts.push(`${loan?.purchase ? "kjøpt av" : "lånt til"} ${to}${st && !["out", "bought"].includes(st) ? ` (${LOAN_STATE[st].toLowerCase()})` : ""}`);
     else if (to === s.owner || st === "own" || e.by === s.owner) parts.push("eget lager");
     if (s.owner && e.by && e.by !== s.owner && !(to && to !== s.owner)) parts.push(`fra lageret til ${s.owner}`);
     const g = num(e.g) ?? loan?.gramsOut ?? null;
@@ -1217,7 +1224,8 @@ function loanAmount(l) {
   const used = l.gramsOut === null ? null : Math.max(0, l.gramsOut - (l.gramsIn ?? 0));
   const filamentKr = used === null ? price.kr : Math.max(5, Math.round((price.kr * used) / total / 5) * 5);
   // Har låntakeren fortsatt rullen eller har brukt den opp, har hen også spolen.
-  const spoolKr = ["owes", "out"].includes(loanState(l)) ? price.spool.kr : 0;
+  // Refill-kjøp har ingen spole: ikke noe spoletillegg (og ingen spole å levere tilbake).
+  const spoolKr = !l.purchase && ["owes", "out"].includes(loanState(l)) ? price.spool.kr : 0;
   const kr = filamentKr + spoolKr;
   const how = (used === null ? `${price.kr} kr for en full rull; mengden er ukjent`
     : `${used}g av ${total}g × ${price.kr} kr = ${filamentKr} kr`) + (spoolKr ? ` + spole ${spoolKr} kr (${price.spool.src}) = ${kr} kr` : "");
@@ -1394,11 +1402,17 @@ function openDetail(id) {
   const left = s.status !== "out" && gramsLeftNow(s);
   if (left) rows.splice(2, 0, [left.src === "lib" ? "Igjen (Bambu-biblioteket)" : "Igjen", gramsText(left)]);
   const use = usage(s);
-  if (use) rows.splice(2, 0, [{ ams: "I AMS hos", loan: "Utlånt til", out: "Tatt ut av", pending: "Tatt ut av (venter)" }[use.kind], `${use.user} (${use.kind === "ams" ? "sist sett " : ""}${fmtTime(use.at)})`]);
+  if (use) rows.splice(2, 0, [{ ams: "I AMS hos", loan: "Utlånt til", bought: "Kjøpt av", out: "Tatt ut av", pending: "Tatt ut av (venter)" }[use.kind], `${use.user} (${use.kind === "ams" ? "sist sett " : ""}${fmtTime(use.at)})`]);
   // Utsjekk til en person (standard: deg selv). Er det ikke eieren, blir det et lån.
   $("#d-borrower").innerHTML = users().filter((u) => u.known).map((u) =>
     `<option value="${esc(u.name)}"${u.name === userName() ? " selected" : ""}>${esc(u.name)}${u.name === s.owner ? " (eier)" : ""}${u.name === userName() ? " – meg" : ""}</option>`).join("");
   $("#d-borrow-label").hidden = s.status === "out";
+  // Refill-kjøp er bare aktuelt når noen andre enn eieren tar spolen.
+  const refillWrap = $("#d-refill-wrap");
+  $("#d-refill").checked = false;
+  const syncRefill = () => (refillWrap.hidden = $("#d-borrower").value === s.owner);
+  $("#d-borrower").onchange = syncRefill;
+  syncRefill();
   $("#d-rows").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
   $("#d-history").innerHTML = (s.history || []).slice().reverse()
     .map((e) => `<li><span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span> ${esc(e.by || "")} · ${fmtTime(e.at)}${num(e.g) !== null ? ` · ${num(e.g)}g igjen${e.src === "new" ? " (ubrukt)" : ""}` : ""}</li>`)
@@ -1451,7 +1465,7 @@ async function saveDetail(e) {
     const borrower = $("#d-borrower").value;
     const spool = state.spools.find((x) => x.id === id);
     if (action === "out" && borrower && spool && borrower !== spool.owner) {
-      await addLoan(spool, borrower, spool.history?.at(-1)?.at || new Date().toISOString(), userName(), left);
+      await addLoan(spool, borrower, spool.history?.at(-1)?.at || new Date().toISOString(), userName(), left, $("#d-refill").checked);
     }
     if (action === "in" && openLoan(id)) await closeLoan(id, "returnedAt", "", libraryWeight(id));
     render();
@@ -3388,7 +3402,11 @@ document.addEventListener("click", (e) => {
   const goto = e.target.closest("[data-goto]");
   if (goto) return showTab(goto.dataset.goto);
   const approveBtn = e.target.closest("[data-approve-out]");
-  if (approveBtn) return approveCheckout(approveBtn.dataset.approveOut, document.querySelector(`[data-pending-to="${CSS.escape(approveBtn.dataset.approveOut)}"]`)?.value || "", approveBtn);
+  if (approveBtn) {
+    const id = CSS.escape(approveBtn.dataset.approveOut);
+    return approveCheckout(approveBtn.dataset.approveOut, document.querySelector(`[data-pending-to="${id}"]`)?.value || "", approveBtn,
+      !!document.querySelector(`[data-pending-refill="${id}"]`)?.checked);
+  }
   const loanBtn = e.target.closest("[data-loan]");
   if (loanBtn) return loanAction(loanBtn.dataset.loan, loanBtn.dataset.spool, loanBtn);
   const pub = e.target.closest("[data-open]");
