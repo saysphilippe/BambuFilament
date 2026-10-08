@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=202610080956">
+  <link rel="stylesheet" href="style.css?v=202610081143">
 </head>
 <body>
   <header>
@@ -55,7 +55,8 @@
 
   <main>
    <div id="tab-stock">
-    <section id="stats" class="stats"></section>
+    <section id="stats" class="stats stats-side"></section>
+    <div class="stock-main">
 
     <section id="activity" class="panel activity" hidden>
       <h2>Siste bevegelser</h2>
@@ -85,6 +86,7 @@
     <div id="type-tabs" class="type-tabs" role="tablist" aria-label="Filamenttype"></div>
     <div id="count" class="count"></div>
     <section id="grid" class="grid"></section>
+    </div>
    </div>
 
    <div id="tab-news" hidden></div>
@@ -335,6 +337,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=202610080956"></script>
+  <script type="module" src="app.js?v=202610081143"></script>
 </body>
 </html>

@@ -92,6 +92,16 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
 .stat span { font-size: 13px; color: var(--muted); }
 
+/* Lager: tallboksene i en smal kolonne til venstre, ca. 30 % mindre enn før. */
+.stats-side { gap: 7px; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+.stats-side .stat { padding: 8px 10px; border-radius: 9px; }
+.stats-side .stat b { font-size: 16px; }
+.stats-side .stat span { font-size: 11px; line-height: 1.3; display: block; }
+@media (min-width: 800px) {
+  #tab-stock:not([hidden]) { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .stats-side { grid-template-columns: 1fr; margin-bottom: 0; position: sticky; top: 12px; }
+}
+
 .panel {
   margin-bottom: 16px;
   padding: 12px 14px;
