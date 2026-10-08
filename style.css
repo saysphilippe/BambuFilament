@@ -92,13 +92,15 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
 .stat span { font-size: 13px; color: var(--muted); }
 
-/* Lager: tallboksene i en smal kolonne til venstre, ca. 30 % mindre enn før. */
+/* Lager: tallboksene ca. 30 % mindre. På brede skjermer står de i margen til venstre
+   for innholdet (som beholder full bredde), og følger med ved rulling. */
 .stats-side { gap: 7px; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
 .stats-side .stat { padding: 8px 10px; border-radius: 9px; }
 .stats-side .stat b { font-size: 16px; }
 .stats-side .stat span { font-size: 11px; line-height: 1.3; display: block; }
-@media (min-width: 800px) {
-  #tab-stock:not([hidden]) { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 1480px) {
+  #tab-stock { position: relative; }
+  .stats-rail { position: absolute; top: 0; bottom: 0; right: calc(100% + 16px); width: 112px; }
   .stats-side { grid-template-columns: 1fr; margin-bottom: 0; position: sticky; top: 12px; }
 }
 
