@@ -612,6 +612,30 @@ details.all-type > .news-colors { margin-top: 10px; }
 .price-chart svg { display: block; width: 100%; height: auto; margin-top: 6px; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .chart-legend i { display: inline-block; width: 10px; height: 3px; margin-right: 5px; vertical-align: middle; border-radius: 2px; }
+.cart-add { align-self: flex-start; }
+.variants li .cart-add { padding: 0 9px; line-height: 20px; margin-left: 6px; }
+.cart-lines { display: grid; gap: 6px; margin: 10px 0; max-height: 46vh; overflow-y: auto; }
+.cart-line { display: grid; grid-template-columns: 48px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--bg); font-size: 14px; }
+.cart-line img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; background: #fff; }
+.cart-what { display: flex; flex-direction: column; min-width: 0; }
+.cart-what .muted { font-size: 12px; overflow-wrap: anywhere; }
+.cart-qty { display: flex; align-items: center; gap: 6px; }
+.cart-qty b { min-width: 18px; text-align: center; }
+.cart-price { display: flex; flex-direction: column; align-items: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cart-price .muted { font-size: 12px; }
+.cart-tips { margin: 6px 0; padding-left: 18px; font-size: 13px; color: var(--accent); }
+.cart-carrier { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 14px; white-space: nowrap; }
+.cart-carrier select { min-width: 0; flex: 1; }
+.cart-sum { display: grid; gap: 2px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.cart-sum-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 2px; border-top: 1px solid var(--border); }
+.cart-sum-row.good span:last-child { color: var(--in); }
+.cart-sum-row.sub { font-weight: 600; }
+.cart-sum-row.total { font-size: 17px; font-weight: 700; border-top: 2px solid var(--text); }
+@media (max-width: 560px) {
+  .cart-line { grid-template-columns: 40px 1fr auto; }
+  .cart-line img { width: 40px; height: 40px; }
+  .cart-price { grid-column: 2 / -1; flex-direction: row; gap: 8px; justify-content: flex-end; }
+}
 .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
 .shop-card { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
 .shop-card.is-out .shop-img img { opacity: .5; }

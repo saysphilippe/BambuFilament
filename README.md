@@ -40,6 +40,10 @@ samling + nøkkel → JSON, se `worker/schema.sql` og `worker/src/records.js`). 
   (nøkkel `STORE_INGEST_KEY`, secret både i Workeren og i GitHub). Tabellene `store_products`,
   `store_meta` og `price_history` (én rad per prisendring per variant). Siden viser kroner og euro,
   og «Prisutvikling» per produkt.
+- Handlekurv (Butikk-fanen): simulert kjøp med Bambus mengderabatt (`bulk` per produkt fra
+  `promotion.bundleFullDiscount`, ruller telles på tvers av produkter i samme kampanje), frakt,
+  25 % mva, toll (0) og fortollingsgebyr fra Posten eller DHL. Satsene ligger under Innstillinger.
+  Kurven lagres bare i nettleseren (`bf.cart`).
 - Flytte data fra JSON-filer på nytt: `node scripts/import-d1.mjs ../BambuFilament-data > import.sql`,
   så `npx wrangler d1 execute filament-universet --remote --file import.sql` i `worker/`.
 

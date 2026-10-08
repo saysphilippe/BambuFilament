@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008193317";
-import { toRecords } from "./worker/src/records.js?v=20261008193317";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008193317";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008195150";
+import { toRecords } from "./worker/src/records.js?v=20261008195150";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008195150";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -460,6 +460,13 @@ const SETTINGS = {
   spoolPrice: { def: 250, min: 0, max: 2000, step: 10 },
   emptySpoolPrice: { def: 35, min: 0, max: 1000, step: 5 },
   eurRate: { def: 11.5, min: 5, max: 20, step: 0.1 },
+  // Handlekurven (simulert kjøp fra Bambus EU-butikk til Norge)
+  freeShipEur: { def: 119, min: 0, max: 1000, step: 1 },
+  shipEur: { def: 20, min: 0, max: 200, step: 0.5 },
+  postenFeeLow: { def: 46, min: 0, max: 1000, step: 1 },
+  postenFeeMid: { def: 78, min: 0, max: 1000, step: 1 },
+  postenFeeHigh: { def: 278, min: 0, max: 2000, step: 1 },
+  dhlFee: { def: 300, min: 0, max: 2000, step: 1 },
 };
 function cleanSettings(x) {
   return Object.fromEntries(Object.entries(SETTINGS).map(([k, r]) => {
@@ -1788,6 +1795,14 @@ function renderSettings() {
     <h3>Gjøre opp lån</h3>
     ${field("spoolPrice", "Standardpris per spole", "Brukes når prisen ikke finnes i Bambu-butikken.", "kr")}
     ${field("emptySpoolPrice", "Spoletillegg", "Legges til når hele rullen er brukt opp og spolen ikke er levert tilbake. Hentes fra butikken som forskjellen mellom «med spole» og «refill» når begge finnes.", "kr")}
+    <h3>Handlekurv (simulert kjøp)</h3>
+    <p class="hint">Bambu tar ikke norsk mva ved levering til Norge. Mva (25 %) og fortollingsgebyret betales ved levering. Sjekk satsene hos Bambu og Posten innimellom.</p>
+    ${field("freeShipEur", "Gratis frakt fra", "Bambu: gratis frakt til Norge over €119 (gjelder ikke printere og AMS). Regnes etter rabatt.", "€")}
+    ${field("shipEur", "Frakt under grensen", "Anslag. Bambu oppgir ikke fast pris, så sjekk i kassen hos Bambu og juster.", "€")}
+    ${field("postenFeeLow", "Posten: fortolling under 500 kr", "Postens gebyr når sendingen er verdt opptil 500 kr.", "kr")}
+    ${field("postenFeeMid", "Posten: fortolling 500–3000 kr", "Postens gebyr når sendingen er verdt 500–3000 kr.", "kr")}
+    ${field("postenFeeHigh", "Posten: fortolling over 3000 kr", "Postens gebyr over 3000 kr. Pakken må da ofte hentes.", "kr")}
+    ${field("dhlFee", "DHL: fortollingsgebyr", "Anslag hvis DHL leverer selv (utlegg av mva). Sjekk fakturaen fra DHL.", "kr")}
     ${field("eurRate", "Eurokurs (reserve)", `Brukes bare når eurokursen fra Norges Bank mangler. Nå brukes ${state.store?.fx ? `Norges Banks kurs ${String(state.store.fx.eurNok).replace(".", ",")}` : "denne"}.`, "kr per euro")}
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;
@@ -3289,8 +3304,10 @@ function renderShop() {
           <span class="stock ${cls}">${label}${p.status === "partial" ? ` (${soldOut} av ${p.variants.length})` : ""}</span>
         </div>
         ${p.variants.length > 1 ? `<details class="variants"><summary>${p.variants.length} varianter</summary>
-          <ul>${p.variants.map(([name, out, price]) => `<li class="${out ? "v-out" : ""}"><span>${esc(name)}</span><span class="v-price">${price ? fmtPrice(price) : ""}</span><span>${out ? "Utsolgt" : "På lager"}</span></li>`).join("")}</ul>
+          <ul>${p.variants.map(([name, out, price]) => `<li class="${out ? "v-out" : ""}"><span>${esc(name)}</span><span class="v-price">${price ? fmtPrice(price) : ""}</span><span>${out ? "Utsolgt" : "På lager"}</span>${price ? cartButton(p.handle, name, "+") : ""}</li>`).join("")}</ul>
         </details>` : ""}
+        ${p.variants.length <= 1 && p.price !== null ? `<div>${cartButton(p.handle, p.variants[0]?.[0] || p.name, "Legg i kurven")}</div>` : ""}
+        ${p.bulk ? `<span class="hint">Mengderabatt: ${p.bulk.tiers.map(([n, pct]) => `${n}+ ruller ${pct} %`).join(", ")}</span>` : ""}
         ${st.changed?.[p.handle] ? `<details class="price-chart" data-history="${esc(p.handle)}"><summary>Prisutvikling</summary><div class="chart-box muted">Henter …</div></details>` : ""}
         ${p.status === "out" || p.status === "partial" || wishersOf(key).length ? wishButton(key) : ""}
       </div>
@@ -3298,6 +3315,111 @@ function renderShop() {
   }).join("") || `<p class="empty-msg">Ingen produkter passer filteret.</p>`;
   $("#shop-more").hidden = list.length <= shown.length;
   $("#shop-more").textContent = `Vis flere (${list.length - shown.length} til)`;
+}
+
+// ---------- Handlekurv (simulert kjøp) ----------
+//
+// Kurven lagres bare i denne nettleseren. Regnestykket følger Bambus EU-butikk ved levering til
+// Norge: mengderabatt per kampanje (antall ruller på tvers av produkter), frakt under grensen
+// for gratis frakt, så 25 % mva av varer og frakt i kroner, toll (0 for filament fra EU) og
+// fortollingsgebyret til den som leverer. Alt er et anslag; kassen hos Bambu har siste ord.
+
+state.cart = (() => { try { return JSON.parse(store("bf.cart") || "[]").filter((x) => x.h && x.v && x.q > 0); } catch { return []; } })();
+state.cartCarrier = store("bf.cartCarrier") || "posten";
+
+function saveCart() {
+  store("bf.cart", state.cart.length ? JSON.stringify(state.cart) : "");
+  const n = state.cart.reduce((a, x) => a + x.q, 0);
+  const btn = $("#cart-open");
+  if (btn) btn.textContent = n ? `Handlekurv (${n})` : "Handlekurv";
+}
+
+const cartButton = (h, v, label) => `<button type="button" class="btn btn-small cart-add" data-cart-h="${esc(h)}" data-cart-v="${esc(v)}" title="Legg i handlekurven">${label}</button>`;
+
+function cartAdd(h, v, btn) {
+  const line = state.cart.find((x) => x.h === h && x.v === v);
+  if (line) line.q += 1; else state.cart.push({ h, v, q: 1 });
+  saveCart();
+  if (btn) { const old = btn.textContent; btn.textContent = "✓"; setTimeout(() => (btn.textContent = old), 900); }
+}
+
+function cartQty(i, delta) {
+  const line = state.cart[i];
+  if (!line) return;
+  line.q = Math.max(0, Math.min(99, line.q + delta));
+  if (!line.q) state.cart.splice(i, 1);
+  saveCart();
+  renderCart();
+}
+
+function cartTotals() {
+  const st = state.doc.settings || cleanSettings({});
+  const rate = eurRate();
+  const byHandle = Object.fromEntries((state.store?.products || []).map((p) => [p.handle, p]));
+  const lines = state.cart.map((x, i) => {
+    const p = byHandle[x.h];
+    const v = p?.variants.find((y) => y[0] === x.v);
+    const unit = v?.[2] ?? (p?.variants.length <= 1 ? p?.price : null) ?? null;
+    return { ...x, i, p, unit, soldOut: !!v?.[1], missing: !p || unit === null, pct: 0 };
+  });
+  // Mengderabatt: tell ruller per kampanje og bruk høyeste trinn som er nådd.
+  const groups = {};
+  for (const l of lines) if (l.p?.bulk && !l.missing) (groups[l.p.bulk.id] ||= { tiers: l.p.bulk.tiers, count: 0, lines: [] }).count += l.q, groups[l.p.bulk.id].lines.push(l);
+  const bulk = Object.values(groups).map((g) => {
+    const tiers = [...g.tiers].sort((a, b) => a[0] - b[0]);
+    const reached = tiers.filter(([n]) => g.count >= n).at(-1);
+    const next = tiers.find(([n]) => g.count < n);
+    for (const l of g.lines) l.pct = reached?.[1] || 0;
+    return { count: g.count, pct: reached?.[1] || 0, next };
+  });
+  for (const l of lines) l.total = l.missing ? 0 : l.unit * l.q * (1 - l.pct / 100);
+  const list = lines.reduce((a, l) => a + (l.missing ? 0 : l.unit * l.q), 0);
+  const goods = lines.reduce((a, l) => a + l.total, 0);
+  const ship = !goods ? 0 : goods >= st.freeShipEur ? 0 : st.shipEur;
+  const eur = goods + ship;
+  const nok = eur * rate;
+  const vat = nok * 0.25;
+  const duty = 0;
+  const fee = !goods ? 0 : state.cartCarrier === "dhl" ? st.dhlFee : nok <= 500 ? st.postenFeeLow : nok <= 3000 ? st.postenFeeMid : st.postenFeeHigh;
+  const total = nok + vat + duty + fee;
+  const rolls = lines.filter((l) => l.p?.category === "filament" && !l.missing).reduce((a, l) => a + l.q, 0);
+  return { st, rate, lines, bulk, list, goods, ship, eur, nok, vat, duty, fee, total, rolls };
+}
+
+function openCart() {
+  renderCart();
+  $("#cart").showModal();
+}
+
+function renderCart() {
+  const c = cartTotals();
+  const kr = (x) => `${Math.round(x).toLocaleString("nb-NO")} kr`;
+  const row = (label, value, cls = "") => `<div class="cart-sum-row ${cls}"><span>${label}</span><span>${value}</span></div>`;
+  $("#cart-lines").innerHTML = c.lines.length ? c.lines.map((l) => `<div class="cart-line">
+      ${l.p?.image ? `<img src="${esc(l.p.image)}" alt="" loading="lazy">` : "<span></span>"}
+      <div class="cart-what"><b>${esc(l.p?.name || l.h)}</b>${l.v !== l.p?.name ? `<span class="muted">${esc(l.v)}</span>` : ""}
+        ${l.missing ? `<span class="error">Finnes ikke i butikken lenger</span>` : l.soldOut ? `<span class="stock stock-out">Utsolgt nå</span>` : ""}</div>
+      <div class="cart-qty"><button type="button" class="btn btn-small" data-cart-qty="${l.i}" data-delta="-1" aria-label="Færre">−</button><b>${l.q}</b><button type="button" class="btn btn-small" data-cart-qty="${l.i}" data-delta="1" aria-label="Flere">+</button></div>
+      <div class="cart-price">${l.missing ? "" : `${l.pct ? `<s class="muted">${fmtEur(l.unit * l.q)}</s> ` : ""}${fmtEur(l.total)}<span class="muted">${kr(l.total * c.rate)}</span>`}</div>
+    </div>`).join("") : `<p class="empty-msg">Kurven er tom. Trykk «+» ved en variant eller «Legg i kurven» i butikken.</p>`;
+  const tips = c.bulk.map((b) => b.next ? `${b.count} ${b.count === 1 ? "rull" : "ruller"} med mengderabatt${b.pct ? ` gir ${b.pct} %` : ""}. Legg til ${b.next[0] - b.count} til for ${b.next[1]} %.` : `${b.count} ruller gir høyeste mengderabatt, ${b.pct} %.`);
+  if (c.goods && c.ship) tips.push(`Handle for ${fmtEur(c.st.freeShipEur - c.goods)} til for gratis frakt.`);
+  $("#cart-tips").innerHTML = tips.map((t) => `<li>${esc(t)}</li>`).join("");
+  $("#cart-tips").hidden = !tips.length;
+  const discount = c.list - c.goods;
+  $("#cart-sum").innerHTML = !c.goods ? "" :
+    row("Varer, listepris", `${fmtEur(c.list)} · ${kr(c.list * c.rate)}`) +
+    (discount > 0.004 ? row(`Mengderabatt`, `− ${fmtEur(discount)} · − ${kr(discount * c.rate)}`, "good") : "") +
+    row(c.ship ? "Frakt fra Bambu" : `Frakt (gratis over ${fmtEur(c.st.freeShipEur)})`, c.ship ? `${fmtEur(c.ship)} · ${kr(c.ship * c.rate)}` : "0 kr") +
+    row("Betales til Bambu", `<b>${fmtEur(c.eur)}</b> · ${kr(c.nok)}`, "sub") +
+    row("Mva 25 % av varer og frakt", kr(c.vat)) +
+    row("Toll", `${kr(c.duty)} <span class="muted">(industrivare fra EU)</span>`) +
+    row(state.cartCarrier === "dhl" ? "Fortollingsgebyr, DHL" : `Fortollingsgebyr, Posten (${c.nok <= 500 ? "under 500 kr" : c.nok <= 3000 ? "500–3000 kr" : "over 3000 kr"})`, kr(c.fee)) +
+    row("Totalt levert", kr(c.total), "total") +
+    (c.rolls ? row(`Per rull filament (${c.rolls} stk., inkl. alt)`, `ca. ${kr((c.total * (c.lines.filter((l) => l.p?.category === "filament").reduce((a, l) => a + l.total, 0) / c.goods)) / c.rolls)}`, "muted") : "");
+  $("#cart-note").textContent = `Eurokurs ${String(c.rate).replace(".", ",")}${state.store?.fx ? ` (Norges Bank, ${fmtDay(state.store.fx.date)})` : ""}. Prisene er fra ${state.store ? fmtTime(state.store.updated) : "—"}. Satsene for frakt og gebyrer endres under Innstillinger.`;
+  $("#cart-carrier").value = state.cartCarrier;
+  $("#cart-clear").hidden = !c.lines.length;
 }
 
 // Prisutvikling for et produkt: én linje per gruppe varianter med samme prishistorikk.
@@ -3465,6 +3587,12 @@ document.addEventListener("click", (e) => {
     state.shop.limit = 60;
     return renderShop();
   }
+  const add = e.target.closest("[data-cart-h]");
+  if (add) return cartAdd(add.dataset.cartH, add.dataset.cartV, add);
+  if (e.target.closest("#cart-open")) return openCart();
+  const qty = e.target.closest("[data-cart-qty]");
+  if (qty) return cartQty(Number(qty.dataset.cartQty), Number(qty.dataset.delta));
+  if (e.target.closest("#cart-clear")) { state.cart = []; saveCart(); return renderCart(); }
   if (e.target.closest("#shop-more")) {
     state.shop.limit += 120;
     return renderShop();
@@ -3548,6 +3676,8 @@ $("#login form").addEventListener("submit", login);
 $("#forgot form").addEventListener("submit", forgot);
 $("#vipps form").addEventListener("submit", vippsSubmit);
 $("#v-return").addEventListener("change", setVippsAmount);
+$("#cart-carrier").addEventListener("change", (e) => { state.cartCarrier = e.target.value; store("bf.cartCarrier", e.target.value); renderCart(); });
+saveCart();
 $("#a-phone").addEventListener("change", (e) => savePhone(e.target));
 $("#a-email").addEventListener("change", (e) => saveEmail(userName(), e.target, $("#a-msg")));
 // Enter i et felt i kontovinduet skal lagre feltet, ikke trykke første knapp (Logg ut).
