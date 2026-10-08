@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008140828";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008140828";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008141002";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008141002";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -2516,7 +2516,7 @@ async function bambuSubmit(e) {
       if (bambuLogin.step === "code") {
         bambuLogin.step = "token";
         showBambuStep();
-        $("#b-error").textContent = "Bambu godtar ikke innlogging via BambuFilament akkurat nå (robotsjekk). Hent tilgangsnøkkelen fra bambulab.com som beskrevet over.";
+        $("#b-error").textContent = "Bambu godtar ikke innlogging via Filament Universet akkurat nå (robotsjekk). Hent tilgangsnøkkelen fra bambulab.com som beskrevet over.";
         return;
       }
       return await bambuCodeLogin("Bambu ville sjekke at du ikke er en robot, så vi bruker kode på e-post i stedet. ");
