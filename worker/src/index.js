@@ -64,7 +64,7 @@ const LIMITS = {
   "/login": "AUTH_LIMIT", "/send-code": "AUTH_LIMIT", "/tfa": "AUTH_LIMIT", "/refresh": "AUTH_LIMIT",
   "/ams": "DATA_LIMIT", "/library": "DATA_LIMIT",
   "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
-  "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/reset-token": "AUTH_LIMIT",
+  "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/reset-token": "AUTH_LIMIT", "/approve": "AUTH_LIMIT",
 };
 
 export default {
@@ -74,6 +74,9 @@ export default {
     // Ukjent opprinnelse behandles som github.io-adressen i CORS-svar, så nettlesere avviser svaret.
     const origin = allowed.includes(sent) ? sent : SITE_ORIGIN;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
+    // Godkjenning fra lenken i e-posten til administrator: egen HTML-side, uten Origin-sjekk
+    // (den er beskyttet av en signert lenke).
+    if (new URL(request.url).pathname === "/approve") return approvePage(request, env);
     if (request.method !== "POST") return json({ error: "Bruk POST" }, 405, origin);
     if (!allowed.includes(sent)) return json({ error: "Ukjent opprinnelse" }, 403, origin);
 
@@ -616,16 +619,157 @@ async function register({ name, email }, env) {
 
   // Varsel til administrator; en feil her skal ikke stoppe registreringen.
   if (added) {
-    await sendMail(env, env.GMAIL_USER, `Ny bruker venter: ${name}`, [
+    const link = await approveLink(name, email, env);
+    const h = escapeHtml;
+    await sendMail(env, adminEmail(env), `Ny bruker venter: ${name}`, [
       `${name} (${email}) har bedt om tilgang til BambuFilament.`,
       "",
-      `Godkjenn eller avvis under Brukere på ${SITE_URL}`,
-    ].join("\n")).catch((err) => console.warn("Varsel feilet:", err.message));
+      `Godkjenn eller avvis: ${link}`,
+      "",
+      `Du kan også gjøre det under Brukere på ${SITE_URL}`,
+    ].join("\n"), `<div style="font-family:system-ui,sans-serif;font-size:15px;color:#1c1f1d">
+      <p><b>${h(name)}</b> (${h(email)}) har bedt om tilgang til BambuFilament.</p>
+      <p style="margin:22px 0"><a href="${h(link)}" style="background:#00ae42;color:#fff;padding:11px 20px;border-radius:9px;text-decoration:none;font-weight:600">Godkjenn eller avvis</a></p>
+      <p style="color:#666;font-size:13px">Lenken gjelder i 7 dager. Du kan også gjøre det under Brukere på <a href="${SITE_URL}">${SITE_URL}</a>.</p>
+    </div>`).catch((err) => console.warn("Varsel feilet:", err.message));
   }
   return { ok: true };
 }
 
+// ---------- Godkjenning fra e-post ----------
+//
+// Lenken i varselet er signert (HMAC med TICKET_SECRET) og gjelder i 7 dager. Den viser en
+// side med Godkjenn og Avvis; selve handlingen er en POST, så e-postprogrammer og skannere
+// som åpner lenker automatisk, ikke kan godkjenne noen.
+
+const WORKER_URL = "https://bambufilament-proxy.saysphilippe.workers.dev";
+const APPROVE_MS = 7 * 864e5;
+const USER_COLORS = ["#2563eb", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626", "#4f46e5", "#0d9488"];
+
+const adminEmail = (env) => String(env.ADMIN_EMAIL || env.GMAIL_USER).trim();
+const escapeHtml = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const b64url = (bytes) => toB64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64url = (text) => fromB64(text.replace(/-/g, "+").replace(/_/g, "/"));
+
+async function approveLink(name, email, env) {
+  const p = b64url(utf8(JSON.stringify({ n: name, e: email, x: Date.now() + APPROVE_MS })));
+  return `${WORKER_URL}/approve?p=${p}&s=${await hmac(env.TICKET_SECRET, `approve|${p}`)}`;
+}
+
+async function readApproveLink(url, env) {
+  const p = url.searchParams.get("p") || "", sig = url.searchParams.get("s") || "";
+  if (!p || !env.TICKET_SECRET || sig !== (await hmac(env.TICKET_SECRET, `approve|${p}`))) return null;
+  try {
+    const { n, e, x } = JSON.parse(new TextDecoder().decode(unb64url(p)));
+    return Date.now() < x ? { name: String(n), email: String(e) } : { expired: true };
+  } catch {
+    return null;
+  }
+}
+
+function page(title, body, status = 200) {
+  const html = `<!doctype html><html lang="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>${escapeHtml(title)} – BambuFilament</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f5f5f4; --card: #fff; --text: #1c1f1d; --muted: #666; --accent: #00ae42; --danger: #c62828; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161817; --card: #202321; --text: #eceeed; --muted: #a2a8a4; } }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  main { background: var(--card); margin: 16px; padding: 28px; border-radius: 14px; max-width: 420px; width: 100%; box-sizing: border-box; box-shadow: 0 2px 12px #0002; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  p { margin: 0 0 12px; } .muted { color: var(--muted); font-size: 13px; }
+  form { display: flex; gap: 10px; margin: 20px 0 8px; }
+  button { flex: 1; padding: 11px; border-radius: 9px; border: 1px solid transparent; font: inherit; font-weight: 600; cursor: pointer; }
+  .ok { background: var(--accent); color: #fff; } .no { background: transparent; color: var(--danger); border-color: var(--danger); }
+  a { color: var(--accent); }
+</style></head><body><main><h1>${escapeHtml(title)}</h1>${body}
+<p class="muted"><a href="${SITE_URL}">Til BambuFilament</a></p></main></body></html>`;
+  return new Response(html, {
+    status,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+    },
+  });
+}
+
+async function approvePage(request, env) {
+  const h = escapeHtml;
+  try {
+    const url = new URL(request.url);
+    const ip = request.headers.get("CF-Connecting-IP") || "ukjent";
+    if (env.AUTH_LIMIT && !(await env.AUTH_LIMIT.limit({ key: `/approve:${ip}` })).success) {
+      return page("For mange forsøk", "<p>Vent et minutt og prøv igjen.</p>", 429);
+    }
+    const link = await readApproveLink(url, env);
+    if (!link) return page("Ugyldig lenke", "<p>Lenken er ikke gyldig. Godkjenn under Brukere på siden i stedet.</p>", 400);
+    if (link.expired) return page("Lenken er utløpt", "<p>Lenken gjaldt i 7 dager. Godkjenn under Brukere på siden i stedet.</p>", 410);
+    const { name, email } = link;
+    const tok = await siteToken(env);
+    const { doc: contacts } = await readJson(DATA_REPO, "contacts.json", tok);
+    const waiting = (contacts?.pending || []).some((p) => p.email === email && p.name === name);
+    if (!waiting) {
+      const done = String(contacts?.emails?.[name] || "").toLowerCase() === email;
+      return page(done ? "Allerede godkjent" : "Ikke lenger ventende",
+        done ? `<p><b>${h(name)}</b> er allerede godkjent.</p>` : `<p>Forespørselen fra <b>${h(name)}</b> er allerede avvist eller trukket tilbake.</p>`);
+    }
+
+    if (request.method === "GET") {
+      return page("Ny bruker", `<p><b>${h(name)}</b> (${h(email)}) har bedt om tilgang til BambuFilament.</p>
+        <form method="post"><button class="ok" name="action" value="approve">Godkjenn</button><button class="no" name="action" value="reject">Avvis</button></form>
+        <p class="muted">Ved godkjenning legges brukeren til og får et midlertidig passord på e-post.</p>`);
+    }
+    if (request.method !== "POST") return page("Ugyldig forespørsel", "", 405);
+    const action = (await request.formData().catch(() => null))?.get("action");
+
+    if (action === "reject") {
+      await updateJson(DATA_REPO, "contacts.json", tok, emptyContacts, (doc) => {
+        doc.pending = (doc.pending || []).filter((p) => !(p.email === email && p.name === name));
+      }, `Avviste registrering: ${name} (e-post)`);
+      return page("Avvist", `<p>Forespørselen fra <b>${h(name)}</b> er avvist.</p>`);
+    }
+    if (action !== "approve") return page("Ugyldig forespørsel", "", 400);
+
+    let taken = false;
+    await updateJson(AUTH_REPO, "users.json", tok, () => ({ version: 1, users: [] }), (doc) => {
+      doc.users ||= [];
+      if (doc.users.some((u) => String(u.name).toLowerCase() === name.toLowerCase())) { taken = true; return false; }
+      const used = new Set(doc.users.map((u) => u.color));
+      const color = USER_COLORS.find((c) => !used.has(c)) || USER_COLORS[doc.users.length % USER_COLORS.length];
+      doc.users.push({ name, color, mustChange: true });
+    }, `La til bruker ${name} (godkjent fra e-post)`);
+    if (taken) return page("Navnet er tatt", `<p>Det finnes allerede en bruker som heter <b>${h(name)}</b>. Avvis forespørselen, eller ordne det under Brukere på siden.</p>`, 409);
+    await updateJson(DATA_REPO, "contacts.json", tok, emptyContacts, (doc) => {
+      doc.emails ||= {};
+      doc.emails[name] = email;
+      doc.pending = (doc.pending || []).filter((p) => p.email !== email);
+    }, `E-post for ${name} (godkjent fra e-post)`);
+    try {
+      await sendReset(name.toLowerCase(), env);
+    } catch (err) {
+      return page("Godkjent, men e-posten feilet", `<p><b>${h(name)}</b> er lagt til, men passordet kunne ikke sendes (${h(err.message)}). Trykk Send passord under Brukere på siden.</p>`);
+    }
+    return page("Godkjent", `<p><b>${h(name)}</b> er lagt til og har fått et midlertidig passord på ${h(email)}.</p>`);
+  } catch (err) {
+    return page("Noe gikk galt", `<p>${h(err.message || String(err))}</p>`, err.status || 502);
+  }
+}
+
 // ---------- SMTP (Gmail) ----------
+
+// Ren tekst, eller tekst + HTML (multipart/alternative). Base64 så linjer aldri starter med ".".
+function mimeBody(text, html) {
+  const part = (type, content) => [`Content-Type: ${type}; charset=UTF-8`, "Content-Transfer-Encoding: base64", "", toB64(utf8(content)).match(/.{1,76}/g).join("\r\n")];
+  if (!html) return part("text/plain", text);
+  const boundary = `bf-${crypto.randomUUID()}`;
+  return [
+    `Content-Type: multipart/alternative; boundary="${boundary}"`, "",
+    `--${boundary}`, ...part("text/plain", text),
+    `--${boundary}`, ...part("text/html", `<!doctype html><html><body>${html}</body></html>`),
+    `--${boundary}--`,
+  ];
+}
 //
 // Gmail med app-passord (secrets GMAIL_USER og GMAIL_APP_PASSWORD), over TLS på port 465.
 
@@ -633,7 +777,7 @@ const SMTP_TIMEOUT_MS = 15000;
 
 const encodeHeader = (text) => (/^[\x20-\x7e]*$/.test(text) ? text : `=?UTF-8?B?${toB64(utf8(text))}?=`);
 
-async function sendMail(env, to, subject, text) {
+async function sendMail(env, to, subject, text, html) {
   const from = String(env.GMAIL_USER).trim();
   const socket = connect({ hostname: "smtp.gmail.com", port: 465 }, { secureTransport: "on" });
   const writer = socket.writable.getWriter();
@@ -668,10 +812,7 @@ async function sendMail(env, to, subject, text) {
     `Date: ${new Date().toUTCString().replace("GMT", "+0000")}`,
     `Message-ID: <${crypto.randomUUID()}@bambufilament>`,
     "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
-    "",
-    toB64(utf8(text)).match(/.{1,76}/g).join("\r\n"),
+    ...mimeBody(text, html),
   ].join("\r\n");
 
   const talk = async () => {
