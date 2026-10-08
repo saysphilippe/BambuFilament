@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008141002";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008141002";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008141227";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008141227";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -439,7 +439,7 @@ function gramsLeftNow(s, { beforeAt = "" } = {}) {
   if (!earlierOut && s.tag?.weight) return { g: s.tag.weight, src: "new" };
   return null;
 }
-const gramsText = (x) => (x ? `${x.g} g${x.src === "new" ? " (ubrukt rull)" : ""}` : "");
+const gramsText = (x) => (x ? `${x.g}g${x.src === "new" ? " (ubrukt rull)" : ""}` : "");
 
 // Brukere fra listen, pluss eiere som finnes på spoler uten å være lagt inn.
 function users() {
@@ -736,7 +736,7 @@ function spoolCard(s, showType = true) {
         <span class="swatch-tags"><span class="source source-${s.kind}">${SOURCE[s.kind]}</span></span>
         <span class="tip">${productionTip(s)}</span>
       </div>
-      <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${left.g} av ${left.total} g igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
+      <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${left.g} av ${left.total}g igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
       <div class="card-body">
         <div class="card-title">${esc(title(s))}</div>
         ${showType ? `<div class="card-type">${esc(s.typeName)}</div>` : ""}
@@ -985,8 +985,8 @@ function renderLoans() {
       : l.state === "returned" ? `levert ${fmtTime(l.returnedAt || (s?.history || []).filter((e) => e.at > l.at && e.action === "in").at(-1)?.at)}`
       : l.state === "owes" ? `brukt opp${l.usedAt ? " " + fmtTime(l.usedAt) : ""}` : `siden ${fmtTime(l.at)}`;
     const grams = l.gramsOut === null ? "" : [
-      `${l.gramsOut} g ved utlån${l.gramsSrc === "new" ? " (ubrukt rull)" : ""}`,
-      l.gramsIn !== null && l.gramsIn <= l.gramsOut ? `brukt ${l.gramsOut - l.gramsIn} g` : l.state === "owes" ? `brukt ca. ${l.gramsOut} g` : "",
+      `${l.gramsOut}g ved utlån${l.gramsSrc === "new" ? " (ubrukt rull)" : ""}`,
+      l.gramsIn !== null && l.gramsIn <= l.gramsOut ? `brukt ${l.gramsOut - l.gramsIn}g` : l.state === "owes" ? `brukt ca. ${l.gramsOut}g` : "",
     ].filter(Boolean).join(" · ");
     const actions = !token() ? ""
       : l.state === "out" ? `<button class="btn btn-small" data-loan="returned" data-spool="${esc(l.spool)}">Levert tilbake</button>
@@ -1014,7 +1014,7 @@ function renderLoans() {
     return `<li>
       <span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
       <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span>
-      <span class="muted">Sjekket ut med RFID-leseren${l.by ? ` av ${esc(l.by)}` : " (ukjent – ingen kort tappet)"} · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut} g` : ""}</span>
+      <span class="muted">Sjekket ut med RFID-leseren${l.by ? ` av ${esc(l.by)}` : " (ukjent – ingen kort tappet)"} · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut}g` : ""}</span>
       <span class="loan-actions">${canApprove(l) ? `<select data-pending-to="${esc(l.id)}" aria-label="Sjekket ut til">${l.by ? "" : `<option value="">Sjekket ut til …</option>`}${opts}</select>
         <button class="btn btn-primary btn-small" data-approve-out="${esc(l.id)}">${ownStock ? "OK" : "Godkjenn"}</button>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
     </li>`;
@@ -1056,7 +1056,7 @@ function eventDetails(e) {
     else if (to === s.owner || st === "own" || e.by === s.owner) parts.push("eget lager");
     if (s.owner && e.by && e.by !== s.owner && !(to && to !== s.owner)) parts.push(`fra lageret til ${s.owner}`);
     const g = num(e.g) ?? loan?.gramsOut ?? null;
-    if (g !== null) parts.push(`${g} g${(e.src || loan?.gramsSrc) === "new" ? " (ubrukt rull)" : ""}`);
+    if (g !== null) parts.push(`${g}g${(e.src || loan?.gramsSrc) === "new" ? " (ubrukt rull)" : ""}`);
   }
   if (e.action === "in") {
     const back = state.loans.find((l) => l.spool === s.id && l.at < e.at && l.to && !l.own && ["returned", "settled"].includes(loanState(l))
@@ -1112,7 +1112,7 @@ function openDetail(id) {
   const rows = t ? [
     ["Farge", s.colorName || familyLabel(s.family) || "Ukjent"],
     ["Status", STATUS[s.status]],
-    ["Vekt (ny)", `${t.weight} g`],
+    ["Vekt (ny)", `${t.weight}g`],
     ["Diameter", `${t.diameter} mm`],
     ["Dyse", `${t.hotendMin}–${t.hotendMax} °C`],
     ["Seng", `${t.bedTemp} °C`],
@@ -1131,7 +1131,7 @@ function openDetail(id) {
   $("#d-borrow-label").hidden = s.status === "out";
   $("#d-rows").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
   $("#d-history").innerHTML = (s.history || []).slice().reverse()
-    .map((e) => `<li><span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span> ${esc(e.by || "")} · ${fmtTime(e.at)}${num(e.g) !== null ? ` · ${num(e.g)} g igjen${e.src === "new" ? " (ubrukt)" : ""}` : ""}</li>`)
+    .map((e) => `<li><span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span> ${esc(e.by || "")} · ${fmtTime(e.at)}${num(e.g) !== null ? ` · ${num(e.g)}g igjen${e.src === "new" ? " (ubrukt)" : ""}` : ""}</li>`)
     .join("") || "<li class='muted'>Ingen hendelser ennå</li>";
   $("#d-checkin").hidden = s.status === "in";
   $("#d-checkout").hidden = s.status === "out";
@@ -2393,7 +2393,7 @@ function renderLibrary(lib, owner = "") {
       <div class="lib-text">
         <b>${esc(n.color || x.name || x.type)}</b>
         <span class="muted">${esc([x.vendor, n.color ? n.type : x.type].filter(Boolean).join(" · "))}</span>
-        ${x.total ? `<div class="remain"><span style="width:${pct}%"></span></div><span class="muted">${x.net} av ${x.total} g</span>` : ""}
+        ${x.total ? `<div class="remain"><span style="width:${pct}%"></span></div><span class="muted">${x.net} av ${x.total}g</span>` : ""}
         ${loc ? `<span class="lib-loc">${esc(loc)}</span>` : ""}
         ${x.rfid && scanned.has(x.rfid) ? `<span class="owned">Skannet inn i lageret</span>` : ""}
       </div>
@@ -2432,11 +2432,11 @@ function productionTip(s) {
 }
 
 function weightLabel(s) {
-  if (s.kind === "library") return s.total ? `<span class="lib-weight">${s.net} av ${s.total} g</span>` : "";
+  if (s.kind === "library") return s.total ? `<span class="lib-weight">${s.net} av ${s.total}g</span>` : "";
   if (s.kind === "ams") return s.remain !== null ? `<span class="lib-weight">${s.remain} % igjen</span>` : "";
   const lib = libraryWeight(s.id);
-  if (lib && lib.total) return `<span class="lib-weight" title="Fra Bambu-filamentbiblioteket">${lib.net} av ${lib.total} g</span>`;
-  return s.tag ? `<span>${s.tag.weight} g</span>` : "";
+  if (lib && lib.total) return `<span class="lib-weight" title="Fra Bambu-filamentbiblioteket">${lib.net} av ${lib.total}g</span>`;
+  return s.tag ? `<span>${s.tag.weight}g</span>` : "";
 }
 
 // Tilkobling til Bambu: e-post + passord, deretter eventuelt kode fra e-post eller autentiseringsapp.
