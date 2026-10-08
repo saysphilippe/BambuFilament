@@ -2,8 +2,12 @@
 //
 // Bambu sitt sky-API sender ikke CORS-headere, og MQTT kan ikke nås fra en
 // nettleser. Denne Workeren videresender derfor innlogging og AMS-forespørsler
-// fra github.io-siden. Den lagrer ingenting: Bambu-tokenen sendes med fra
+// fra github.io-siden. Den lagrer ingenting om Bambu: Bambu-tokenen sendes med fra
 // brukerens nettleser i hver forespørsel.
+//
+// Workeren tar også imot registreringer (/register) og sender midlertidige passord
+// på e-post (/reset, via Gmail). Til det lagrer den GitHub-tokenen til siden i KV
+// (RESET_KV), lagt inn av siden når administrator er innlogget (/reset-token).
 
 import { connect } from "cloudflare:sockets";
 
@@ -60,6 +64,7 @@ const LIMITS = {
   "/login": "AUTH_LIMIT", "/send-code": "AUTH_LIMIT", "/tfa": "AUTH_LIMIT", "/refresh": "AUTH_LIMIT",
   "/ams": "DATA_LIMIT", "/library": "DATA_LIMIT",
   "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
+  "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/reset-token": "AUTH_LIMIT",
 };
 
 export default {
@@ -93,6 +98,19 @@ export default {
           }
           return json(await sendCode(body, env), 200, origin);
         }
+        case "/reset":
+        case "/register": {
+          // Én e-post per bruker/adresse per minutt. Nøkkelen er det som ble skrevet inn,
+          // så svaret er det samme om brukeren finnes eller ikke.
+          const who = String((path === "/reset" ? body.who : body.email) || "").trim().toLowerCase().slice(0, 100);
+          if (env?.EMAIL_LIMIT && !(await env.EMAIL_LIMIT.limit({ key: `${path}:${who}` })).success) {
+            return json({ error: "Det er nettopp sendt en e-post. Vent et minutt." }, 429, origin);
+          }
+          return json(path === "/reset" ? await sendReset(who, env) : await register(body, env), 200, origin);
+        }
+        case "/reset-token":
+          if (!token) return json({ error: "Mangler GitHub-token" }, 401, origin);
+          return json(await saveResetToken(token, env), 200, origin);
         case "/tfa": return json(await tfa(body), 200, origin);
         case "/refresh": return json(await refresh(body), 200, origin);
         case "/ams":
@@ -428,4 +446,252 @@ async function fetchReports(user, token, serials) {
     try { await socket.close(); } catch { /* ignorer */ }
   }
   return reports;
+}
+
+// ---------- Brukere: registrering og midlertidig passord på e-post ----------
+//
+// Brukerne logger inn ved å dekryptere GitHub-tokenen med passordet sitt (se auth.js).
+// Workeren lager et tilfeldig passord, krypterer tokenen med det og lagrer resultatet
+// som users[].reset i BambuFilament-auth. Det vanlige passordet virker fortsatt, så
+// ingen kan stenge andre ute ved å be om nye passord. Siden krever passordbytte etter
+// innlogging med det midlertidige passordet, og fjerner det da.
+//
+// E-postadresser og ventende registreringer ligger i contacts.json i det private
+// data-repoet: { emails: { navn: adresse }, pending: [{ name, email, at }] }.
+
+const DATA_REPO = "saysphilippe/BambuFilament-data";
+const AUTH_REPO = "saysphilippe/BambuFilament-auth";
+const SITE_URL = "https://saysphilippe.github.io/BambuFilament/";
+const RESET_TTL_MS = 3600e3;
+const MAX_PENDING = 20;
+const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
+const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,38}[\p{L}\p{N}]$/u;
+
+async function github(path, tok, init = {}) {
+  return fetch(`https://api.github.com${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${tok}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "BambuFilament-proxy",
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+    },
+  });
+}
+
+const toB64 = (bytes) => {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+const fromB64 = (text) => Uint8Array.from(atob(text.replace(/\s/g, "")), (c) => c.charCodeAt(0));
+const utf8 = (text) => new TextEncoder().encode(text);
+
+async function readJson(repo, path, tok) {
+  const res = await github(`/repos/${repo}/contents/${path}?ref=main`, tok);
+  if (res.status === 404) return { doc: null };
+  if (!res.ok) throw fail(`GitHub svarte ${res.status} ved henting av ${path}`, 502);
+  const meta = await res.json();
+  return { doc: JSON.parse(new TextDecoder().decode(fromB64(meta.content))), sha: meta.sha };
+}
+
+// Henter, lar mutate endre (returnerer false = ikke lagre) og lagrer. Prøver på nytt ved konflikt.
+async function updateJson(repo, path, tok, empty, mutate, message) {
+  for (let attempt = 0; ; attempt++) {
+    const { doc, sha } = await readJson(repo, path, tok);
+    const next = doc || empty();
+    if (mutate(next) === false) return false;
+    const res = await github(`/repos/${repo}/contents/${path}`, tok, {
+      method: "PUT",
+      body: JSON.stringify({ message, branch: "main", sha, content: toB64(utf8(JSON.stringify(next, null, 2) + "\n")) }),
+    });
+    if (res.ok) return true;
+    if (res.status !== 409 || attempt >= 2) throw fail(`GitHub svarte ${res.status} ved lagring`, 502);
+  }
+}
+
+const emptyContacts = () => ({ version: 1, emails: {}, pending: [] });
+
+async function siteToken(env) {
+  const tok = await env.RESET_KV?.get("github-token");
+  if (!tok || !env.GMAIL_USER || !env.GMAIL_APP_PASSWORD) throw fail("E-post er ikke satt opp ennå. Spør administrator.", 503);
+  return tok;
+}
+
+// Siden sender tokenen sin hit når administrator er innlogget. Den godtas bare hvis den
+// kan skrive til begge repoene (bare eieren kan lage en slik token).
+async function saveResetToken(tok, env) {
+  if (!env.RESET_KV) throw fail("RESET_KV er ikke satt opp", 500);
+  if ((await env.RESET_KV.get("github-token")) === tok) return { ok: true };
+  for (const repo of [AUTH_REPO, DATA_REPO]) {
+    const res = await github(`/repos/${repo}`, tok);
+    const info = res.ok ? await res.json() : null;
+    if (!info?.permissions?.push) throw fail("Tokenen har ikke skrivetilgang til begge repoene", 403);
+  }
+  await env.RESET_KV.put("github-token", tok);
+  return { ok: true };
+}
+
+// Passord som "k7mq-x4tp-9hzr-c2wd": 16 tegn fra 31 = ca. 79 bit.
+function resetPassword() {
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("").match(/.{4}/g).join("-");
+}
+
+// Samme format som auth.js leser (kdf "hkdf").
+async function encryptReset(tok, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const base = await crypto.subtle.importKey("raw", utf8(password), "HKDF", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt, info: utf8("BambuFilament reset") },
+    base, { name: "AES-GCM", length: 256 }, false, ["encrypt"],
+  );
+  const data = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, utf8(tok)));
+  return { kdf: "hkdf", salt: toB64(salt), iv: toB64(iv), data: toB64(data) };
+}
+
+// who er brukernavn eller e-postadresse. Svaret er det samme om brukeren finnes eller
+// ikke, så det ikke avslører hvilke adresser som er registrert.
+async function sendReset(who, env) {
+  const done = { ok: true };
+  if (!who) throw fail("Skriv brukernavn eller e-post");
+  const tok = await siteToken(env);
+
+  const { doc: contacts } = await readJson(DATA_REPO, "contacts.json", tok);
+  const emails = contacts?.emails || {};
+  const name = Object.keys(emails).find((n) => n.toLowerCase() === who || String(emails[n]).toLowerCase() === who);
+  const email = name && String(emails[name]).trim();
+  if (!email || !EMAIL_RE.test(email)) return done;
+
+  const password = resetPassword();
+  const reset = { ...(await encryptReset(tok, password)), exp: new Date(Date.now() + RESET_TTL_MS).toISOString() };
+  const saved = await updateJson(AUTH_REPO, "users.json", tok, () => ({ version: 1, users: [] }), (doc) => {
+    const u = doc.users?.find((x) => x.name === name);
+    if (!u) return false;
+    u.reset = reset;
+  }, `Midlertidig passord på e-post (${name})`);
+  if (!saved) return done;
+
+  await sendMail(env, email, "Midlertidig passord til BambuFilament", [
+    `Hei ${name}!`,
+    "",
+    "Her er et midlertidig passord til BambuFilament:",
+    "",
+    `    ${password}`,
+    "",
+    `Logg inn på ${SITE_URL} som ${name} innen én time. Du blir bedt om å velge ditt eget passord.`,
+    "",
+    "Ba du ikke om dette, kan du se bort fra e-posten. Et passord du har fra før, virker fortsatt.",
+  ].join("\n"));
+  return done;
+}
+
+// Ny bruker ber om tilgang. Administrator godkjenner i brukeroversikten på siden.
+async function register({ name, email }, env) {
+  name = String(name || "").trim().replace(/\s+/g, " ");
+  email = String(email || "").trim().toLowerCase();
+  if (!NAME_RE.test(name)) throw fail("Brukernavnet må ha 2–40 tegn: bokstaver, tall, mellomrom, punktum, bindestrek eller understrek.");
+  if (email.length > 100 || !EMAIL_RE.test(email)) throw fail("Skriv en gyldig e-postadresse.");
+  const tok = await siteToken(env);
+
+  const { doc: auth } = await readJson(AUTH_REPO, "users.json", tok);
+  const lower = name.toLowerCase();
+  if ((auth?.users || []).some((u) => String(u.name).toLowerCase() === lower)) throw fail("Brukernavnet er tatt. Velg et annet.", 409);
+
+  let problem = "";
+  const added = await updateJson(DATA_REPO, "contacts.json", tok, emptyContacts, (doc) => {
+    doc.emails ||= {};
+    doc.pending = Array.isArray(doc.pending) ? doc.pending : [];
+    // Adressen er allerede i bruk: svar som vanlig, uten å avsløre det.
+    if (Object.values(doc.emails).some((e) => String(e).toLowerCase() === email)) return false;
+    if (doc.pending.some((p) => p.email === email)) return false;
+    if (doc.pending.some((p) => p.name.toLowerCase() === lower)) { problem = "Brukernavnet er tatt. Velg et annet."; return false; }
+    if (doc.pending.length >= MAX_PENDING) { problem = "Det er for mange ventende forespørsler. Prøv igjen senere."; return false; }
+    doc.pending.push({ name, email, at: new Date().toISOString() });
+  }, `Registrering: ${name}`);
+  if (problem) throw fail(problem, 409);
+
+  // Varsel til administrator; en feil her skal ikke stoppe registreringen.
+  if (added) {
+    await sendMail(env, env.GMAIL_USER, `Ny bruker venter: ${name}`, [
+      `${name} (${email}) har bedt om tilgang til BambuFilament.`,
+      "",
+      `Godkjenn eller avvis under Brukere på ${SITE_URL}`,
+    ].join("\n")).catch((err) => console.warn("Varsel feilet:", err.message));
+  }
+  return { ok: true };
+}
+
+// ---------- SMTP (Gmail) ----------
+//
+// Gmail med app-passord (secrets GMAIL_USER og GMAIL_APP_PASSWORD), over TLS på port 465.
+
+const SMTP_TIMEOUT_MS = 15000;
+
+const encodeHeader = (text) => (/^[\x20-\x7e]*$/.test(text) ? text : `=?UTF-8?B?${toB64(utf8(text))}?=`);
+
+async function sendMail(env, to, subject, text) {
+  const from = env.GMAIL_USER;
+  const socket = connect({ hostname: "smtp.gmail.com", port: 465 }, { secureTransport: "on" });
+  const writer = socket.writable.getWriter();
+  const reader = socket.readable.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  // Leser et helt svar (flere linjer "250-..." avsluttes med "250 ...").
+  async function reply() {
+    for (;;) {
+      const lines = buf.split("\r\n");
+      const end = lines.slice(0, -1).findIndex((l) => /^\d{3}( |$)/.test(l));
+      if (end >= 0) {
+        buf = lines.slice(end + 1).join("\r\n");
+        return lines.slice(0, end + 1).join("\n");
+      }
+      const { value, done } = await reader.read();
+      if (done) throw fail("E-posttjeneren lukket forbindelsen", 502);
+      buf += decoder.decode(value, { stream: true });
+    }
+  }
+  async function step(line, code) {
+    if (line !== null) await writer.write(utf8(line + "\r\n"));
+    const r = await reply();
+    if (!r.startsWith(code)) throw fail(`Kunne ikke sende e-post (${r.split("\n").pop().slice(0, 120)})`, 502);
+  }
+
+  const message = [
+    `From: ${encodeHeader("BambuFilament")} <${from}>`,
+    `To: <${to}>`,
+    `Subject: ${encodeHeader(subject)}`,
+    `Date: ${new Date().toUTCString().replace("GMT", "+0000")}`,
+    `Message-ID: <${crypto.randomUUID()}@bambufilament>`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    toB64(utf8(text)).match(/.{1,76}/g).join("\r\n"),
+  ].join("\r\n");
+
+  const talk = async () => {
+    await step(null, "220");
+    await step("EHLO bambufilament", "250");
+    await step(`AUTH PLAIN ${toB64(utf8(`\0${from}\0${env.GMAIL_APP_PASSWORD}`))}`, "235");
+    await step(`MAIL FROM:<${from}>`, "250");
+    await step(`RCPT TO:<${to}>`, "250");
+    await step("DATA", "354");
+    await step(`${message}\r\n.`, "250");
+    await writer.write(utf8("QUIT\r\n")).catch(() => {});
+  };
+  let timer;
+  try {
+    await Promise.race([
+      talk(),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(fail("E-posttjeneren svarte ikke", 504)), SMTP_TIMEOUT_MS); }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    socket.close().catch(() => {});
+  }
 }

@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=202610072254">
+  <link rel="stylesheet" href="style.css?v=202610080918">
 </head>
 <body>
   <header>
@@ -41,6 +41,7 @@
       <h2>Logg inn for å se lagrene</h2>
       <p class="hint">BambuFilament er en felles filamentoversikt for en lukket gruppe. Spoler, AMS, bibliotek og venteliste vises bare for innloggede brukere.</p>
       <button id="gate-login" class="btn btn-primary">Logg inn</button>
+      <p class="gate-links"><button type="button" class="link-btn" data-open="register">Ny bruker? Be om tilgang</button> · <button type="button" class="link-btn" data-open="forgot">Glemt passord?</button></p>
       <p class="hint"><a href="?demo">Se demo med eksempeldata</a></p>
     </div>
   </section>
@@ -174,11 +175,13 @@
     </nav>
     <div id="u-stats" hidden></div>
     <div id="u-list-pane">
-    <p class="hint">Hver bruker har sin egen farge, som vises på spolene de eier. Nye brukere får et midlertidig passord som må byttes ved første innlogging. Navnet må være likt <code>OWNER</code> i leserens <code>config.h</code>.</p>
+    <p class="hint">Hver bruker har sin egen farge, som vises på spolene de eier. Nye brukere får et midlertidig passord som må byttes ved første innlogging. Med e-postadresse sendes passordet på e-post, og brukeren kan selv be om nytt passord. Navnet må være likt <code>OWNER</code> i leserens <code>config.h</code>.</p>
+    <div id="u-pending"></div>
     <ul id="u-list" class="u-list"></ul>
     <div id="u-fresh" class="u-fresh"></div>
     <form id="u-form" class="u-form">
       <input name="name" placeholder="Navn på ny bruker" required maxlength="40" aria-label="Navn">
+      <input name="email" type="email" placeholder="E-post (valgfritt)" maxlength="100" aria-label="E-post">
       <input name="color" type="color" aria-label="Farge">
       <button class="btn btn-primary">Legg til</button>
     </form>
@@ -216,11 +219,43 @@
       <label>Passord<input id="l-password" type="password" autocomplete="current-password"></label>
       <label class="switch"><input id="l-remember" type="checkbox"> Husk meg på denne enheten i 30 dager</label>
       <p class="hint">Uten «Husk meg» logges du ut når du lukker fanen. Bruk det bare på din egen PC eller telefon.</p>
+      <p class="hint"><button type="button" class="link-btn" data-open="forgot">Glemt passord?</button> · <button type="button" class="link-btn" data-open="register">Ny bruker?</button></p>
       <p id="l-error" class="error"></p>
       <div class="d-buttons">
         <span class="spacer"></span>
         <button value="cancel" class="btn" formnovalidate>Avbryt</button>
         <button value="login" class="btn btn-primary">Logg inn</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="forgot">
+    <form method="dialog">
+      <h2>Glemt passord</h2>
+      <p class="hint">Skriv brukernavnet eller e-postadressen din. Er adressen registrert, får du et midlertidig passord på e-post. Det virker i én time, og du velger ditt eget passord når du logger inn med det.</p>
+      <label>Brukernavn eller e-post<input id="f-who" autocomplete="username" maxlength="100" required></label>
+      <p id="f-status" class="hint" role="status"></p>
+      <p id="f-error" class="error"></p>
+      <div class="d-buttons">
+        <span class="spacer"></span>
+        <button value="cancel" class="btn" formnovalidate>Lukk</button>
+        <button id="f-send" value="send" class="btn btn-primary">Send passord</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="register">
+    <form method="dialog">
+      <h2>Be om tilgang</h2>
+      <p class="hint">Velg brukernavn og skriv e-postadressen din. Administrator godkjenner forespørselen, og da får du et midlertidig passord på e-post.</p>
+      <label>Brukernavn<input id="r-name" autocomplete="username" minlength="2" maxlength="40" required></label>
+      <label>E-post<input id="r-email" type="email" autocomplete="email" maxlength="100" required></label>
+      <p id="r-status" class="hint" role="status"></p>
+      <p id="r-error" class="error"></p>
+      <div class="d-buttons">
+        <span class="spacer"></span>
+        <button value="cancel" class="btn" formnovalidate>Lukk</button>
+        <button id="r-send" value="send" class="btn btn-primary">Send forespørsel</button>
       </div>
     </form>
   </dialog>
@@ -300,6 +335,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=202610072254"></script>
+  <script type="module" src="app.js?v=202610080918"></script>
 </body>
 </html>

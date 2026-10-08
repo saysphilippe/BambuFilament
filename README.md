@@ -67,6 +67,23 @@ PBKDF2-SHA256, 600 000 runder). Riktig passord låser opp tokenen i nettleseren.
 - **Utløpt eller ny GitHub-token:** logg inn som administrator. Siden oppdager at tokenen ikke virker
   og ber om den nye. Din innlogging fornyes med passordet ditt, og de andre får nye midlertidige passord.
 
+### E-post og registrering
+
+- **Glemt passord:** på innloggingssiden skriver brukeren brukernavn eller e-post. Workeren lager et
+  midlertidig passord (16 tilfeldige tegn, gyldig i én time) og sender det fra Gmail. Det lagres som
+  `users[].reset` ved siden av det vanlige passordet, som fortsatt virker, så ingen kan stenge andre ute.
+  Etter innlogging med det må brukeren velge nytt passord, og `reset` fjernes.
+- **Be om tilgang:** nye brukere oppgir brukernavn og e-post. Forespørselen vises under *Brukere*
+  for administrator (som også får e-post), med *Godkjenn* og *Avvis*. Godkjente får passord på e-post.
+- Administrator kan legge inn e-post for hver bruker i brukerlisten og trykke *Send passord*.
+- E-postadresser og ventende forespørsler ligger i `contacts.json` i det private data-repoet.
+  Alle innloggede kan lese det (felles token), men bare administrator ser det på siden.
+- Workeren trenger GitHub-tokenen. Siden sender den til Workeren (`/reset-token`, lagres i KV
+  `RESET_KV`) når administrator er innlogget, også etter tokenbytte. Workeren godtar bare en token
+  med skrivetilgang til begge repoene.
+- Svaret på *Glemt passord* er det samme om brukeren finnes eller ikke. Maks én e-post per
+  navn/adresse per minutt, og 10 forsøk per minutt per IP.
+
 Tokenen lages på https://github.com/settings/personal-access-tokens/new:
 *Only select repositories* → **`BambuFilament-data`** og **`BambuFilament-auth`** (ikke `BambuFilament`), *Repository permissions* → *Contents: Read and write*.
 
@@ -90,6 +107,8 @@ Publisere Workeren:
 cd worker
 npx wrangler login
 npx wrangler secret put TICKET_SECRET   # tilfeldig hemmelighet, bare første gang
+npx wrangler secret put GMAIL_USER         # Gmail-adressen som sender passord
+npx wrangler secret put GMAIL_APP_PASSWORD # app-passord fra https://myaccount.google.com/apppasswords
 npx wrangler deploy
 ```
 

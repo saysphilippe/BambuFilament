@@ -49,6 +49,17 @@ export async function encryptToken(token, password) {
 // Returnerer tokenen, eller null ved feil passord.
 export async function decryptToken(cred, password) {
   try {
+    // Midlertidige passord sendt på e-post (fra Workeren) er lange og tilfeldige
+    // (ca. 79 bit), så de bruker HKDF i stedet for PBKDF2. Se worker/src/index.js.
+    if (cred.kdf === "hkdf") {
+      const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "HKDF", false, ["deriveKey"]);
+      const key = await crypto.subtle.deriveKey(
+        { name: "HKDF", hash: "SHA-256", salt: unb64(cred.salt), info: new TextEncoder().encode("BambuFilament reset") },
+        base, { name: "AES-GCM", length: 256 }, false, ["decrypt"],
+      );
+      const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(cred.iv) }, key, unb64(cred.data));
+      return new TextDecoder().decode(data);
+    }
     // Antall runder kommer fra delte data: avvis urimelige verdier (ellers kan nettleseren låses).
     const iter = Number(cred.iter || ITERATIONS);
     if (!Number.isInteger(iter) || iter < 100000 || iter > 2000000) return null;

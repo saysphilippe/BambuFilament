@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610072254";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610072254";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610080918";
+import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610080918";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -17,6 +17,8 @@ const FILES = {
   shared: { repo: DATA_REPO, path: "shared.json", empty: () => ({ version: 1, ams: {}, library: {}, wishes: {} }) },
   // Innlogginger og sist aktiv, for innloggingsstatistikken (bare admin ser den).
   activity: { repo: DATA_REPO, path: "activity.json", empty: () => ({ version: 1, logins: [], seen: {} }) },
+  // E-postadresser og ventende registreringer (skrives også av Workeren, se worker/).
+  contacts: { repo: DATA_REPO, path: "contacts.json", empty: () => ({ version: 1, emails: {}, pending: [] }) },
 };
 const MAX_LOGINS = 500;            // eldste innlogginger fjernes
 const SEEN_EVERY_MS = 6 * 3600e3;  // «sist aktiv» lagres høyst hver 6. time per bruker
@@ -50,6 +52,7 @@ const state = {
   colorNames: {},
   colorIndex: {},
   activity: { logins: [], seen: {} },
+  contacts: { emails: {}, pending: [] },
   usersTab: "list",
   tab: "stock",
   amsLive: null,
@@ -158,8 +161,11 @@ async function loadFile(file) {
 async function loadDoc() {
   const auth = await loadFile("users");
   if (!token()) return { ...auth, spools: [], ams: {}, library: {}, wishes: {} };
-  const [main, shared, activity] = await Promise.all([loadFile("spools"), loadFile("shared"), loadFile("activity")]);
+  const [main, shared, activity, contacts] = await Promise.all([
+    loadFile("spools"), loadFile("shared"), loadFile("activity"), loadFile("contacts").catch(() => FILES.contacts.empty()),
+  ]);
   state.activity = cleanActivity(activity);
+  state.contacts = cleanContacts(contacts);
   return { users: auth.users || [], spools: main.spools || [], ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {} };
 }
 
@@ -184,6 +190,9 @@ async function saveDoc(mutate, message, file = "spools") {
     } else if (file === "activity") {
       doc.logins = Array.isArray(doc.logins) ? doc.logins : [];
       doc.seen = doc.seen && typeof doc.seen === "object" ? doc.seen : {};
+    } else if (file === "contacts") {
+      doc.emails = doc.emails && typeof doc.emails === "object" ? doc.emails : {};
+      doc.pending = Array.isArray(doc.pending) ? doc.pending : [];
     } else if (file === "spools") {
       doc.spools ||= [];
       // Brukere ligger i auth-repoet og delte data i shared.json (eldre versjoner la dem her).
@@ -206,6 +215,10 @@ async function saveDoc(mutate, message, file = "spools") {
     if (put.ok) {
       if (file === "activity") {
         state.activity = cleanActivity(doc);
+        return state.doc;
+      }
+      if (file === "contacts") {
+        state.contacts = cleanContacts(doc);
         return state.doc;
       }
       const merged = file === "users" ? { ...state.doc, users: doc.users }
@@ -336,6 +349,17 @@ function cleanActivity(a) {
   return { logins, seen };
 }
 
+const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
+const cleanEmail = (e) => (EMAIL_RE.test(str(e).trim()) ? str(e).trim().slice(0, 100) : "");
+
+function cleanContacts(c) {
+  const emails = Object.fromEntries(Object.entries(c?.emails || {}).map(([k, v]) => [str(k), cleanEmail(v)]).filter(([, v]) => v));
+  const pending = (Array.isArray(c?.pending) ? c.pending : []).map((p) => ({
+    name: clip(p?.name, MAX.user), email: cleanEmail(p?.email), at: str(p?.at),
+  })).filter((p) => p.name && p.email);
+  return { emails, pending };
+}
+
 const cleanMap = (obj, fn) => Object.fromEntries(Object.entries(obj || {}).map(([k, v]) => [k, fn(v)]).filter(([, v]) => v));
 
 function setDoc(doc) {
@@ -377,7 +401,10 @@ async function refresh() {
   setSync("Henter…");
   try {
     setDoc(DEMO ? demoDoc() : await loadDoc());
-    if (token()) recordSeen();
+    if (token()) {
+      recordSeen();
+      shareToken();
+    }
     setSync(DEMO ? "Demo – eksempeldata" : `Oppdatert ${new Date().toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })}`);
   } catch (e) {
     setSync(e.message, true);
@@ -733,16 +760,33 @@ function renderUsers() {
   $("#u-list").innerHTML = users().map((u) => {
     const count = state.spools.filter((s) => s.owner === u.name).length;
     const why = u.name === me ? "Du kan ikke fjerne deg selv" : count ? "Flytt eller slett spolene til brukeren først" : "Fjern bruker";
-    const note = [u.admin && "admin", !u.known && "ikke i brukerlisten", u.known && !u.cred && "ingen innlogging", u.mustChange && "må bytte passord"].filter(Boolean).join(", ");
+    const note = [u.admin && "admin", !u.known && "ikke i brukerlisten", u.known && !u.cred && !u.reset && "ingen innlogging", u.mustChange && "må bytte passord"].filter(Boolean).join(", ");
+    const email = state.contacts.emails[u.name] || "";
     return `<li style="--owner:${u.color}">
       <span class="owner-dot"></span>
       <span class="u-name">${esc(u.name)}${note ? ` <span class="muted">(${note})</span>` : ""}</span>
+      ${u.known && canEdit ? `<input type="email" class="u-email" data-email="${esc(u.name)}" value="${esc(email)}" placeholder="E-post" maxlength="100" aria-label="E-post for ${esc(u.name)}">`
+        : email && isAdmin() ? `<span class="u-email-text muted">${esc(email)}</span>` : ""}
       <span class="muted">${count} ${count === 1 ? "spole" : "spoler"}</span>
       ${u.known ? `
-        <button type="button" class="btn btn-small" data-reset="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Lag midlertidig passord">${u.cred ? "Nytt passord" : "Lag passord"}</button>
+        ${email ? `<button type="button" class="btn btn-small" data-send="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Send midlertidig passord til ${esc(email)}">Send passord</button>` : ""}
+        <button type="button" class="btn btn-small" data-reset="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Lag midlertidig passord som vises her">${u.cred ? "Nytt passord" : "Lag passord"}</button>
         <button type="button" class="btn btn-danger btn-small" data-remove="${esc(u.name)}" ${!canEdit || why !== "Fjern bruker" ? "disabled" : ""} title="${why}">Fjern</button>` : ""}
     </li>`;
   }).join("") || "<li class='muted'>Ingen brukere ennå</li>";
+  const pending = canEdit ? state.contacts.pending : [];
+  $("#u-pending").innerHTML = pending.length ? `<div class="u-pending">
+      <h3>Venter på godkjenning (${pending.length})</h3>
+      <ul class="u-list">${pending.map((p) => `
+        <li>
+          <span class="u-name">${esc(p.name)}</span>
+          <span class="u-email-text">${esc(p.email)}</span>
+          <span class="muted">${p.at ? fmtTime(p.at) : ""}</span>
+          <button type="button" class="btn btn-primary btn-small" data-approve="${esc(p.email)}">Godkjenn</button>
+          <button type="button" class="btn btn-danger btn-small" data-reject="${esc(p.email)}">Avvis</button>
+        </li>`).join("")}</ul>
+      <p class="hint">Ved godkjenning legges brukeren til og får et midlertidig passord på e-post.</p>
+    </div>` : "";
   $("#u-fresh").innerHTML = freshPasswords.length
     ? `<p><b>Midlertidige passord.</b> Gi dem til brukerne nå, de vises bare denne ene gangen. Brukeren må bytte passord ved første innlogging.</p>
        <table>${freshPasswords.map(([n, p]) => `<tr><td>${esc(n)}</td><td><code class="pw">${esc(p)}</code></td></tr>`).join("")}</table>`
@@ -769,8 +813,20 @@ async function addUser(e) {
   const form = e.target;
   const name = clip(form.elements.name.value, MAX.user);
   const color = form.elements.color.value;
+  const email = form.elements.email.value.trim();
   if (!name) return;
   $("#u-error").textContent = "";
+  if (email) {
+    if (!cleanEmail(email)) return ($("#u-error").textContent = "E-postadressen ser ikke riktig ut.");
+    try {
+      await createWithEmail(name, email, color);
+      form.elements.name.value = "";
+      form.elements.email.value = "";
+    } catch (err) {
+      $("#u-error").textContent = err.message;
+    }
+    return;
+  }
   try {
     const temp = randomPassword();
     const cred = await encryptToken(token(), temp);
@@ -826,12 +882,163 @@ async function removeUser(name, btn) {
       if (state.spools.some((s) => s.owner === name)) return `${name} eier fortsatt spoler. Flytt eller slett dem først.`;
       doc.users = doc.users.filter((u) => u.name !== name);
     }, `Fjernet bruker ${name} (${userName()})`, "users");
+    if (state.contacts.emails[name]) {
+      await saveDoc((doc) => { delete doc.emails[name]; }, `Fjernet e-post for ${name} (${userName()})`, "contacts");
+    }
     freshPasswords = freshPasswords.filter(([n]) => n !== name);
     if (state.filters.owner === name) state.filters.owner = "";
     render();
     renderUsers();
   } catch (err) {
     $("#u-error").textContent = err.message;
+  }
+}
+
+// ---------- E-post og registrering ----------
+
+// Ny bruker uten passord på skjermen: Workeren lager et midlertidig passord og sender det.
+async function createWithEmail(name, email, color, fromPending = false) {
+  $("#u-error").textContent = `Legger til ${name}…`;
+  await saveDoc((doc) => {
+    if (!adminIn(doc)) return ADMIN_ONLY;
+    if (doc.users.some((u) => u.name.toLowerCase() === name.toLowerCase())) return `${name} finnes allerede.`;
+    doc.users.push({ name, color, mustChange: true });
+  }, `La til bruker ${name} (${userName()})`, "users");
+  await saveDoc((doc) => {
+    doc.emails[name] = email;
+    if (fromPending) doc.pending = doc.pending.filter((p) => p.email !== email);
+  }, `E-post for ${name} (${userName()})`, "contacts");
+  render();
+  renderUsers();
+  await sendPassword(name);
+}
+
+async function sendPassword(name, btn) {
+  const email = state.contacts.emails[name];
+  if (!email) return;
+  if (btn) btn.disabled = true;
+  $("#u-error").textContent = `Sender passord til ${email}…`;
+  try {
+    await shareToken(true);
+    await proxy("/reset", { who: name });
+    $("#u-error").textContent = `Midlertidig passord er sendt til ${email}. Det virker i én time.`;
+    setTimeout(refresh, 2000);
+  } catch (err) {
+    $("#u-error").textContent = `Kunne ikke sende e-post: ${err.message}`;
+  }
+  if (btn) btn.disabled = false;
+}
+
+async function saveEmail(name, input) {
+  const email = input.value.trim();
+  if (email === (state.contacts.emails[name] || "")) return;
+  if (email && !cleanEmail(email)) return ($("#u-error").textContent = "E-postadressen ser ikke riktig ut.");
+  $("#u-error").textContent = "Lagrer e-post…";
+  try {
+    await saveDoc((doc) => {
+      if (!adminIn(state.doc)) return ADMIN_ONLY;
+      if (email) doc.emails[name] = email; else delete doc.emails[name];
+    }, `E-post for ${name} (${userName()})`, "contacts");
+    $("#u-error").textContent = email ? `Lagret e-post for ${name}.` : `Fjernet e-post for ${name}.`;
+    renderUsers();
+  } catch (err) {
+    $("#u-error").textContent = err.message;
+  }
+}
+
+async function approve(email, btn) {
+  const p = state.contacts.pending.find((x) => x.email === email);
+  if (!p) return;
+  btn.disabled = true;
+  const used = new Set(state.doc.users.map((u) => u.color));
+  const color = USER_COLORS.find((c) => !used.has(c)) || USER_COLORS[state.doc.users.length % USER_COLORS.length];
+  try {
+    await createWithEmail(p.name, p.email, color, true);
+  } catch (err) {
+    $("#u-error").textContent = err.message;
+    btn.disabled = false;
+  }
+}
+
+async function reject(email, btn) {
+  if (!confirmed(btn, "Avvise? Trykk igjen")) return;
+  try {
+    await saveDoc((doc) => {
+      if (!adminIn(state.doc)) return ADMIN_ONLY;
+      doc.pending = doc.pending.filter((p) => p.email !== email);
+    }, `Avviste registrering (${userName()})`, "contacts");
+    $("#u-error").textContent = "";
+    renderUsers();
+  } catch (err) {
+    $("#u-error").textContent = err.message;
+  }
+}
+
+// Workeren trenger GitHub-tokenen for å sende passord og ta imot registreringer.
+// Den sendes når administrator er innlogget (og når tokenen er byttet).
+let tokenShared = "";
+async function shareToken(strict = false) {
+  if (DEMO || !token() || !isAdmin() || tokenShared === token()) return;
+  try {
+    await proxy("/reset-token", {}, token());
+    tokenShared = token();
+  } catch (err) {
+    if (strict) throw err;
+    console.warn("Kunne ikke gi Workeren tokenen:", err.message);
+  }
+}
+
+function openPublic(id) {
+  if (id === "forgot") {
+    $("#f-who").value = $("#login").open ? $("#l-user").value : "";
+    $("#f-status").textContent = "";
+    $("#f-error").textContent = "";
+    $("#f-send").disabled = false;
+  } else {
+    $("#r-name").value = "";
+    $("#r-email").value = "";
+    $("#r-status").textContent = "";
+    $("#r-error").textContent = "";
+    $("#r-send").disabled = false;
+  }
+  if ($("#login").open) $("#login").close();
+  $(`#${id}`).showModal();
+}
+
+async function forgot(e) {
+  e.preventDefault();
+  if (e.submitter?.value === "cancel") return $("#forgot").close();
+  const who = $("#f-who").value.trim();
+  if (!who) return;
+  $("#f-error").textContent = "";
+  $("#f-status").textContent = "Sender…";
+  $("#f-send").disabled = true;
+  try {
+    await proxy("/reset", { who });
+    $("#f-status").textContent = "Er brukeren eller adressen registrert med e-post, er et midlertidig passord sendt nå. Sjekk innboksen (og søppelpost). Får du ingenting, spør administrator om å legge inn e-postadressen din.";
+  } catch (err) {
+    $("#f-status").textContent = "";
+    $("#f-error").textContent = err.message;
+    $("#f-send").disabled = false;
+  }
+}
+
+async function registerUser(e) {
+  e.preventDefault();
+  if (e.submitter?.value === "cancel") return $("#register").close();
+  const name = $("#r-name").value.trim();
+  const email = $("#r-email").value.trim();
+  if (!name || !email) return;
+  $("#r-error").textContent = "";
+  $("#r-status").textContent = "Sender…";
+  $("#r-send").disabled = true;
+  try {
+    await proxy("/register", { name, email });
+    $("#r-status").textContent = "Forespørselen er sendt. Når administrator har godkjent den, får du et midlertidig passord på e-post.";
+  } catch (err) {
+    $("#r-status").textContent = "";
+    $("#r-error").textContent = err.message;
+    $("#r-send").disabled = false;
   }
 }
 
@@ -985,7 +1192,7 @@ function openAccount() {
 }
 
 function openLogin() {
-  const withLogin = state.doc.users.filter((u) => u.cred);
+  const withLogin = state.doc.users.filter((u) => u.cred || u.reset);
   if (!withLogin.length) return openSetup();
   const last = store("bf.lastUser");
   $("#l-user").innerHTML = withLogin.map((u) => `<option${u.name === last ? " selected" : ""}>${esc(u.name)}</option>`).join("");
@@ -1000,7 +1207,14 @@ async function login(e) {
   const name = $("#l-user").value;
   const user = state.doc.users.find((u) => u.name === name);
   $("#l-error").textContent = "Sjekker…";
-  const tok = user?.cred && (await decryptToken(user.cred, $("#l-password").value));
+  const pw = $("#l-password").value;
+  let tok = user?.cred && (await decryptToken(user.cred, pw));
+  // Midlertidig passord fra e-post (gjelder i én time).
+  let viaReset = false;
+  if (!tok && user?.reset && new Date(user.reset.exp).getTime() > Date.now()) {
+    tok = await decryptToken(user.reset, pw);
+    viaReset = !!tok;
+  }
   if (!tok) {
     $("#l-error").textContent = "Feil passord.";
     return;
@@ -1019,7 +1233,8 @@ async function login(e) {
   setSession({ user: name, token: tok }, $("#l-remember").checked);
   recordLogin(name, $("#l-remember").checked);
   $("#login").close();
-  if (user.mustChange) openChangePassword(true);
+  if (user.admin) shareToken();
+  if (user.mustChange || viaReset) openChangePassword(true);
 }
 
 // ---------- Ny GitHub-token (når den gamle er utløpt eller generert på nytt) ----------
@@ -1128,6 +1343,7 @@ async function changePassword(e) {
       if (!u) return "Brukeren din finnes ikke lenger.";
       u.cred = cred;
       u.mustChange = false;
+      delete u.reset;
     }, `Byttet passord (${userName()})`, "users");
     freshPasswords = freshPasswords.filter(([n]) => n !== userName());
     dlg.close();
@@ -2048,7 +2264,15 @@ document.addEventListener("click", (e) => {
   const rm = e.target.closest("[data-remove]");
   if (rm) return removeUser(rm.dataset.remove, rm);
   const reset = e.target.closest("[data-reset]");
-  if (reset) resetPassword(reset.dataset.reset, reset);
+  if (reset) return resetPassword(reset.dataset.reset, reset);
+  const send = e.target.closest("[data-send]");
+  if (send) return sendPassword(send.dataset.send, send);
+  const ok = e.target.closest("[data-approve]");
+  if (ok) return approve(ok.dataset.approve, ok);
+  const no = e.target.closest("[data-reject]");
+  if (no) return reject(no.dataset.reject, no);
+  const pub = e.target.closest("[data-open]");
+  if (pub) openPublic(pub.dataset.open);
 });
 // Husk hvilke typer som er åpne i «Alle typer», så de ikke lukkes ved oppdatering.
 document.addEventListener("toggle", (e) => {
@@ -2077,6 +2301,9 @@ $("#gate-login").addEventListener("click", openLogin);
 $("#rk-form").addEventListener("submit", saveRekey);
 $("#rk-close").addEventListener("click", () => $("#rekey").close());
 $("#login form").addEventListener("submit", login);
+$("#forgot form").addEventListener("submit", forgot);
+$("#register form").addEventListener("submit", registerUser);
+$("#u-list").addEventListener("change", (e) => e.target.matches(".u-email") && saveEmail(e.target.dataset.email, e.target));
 $("#account-dialog form").addEventListener("submit", accountAction);
 $("#password form").addEventListener("submit", changePassword);
 $("#password").addEventListener("cancel", (e) => $("#password").dataset.forced && e.preventDefault());

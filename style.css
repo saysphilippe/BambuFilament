@@ -306,6 +306,13 @@ body.demo .demo-banner { display: block; }
 .u-fresh td, .pw-table td { padding: 4px 14px 4px 0; }
 .pw { font-size: 15px; user-select: all; }
 .u-list li { flex-wrap: wrap; }
+.u-email { flex: 1 1 200px; min-width: 0; max-width: 260px; padding: 4px 8px; font-size: 13px; }
+.u-email-text { font-size: 13px; }
+.u-pending { margin: 0 0 14px; padding: 10px 12px; border-radius: 9px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.u-pending h3 { margin: 0 0 6px; font-size: 14px; }
+.u-pending .u-list li { border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+.link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.gate-links { font-size: 14px; margin: 12px 0 0; }
 
 .tabs { display: flex; gap: 4px; max-width: 1200px; margin: 0 auto; padding: 12px 16px 0; }
 .tab {

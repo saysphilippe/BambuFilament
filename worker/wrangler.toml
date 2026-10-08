@@ -22,3 +22,9 @@ simple = { limit = 120, period = 60 }
 name = "EMAIL_LIMIT"
 namespace_id = "1004"
 simple = { limit = 1, period = 60 }
+
+# GitHub-tokenen til siden, brukt til registrering og midlertidige passord på e-post.
+# Legges inn av siden når administrator er innlogget. Gmail: secrets GMAIL_USER og GMAIL_APP_PASSWORD.
+[[kv_namespaces]]
+binding = "RESET_KV"
+id = "0e498e5e33d14e12b632744ac454aead"
