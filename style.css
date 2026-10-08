@@ -406,7 +406,9 @@ body.demo .demo-banner { display: block; }
 .ams-fold > summary, .library > summary { cursor: pointer; padding: 6px 0; list-style-position: inside; }
 .ams-fold > summary .muted, .library > summary .muted { font-weight: 400; margin-left: 6px; }
 .ams-fold[open] > summary { margin-bottom: 8px; }
-.printers { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 12px; }
+.printers { display: grid; grid-template-columns: 1fr; gap: 12px; }
+/* AMS-enhetene to og to ved siden av hverandre (én kolonne på smale skjermer). */
+.ams-units { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); column-gap: 20px; }
 .printer { padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--owner); border-radius: 14px; box-shadow: var(--shadow); }
 .printer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .online-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }

@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008131032";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008131032";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008131111";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008131111";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -2218,7 +2218,7 @@ function renderPrinter(p) {
   const ext = p.external.filter((t) => !t.empty).map((t) => renderTray(t, "Ekstern")).join("");
   const body = !p.online ? `<p class="muted">Printeren er frakoblet.</p>`
     : !p.reported ? `<p class="muted">Printeren svarte ikke denne gangen.</p>`
-    : (units || ext) ? units + (ext ? `<div class="ams-unit"><div class="ams-unit-head"><b>Ekstern spole</b></div><div class="trays">${ext}</div></div>` : "")
+    : (units || ext) ? `<div class="ams-units">${units}${ext ? `<div class="ams-unit"><div class="ams-unit-head"><b>Ekstern spole</b></div><div class="trays">${ext}</div></div>` : ""}</div>`
     : `<p class="muted">Ingen AMS.</p>`;
   return `<div class="printer">
     <div class="printer-head">
