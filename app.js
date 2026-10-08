@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008135812";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008135812";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008135902";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008135902";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -509,7 +509,7 @@ const familyLabel = (key) => FAMILIES.find(([k]) => k === key)?.[1] || "";
 const familyOfHex = (hex) => (hex ? familyLabel(family({ colors: ["#" + String(hex).replace("#", "").slice(0, 8).padEnd(8, "F")] })) : "");
 const title = (s) => s.name || s.colorName || familyLabel(s.family) || "Ukjent farge";
 
-const SOURCE = { rfid: "RFID", library: "Bambu-bibliotek", ams: "I AMS" };
+const SOURCE = { rfid: "RFID", library: "Bibliotek", ams: "I AMS" };
 
 function libName(x) {
   const official = x.variant && state.colorNames[`GF${x.variant}`];
