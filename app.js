@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008170105";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008170105";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008170413";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008170413";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -407,6 +407,7 @@ const SETTINGS = {
   cardMinutes: { def: 1, min: 0.25, max: 60, step: 0.25 },
   checkoutMinutes: { def: 10, min: 1, max: 1440, step: 1 },
   spoolPrice: { def: 250, min: 0, max: 2000, step: 10 },
+  emptySpoolPrice: { def: 160, min: 0, max: 1000, step: 10 },
   eurRate: { def: 11.5, min: 5, max: 20, step: 0.1 },
 };
 function cleanSettings(x) {
@@ -1149,6 +1150,14 @@ function spoolPrice(typeName) {
   return { kr: st.spoolPrice, src: "standardpris" };
 }
 
+// Tom spole (Bambu Reusable Spool) i kroner, ellers prisen fra Innstillinger.
+function emptySpoolPrice() {
+  const st = state.doc.settings || cleanSettings({});
+  const p = (state.store?.products || []).find((x) => x.handle === "bambu-reusable-spool");
+  if (p && p.price) return Math.round((p.price * st.eurRate) / 10) * 10;
+  return st.emptySpoolPrice;
+}
+
 let vippsLoan = null;
 function openVipps(loanId) {
   const l = state.loans.find((x) => x.id === loanId);
@@ -1160,9 +1169,12 @@ function openVipps(loanId) {
   // Beløpet følger mengden: brukt mengde (utlånt minus levert tilbake) av en full rull.
   const total = s?.tag?.weight || 1000;
   const used = l.gramsOut === null ? null : Math.max(0, l.gramsOut - (l.gramsIn ?? 0));
-  const kr = used === null ? price.kr : Math.max(5, Math.round((price.kr * used) / total / 5) * 5);
-  const how = used === null ? `${price.kr} kr for en full rull; mengden er ukjent`
-    : `${used}g av ${total}g × ${price.kr} kr = ${kr} kr`;
+  const filamentKr = used === null ? price.kr : Math.max(5, Math.round((price.kr * used) / total / 5) * 5);
+  // Brukt opp og ikke levert tilbake: låntakeren har også beholdt (eller kastet) spolen.
+  const spoolKr = loanState(l) === "owes" ? emptySpoolPrice() : 0;
+  const kr = filamentKr + spoolKr;
+  const how = (used === null ? `${price.kr} kr for en full rull; mengden er ukjent`
+    : `${used}g av ${total}g × ${price.kr} kr = ${filamentKr} kr`) + (spoolKr ? ` + tom spole ${spoolKr} kr = ${kr} kr` : "");
   const phone = state.contacts.phones?.[l.owner] || "";
   $("#v-what").textContent = `${l.to} gjør opp for ${what}, lånt av ${l.owner || "ukjent eier"}.`;
   $("#v-to").textContent = l.owner || "Ukjent eier";
@@ -1588,6 +1600,7 @@ function renderSettings() {
     ${field("checkoutMinutes", "Utsjekk etter", "En spole som er inne, sjekkes ut når den skannes på nytt etter så lang tid. Skannes den før det, skjer ingenting.")}
     <h3>Gjøre opp lån</h3>
     ${field("spoolPrice", "Standardpris per spole", "Brukes når prisen ikke finnes i Bambu-butikken.", "kr")}
+    ${field("emptySpoolPrice", "Pris for tom spole", "Legges til når hele rullen er brukt opp og spolen ikke er levert tilbake. Hentes fra «Bambu Reusable Spool» i butikken når den finnes der.", "kr")}
     ${field("eurRate", "Eurokurs", "Bambu-butikken oppgir priser i euro. Prisen regnes om til kroner med denne kursen og rundes av til nærmeste 10 kr.", "kr per euro")}
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;
