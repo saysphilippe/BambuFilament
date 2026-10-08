@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008200252";
-import { toRecords } from "./worker/src/records.js?v=20261008200252";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008200252";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008201339";
+import { toRecords } from "./worker/src/records.js?v=20261008201339";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008201339";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -534,7 +534,7 @@ async function refresh() {
   try {
     setDoc(DEMO ? demoDoc() : await loadDoc());
     if (token()) {
-      if (!state.store) loadStore().then(() => state.tab === "shop" && renderShop());
+      if (!state.store) loadStore().then(() => state.tab === "shop" ? renderShop() : state.tab === "news" && renderNews());
       setTimeout(openVippsFromUrl);
       recordSeen();
       shareToken();
@@ -3091,6 +3091,32 @@ function stockMatch(stock) {
   return stock === f;
 }
 
+// Priser fra butikkdataene for en type (produkt) og en farge (varianter med fargekoden i navnet).
+function storeProductFor(t) {
+  const handle = t.product?.url?.split("/products/")[1]?.split(/[?#]/)[0];
+  return handle ? state.store?.products.find((p) => p.handle === handle) : null;
+}
+function colorPrices(x, t) {
+  const p = storeProductFor(t);
+  if (!p || !x.code) return null;
+  const vs = p.variants.filter((v) => v[2] && v[0].includes(`(${x.code})`));
+  const min = (re) => { const l = vs.filter((v) => re.test(v[0])).map((v) => v[2]); return l.length ? Math.min(...l) : null; };
+  const refill = min(/refill/i), spool = min(/with spool/i);
+  const other = !refill && !spool && vs.length ? Math.min(...vs.map((v) => v[2])) : null;
+  return refill || spool || other ? { refill, spool, other } : null;
+}
+function newsPrice(x, t) {
+  const pr = colorPrices(x, t);
+  if (!pr) return "";
+  const parts = [pr.refill && `Refill ${fmtPrice(pr.refill)}`, pr.spool && `Med spole ${fmtPrice(pr.spool)}`, pr.other && fmtPrice(pr.other)].filter(Boolean);
+  return `<span class="news-price">${parts.map((x) => `<span>${x}</span>`).join("")}</span>`;
+}
+function typePrice(t) {
+  const p = storeProductFor(t);
+  const from = p?.refill ?? p?.price;
+  return from ? `<span class="news-price"><span>fra ${fmtPrice(from)}${p.refill ? " (refill)" : ""}</span></span>` : "";
+}
+
 function renderNews() {
   const box = $("#tab-news");
   const c = state.catalog;
@@ -3123,6 +3149,7 @@ function renderNews() {
         <span class="news-color-text">
           <b>${esc(x.name || x.key)}</b>
           <span>${esc(x.t.type)}</span>
+          ${newsPrice(x, x.t)}
           ${stockBadge(x.stock)}
           ${ownedBadge(owned[x.key])}
         </span>
@@ -3175,6 +3202,7 @@ function renderNews() {
         <div class="news-type-body">
           <b>${esc(t.type)}</b>
           <span class="muted">Ny ${fmtDay(t.firstSeen)} · ${t.colors.length} farger</span>
+          ${typePrice(t)}
           <div class="strip">${t.colors.slice(0, 14).map((x) => `<span style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}" title="${esc(x.name)}"></span>`).join("")}</div>
           <div class="row-actions">${productLink(t)}${!typeInStock(t) || wishersOf(`type:${t.type}`).length ? wishButton(`type:${t.type}`) : ""}</div>
           ${!t.product ? stockBadge("missing") : !typeInStock(t) ? stockBadge("out") : ""}
@@ -3200,6 +3228,7 @@ function renderNews() {
           <div class="all-type-head">
             <b>${esc(t.type)}</b>
             <span class="muted">${t.colors.length} farger${known ? ` · ${inStore} på lager i butikken` : ""}${have ? ` · ${have} hos oss` : ""}</span>
+            ${typePrice(t)}
             ${productLink(t, "Produktside")}
           </div>
           <div class="strip big">${t.colors.map((x) => `<span class="${owned[x.key] ? "have" : ""} ${x.stock && x.stock !== "in" ? "na" : ""}"

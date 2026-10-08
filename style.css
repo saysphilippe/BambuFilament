@@ -636,6 +636,7 @@ details.all-type > .news-colors { margin-top: 10px; }
   .cart-line img { width: 40px; height: 40px; }
   .cart-price { grid-column: 2 / -1; flex-direction: row; gap: 8px; justify-content: flex-end; }
 }
+.news-price { display: flex; flex-direction: column; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; }
 .shop-card { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
 .shop-card.is-out .shop-img img { opacity: .5; }
