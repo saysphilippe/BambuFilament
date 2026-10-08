@@ -402,10 +402,14 @@ body.demo .demo-banner { display: block; }
 .ams-owner { margin-bottom: 20px; }
 .ams-owner h2 { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 4px solid var(--owner); }
 .ams-owner h2 .muted { font-weight: 400; }
-.ams-fold { margin-bottom: 12px; }
-.ams-fold > summary, .library > summary { cursor: pointer; padding: 6px 0; list-style-position: inside; }
+/* AMS og bibliotek: hver sin sammenleggbare boks, med overskriften inne i boksen. */
+.ams-fold, .library { margin-bottom: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--owner); border-radius: 14px; box-shadow: var(--shadow); }
+.ams-fold > summary, .library > summary { cursor: pointer; list-style-position: inside; }
 .ams-fold > summary .muted, .library > summary .muted { font-weight: 400; margin-left: 6px; }
-.ams-fold[open] > summary { margin-bottom: 8px; }
+.ams-fold[open] > summary, .library[open] > summary { margin-bottom: 10px; }
+/* Printerne inne i AMS-boksen: ingen egen ramme, skilt med strek ved flere. */
+.ams-fold .printer { padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+.ams-fold .printer + .printer { padding-top: 12px; border-top: 1px solid var(--border); }
 .printers { display: grid; grid-template-columns: 1fr; gap: 12px; }
 /* AMS-enhetene to og to ved siden av hverandre (én kolonne på smale skjermer). */
 .ams-units { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; }
@@ -486,10 +490,6 @@ body.demo .demo-banner { display: block; }
 .all-type-head .btn { margin-left: auto; }
 a.btn { text-decoration: none; display: inline-block; }
 
-.library { margin-bottom: 12px; }
-.library[open] > summary { margin-bottom: 8px; }
-/* Samme boks som printerne i AMS-delen. */
-.lib-card { padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--owner); border-radius: 14px; box-shadow: var(--shadow); }
 .lib-card .lib-grid { margin-top: 0; }
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; margin-top: 10px; }
 .lib-item { display: flex; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg); }
