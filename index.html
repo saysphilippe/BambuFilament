@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008134541">
+  <link rel="stylesheet" href="style.css?v=20261008134820">
 </head>
 <body>
   <header>
@@ -58,7 +58,10 @@
 
   <main>
    <div id="tab-stock">
-    <aside class="stats-rail"><section id="stats" class="stats stats-side"></section></aside>
+    <aside class="stats-rail"><div class="rail-inner">
+      <section id="stats" class="stats stats-side"></section>
+      <nav class="rail-types" aria-label="Materiale"><span class="rail-label">Materiale</span><div id="type-chips" class="chips"></div></nav>
+    </div></aside>
 
     <button id="stock-pending" class="notice stock-pending" type="button" data-goto="loans" hidden></button>
 
@@ -79,7 +82,6 @@
           <option value="recent">Sorter: sist skannet</option>
         </select>
       </div>
-      <div class="chip-row"><span class="chip-label">Materiale</span><div id="type-chips" class="chips"></div></div>
       <div class="chip-row"><span class="chip-label">Eier</span><div id="owner-chips" class="chips"></div></div>
       <div class="chip-row"><span class="chip-label">Farge</span><div id="family-chips" class="chips"></div></div>
     </section>
@@ -355,6 +357,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=20261008134541"></script>
+  <script type="module" src="app.js?v=20261008134820"></script>
 </body>
 </html>
