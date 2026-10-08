@@ -81,6 +81,8 @@ PBKDF2-SHA256, 600 000 runder). Riktig passord låser opp tokenen i nettleseren.
 - **Be om tilgang:** nye brukere oppgir brukernavn og e-post. Forespørselen vises under *Brukere*
   for administrator (som også får e-post), med *Godkjenn* og *Avvis*. Godkjente får passord på e-post.
 - Administrator kan legge inn e-post for hver bruker i brukerlisten og trykke *Send passord*.
+  Brukere uten e-post får *Vis nytt passord*: passordet vises for administrator og gjelder også i 4 timer.
+  Alle midlertidige passord lagres som `users[].reset` (med `exp`), så et eksisterende passord virker fortsatt.
 - E-postadresser og ventende forespørsler ligger i `contacts.json` i det private data-repoet.
   Alle innloggede kan lese det (felles token), men bare administrator ser det på siden.
 - Workeren trenger GitHub-tokenen. Siden sender den til Workeren (`/reset-token`, lagres i KV

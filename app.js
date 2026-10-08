@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008120633";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008120633";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008120841";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008120841";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -29,6 +29,10 @@ const rawUrl = (file) => `https://raw.githubusercontent.com/${FILES[file].repo}/
 const MAX = { name: 60, note: 300, user: 40 };
 const clip = (text, n) => String(text || "").trim().slice(0, n);
 const REFRESH_MS = 120000;
+// Midlertidige passord (vist her eller sendt på e-post) gjelder i 4 timer. De lagres som
+// users[].reset ved siden av et eventuelt vanlig passord, som fortsatt virker.
+const TEMP_MS = 4 * 3600e3;
+const tempCred = async (tok, temp) => ({ ...(await encryptToken(tok, temp)), exp: new Date(Date.now() + TEMP_MS).toISOString() });
 // Cloudflare Worker som videresender til Bambu (se worker/). Tom = AMS-fanen er av.
 const PROXY_URL = ["127.0.0.1", "localhost"].includes(location.hostname) ? "http://127.0.0.1:8787" : "https://bambufilament-proxy.saysphilippe.workers.dev";
 const DEMO = new URLSearchParams(location.search).has("demo");
@@ -797,7 +801,7 @@ function renderUsers() {
       <p class="hint">Ved godkjenning legges brukeren til og får et midlertidig passord på e-post.</p>
     </div>` : "";
   $("#u-fresh").innerHTML = freshPasswords.length
-    ? `<p><b>Midlertidige passord.</b> Gi dem til brukerne nå, de vises bare denne ene gangen. Brukeren må bytte passord ved første innlogging.</p>
+    ? `<p><b>Midlertidige passord.</b> Gi dem til brukerne nå, de vises bare denne ene gangen. De virker i 4 timer, og brukeren velger eget passord når hen logger inn med dem. Et passord brukeren har fra før, virker fortsatt.</p>
        <table>${freshPasswords.map(([n, p]) => `<tr><td>${esc(n)}</td><td><code class="pw">${esc(p)}</code></td></tr>`).join("")}</table>`
     : "";
   const form = $("#u-form");
@@ -838,11 +842,11 @@ async function addUser(e) {
   }
   try {
     const temp = randomPassword();
-    const cred = await encryptToken(token(), temp);
+    const reset = await tempCred(token(), temp);
     await saveDoc((doc) => {
       if (!adminIn(doc)) return ADMIN_ONLY;
       if (doc.users.some((u) => u.name.toLowerCase() === name.toLowerCase())) return `${name} finnes allerede.`;
-      doc.users.push({ name, color, cred, mustChange: true });
+      doc.users.push({ name, color, reset, mustChange: true });
     }, `La til bruker ${name} (${userName()})`, "users");
     freshPasswords.push([name, temp]);
     form.elements.name.value = "";
@@ -854,21 +858,16 @@ async function addUser(e) {
 }
 
 async function resetPassword(name, btn) {
-  const hasPassword = hasLogin(state.doc.users.find((u) => u.name === name));
-  if (hasPassword && !confirmed(btn, "Det gamle slutter å virke – trykk igjen")) return;
   $("#u-error").textContent = `Lager passord for ${name}…`;
   if (btn) btn.disabled = true;
   try {
     const temp = randomPassword();
-    const cred = await encryptToken(token(), temp);
+    const reset = await tempCred(token(), temp);
     await saveDoc((doc) => {
       if (!adminIn(doc)) return ADMIN_ONLY;
       const u = doc.users.find((x) => x.name === name);
       if (!u) return `${name} finnes ikke lenger.`;
-      u.cred = cred;
-      u.mustChange = true;
-      delete u.kp;
-      delete u.reset;
+      u.reset = reset;
     }, `Nytt passord for ${name} (${userName()})`, "users");
     freshPasswords = freshPasswords.filter(([n]) => n !== name).concat([[name, temp]]);
     $("#u-error").textContent = "";
@@ -1233,7 +1232,10 @@ async function login(e) {
     viaReset = !!tok;
   }
   if (!tok) {
-    $("#l-error").textContent = "Feil passord.";
+    const expired = user?.reset && !viaReset && new Date(user.reset.exp).getTime() <= Date.now() && (await decryptToken(user.reset, pw));
+    $("#l-error").textContent = expired
+      ? "Det midlertidige passordet er utløpt (det gjaldt i 4 timer). Trykk «Glemt passord?» for å få et nytt, eller spør administrator."
+      : "Feil passord.";
     return;
   }
   // Sjekk at tokenen fortsatt virker (den kan være utløpt eller generert på nytt).
@@ -1319,7 +1321,7 @@ async function saveRekey(e) {
       else if (state.contacts.emails[u.name]) plan[u.name] = { mail: true };
       else {
         const temp = randomPassword();
-        plan[u.name] = { temp, cred: await encryptToken(tok, temp) };
+        plan[u.name] = { temp, reset: await tempCred(tok, temp) };
       }
     }
     const kept = [], mailed = [], shown = [];
@@ -1337,9 +1339,10 @@ async function saveRekey(e) {
           kept.push(u.name);
         } else if (p?.mail) {
           mailed.push(u.name);
-        } else if (p?.cred) {
-          u.cred = p.cred;
+        } else if (p?.reset) {
+          u.reset = p.reset;
           u.mustChange = true;
+          delete u.cred;
           delete u.kp;
           shown.push({ name: u.name, temp: p.temp });
         }
@@ -1363,7 +1366,7 @@ async function saveRekey(e) {
       mailed.length && (mailError
         ? `<p class="error">Kunne ikke sende e-post til ${mailed.map(esc).join(", ")}: ${esc(mailError)}. De kan bruke «Glemt passord?».</p>`
         : `<p><b>Fikk nytt midlertidig passord på e-post:</b> ${mailed.map(esc).join(", ")} (hadde ikke valgt eget passord ennå).</p>`),
-      shown.length && `<p><b>Gi disse midlertidige passordene til brukerne.</b> De vises bare nå.</p>`,
+      shown.length && `<p><b>Gi disse midlertidige passordene til brukerne.</b> De vises bare nå og virker i 4 timer.</p>`,
     ].filter(Boolean).join("") || "<p>Ingen andre brukere har innlogging.</p>";
     $("#rk-list").innerHTML = shown.map((o) => `<tr><td>${esc(o.name)}</td><td><code class="pw">${esc(o.temp)}</code></td></tr>`).join("");
     $("#rk-form").hidden = true;
