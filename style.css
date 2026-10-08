@@ -175,7 +175,7 @@ input, select, textarea {
 .grid, .grid-inner { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .grid.grouped { display: block; }
 .mat-group { margin-bottom: 22px; }
-.mat-head { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px; font-size: 22px; font-weight: 700; letter-spacing: -.01em; cursor: pointer; list-style: none; }
+.mat-head { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px; font-size: 18px; font-weight: 700; letter-spacing: -.01em; cursor: pointer; list-style: none; }
 .type-head { display: flex; align-items: baseline; gap: 6px; margin: 12px 0 8px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; cursor: pointer; list-style: none; }
 .mat-head::-webkit-details-marker, .type-head::-webkit-details-marker { display: none; }
 /* Pil som viser om gruppen er åpen eller lukket. */
@@ -184,7 +184,8 @@ input, select, textarea {
 .mat-head::before { font-size: 16px; }
 .type-head::before { font-size: 12px; }
 .type-group:not([open]) > .type-head { margin-bottom: 4px; }
-.mat-head span, .type-head span { font-size: 13px; font-weight: 500; color: var(--muted); }
+/* Antallet i samme størrelse som overskriften, men dempet. */
+.mat-head span, .type-head span { font-size: inherit; font-weight: 500; color: var(--muted); }
 
 .card {
   display: flex;
