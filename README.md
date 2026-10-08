@@ -134,8 +134,12 @@ En spole som finnes flere steder (samme RFID / Tray UID) vises bare én gang. Pl
 
 ## Lånt filament
 
-- Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg «Lånes ut til» ved
-  utsjekk, eller sjekk ut en spole du ikke eier (også med RFID-leseren; siden lager lånet når den lastes).
+- Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg «Sjekk ut til» ved utsjekk
+  (standard: deg selv).
+- Utsjekk med RFID-leseren (kjennes igjen ved at `lastScan` er lik hendelsens tidspunkt) havner under
+  *Utsjekk til godkjenning*: fra eget lager holder det med *OK*; ellers må man velge hvem spolen gikk
+  til og trykke *Godkjenn* (blir et lån). Antallet vises på fanen og øverst i lageret.
+- «Siste bevegelser» viser detaljer: lånt til hvem, eget lager, gram, RFID-leser, venter på godkjenning.
 - Status: *Utlånt* → *Levert tilbake* (spolen sjekkes inn) eller *Skylder* (brukt opp) → *Gjort opp*.
   Øverst står hvem som skylder hvem.
 - Gram ved utsjekk: fra Bambu-biblioteket hvis spolen er der, ellers full rull hvis den aldri er sjekket
