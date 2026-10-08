@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008172317";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008172317";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008172517";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008172517";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -395,6 +395,10 @@ function cleanLoans(d) {
     id: str(l.id), spool: str(l.spool), owner: clip(l.owner, MAX.user), to: clip(l.to, MAX.user), by: clip(l.by, MAX.user),
     at: time(l.at), returnedAt: time(l.returnedAt), usedAt: time(l.usedAt), settledAt: time(l.settledAt),
     settledBy: clip(l.settledBy, MAX.user), note: clip(l.note, MAX.note),
+    // Tom spole som låntakeren leverer tilbake i stedet for å betale spoletillegg.
+    spoolReturn: l.spoolReturn && !isNaN(new Date(l.spoolReturn.promisedAt))
+      ? { promisedAt: str(l.spoolReturn.promisedAt), receivedAt: isNaN(new Date(l.spoolReturn.receivedAt)) ? "" : str(l.spoolReturn.receivedAt), receivedBy: clip(l.spoolReturn.receivedBy, MAX.user) }
+      : null,
     // Kopi av spolens navn, så lånet kan vises også om spolen slettes.
     title: clip(l.title, MAX.name), type: clip(l.type, MAX.name), color: hexOnly(l.color),
     pending: !!l.pending, own: !!l.own,
@@ -1029,7 +1033,7 @@ function renderLoans() {
     const s = spoolOf(l);
     const color = s?.tag ? swatch(s.tag) : l.color ? "#" + l.color : "var(--muted-bg)";
     const use = s && usage(s);
-    const when = l.state === "settled" ? `gjort opp ${fmtTime(l.settledAt)}${l.settledBy ? ` av ${esc(l.settledBy)}` : ""}${l.note ? ` · ${esc(l.note)}` : ""}`
+    const when = l.state === "settled" ? `gjort opp ${fmtTime(l.settledAt)}${l.settledBy ? ` av ${esc(l.settledBy)}` : ""}${l.note ? ` · ${esc(l.note)}` : ""}${l.spoolReturn?.receivedAt ? ` · spole mottatt ${fmtTime(l.spoolReturn.receivedAt)}` : ""}`
       : l.state === "returned" ? `levert ${fmtTime(l.returnedAt || (s?.history || []).filter((e) => e.at > l.at && e.action === "in").at(-1)?.at)}`
       : l.state === "owes" ? `brukt opp${l.usedAt ? " " + fmtTime(l.usedAt) : ""}` : `siden ${fmtTime(l.at)}`;
     const grams = l.gramsOut === null ? "" : [
@@ -1053,6 +1057,18 @@ function renderLoans() {
   const section = (h, list, empty) => `<h2>${h} (${list.length})</h2>` +
     (list.length ? `<ul class="loan-list">${list.map(row).join("")}</ul>` : `<p class="muted">${empty}</p>`);
 
+  const coming = spoolsComing();
+  const spoolRow = (l) => {
+    const s = spoolOf(l);
+    const canConfirm = !!token() && (l.owner === userName() || isAdmin());
+    return `<li>
+      <span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
+      <span class="loan-what"><b>Tom spole: ${esc(s ? title(s) : l.title || "spole")}</b><span class="muted">${esc(s?.typeName || l.type)}</span></span>
+      <span class="loan-who"><span class="owner-dot" style="--owner:${userColor(l.to)}"></span><b>${esc(l.to)}</b> → <span class="owner-dot" style="--owner:${userColor(l.owner)}"></span>${esc(l.owner || "Ingen eier")}</span>
+      <span class="muted">lovet ${fmtTime(l.spoolReturn.promisedAt)}</span>
+      <span class="loan-actions">${canConfirm ? `<button class="btn btn-primary btn-small" data-spool-received="${esc(l.id)}">Mottatt</button>` : `<span class="muted">venter på at ${esc(l.owner)} bekrefter</span>`}</span>
+    </li>`;
+  };
   const pendingRow = (l) => {
     const s = spoolOf(l);
     const ownStock = l.by === l.owner;
@@ -1079,6 +1095,7 @@ function renderLoans() {
     <p id="loan-error" class="error"></p>
     ${section("Utlånt nå", out, "Ingen spoler er utlånt.")}
     ${section("Skylder", owes, "Ingen skylder filament.")}
+    ${coming.length ? `<h2>Tomme spoler på vei tilbake (${coming.length})</h2><ul class="loan-list">${coming.map(spoolRow).join("")}</ul>` : ""}
     ${section("Avsluttet", done, "Ingen avsluttede lån ennå.")}
   </section>
   ${activityHtml()}`;
@@ -1124,15 +1141,19 @@ function eventDetails(e) {
 // Det blir eierens gjøremål: antallet vises på fanen «Lånt filament» og øverst i lageret.
 const canApprove = (l) => !!token() && (l.owner === userName() || isAdmin() || !l.owner);
 const myTodos = () => state.loans.filter((l) => loanState(l) === "pending" && (l.owner === userName() || (!l.owner && isAdmin())));
+// Tomme spoler på vei tilbake: eieren bekrefter mottak.
+const spoolsComing = () => state.loans.filter((l) => l.spoolReturn && !l.spoolReturn.receivedAt);
+const mySpoolsComing = () => spoolsComing().filter((l) => l.owner === userName() || (!l.owner && isAdmin()));
 
 function renderPendingCount() {
-  const n = myTodos().length;
+  const n = myTodos().length + mySpoolsComing().length;
   const tab = document.querySelector('.tab[data-tab="loans"]');
   tab.innerHTML = `Lånt filament${n ? `<span class="tab-count">${n}</span>` : ""}`;
   const unnamed = token() ? unnamedCards() : 0;
   document.querySelector('.tab[data-tab="cards"]').innerHTML = `RFID-kort${unnamed ? `<span class="tab-count">${unnamed}</span>` : ""}`;
   $("#stock-pending").hidden = !n;
-  $("#stock-pending").textContent = n ? `Gjøremål: ${n} ${n === 1 ? "utsjekk" : "utsjekk"} av spolene dine fra RFID-leseren må godkjennes – trykk for å se` : "";
+  const parts = [myTodos().length && `${myTodos().length} utsjekk fra RFID-leseren må godkjennes`, mySpoolsComing().length && `${mySpoolsComing().length} tom${mySpoolsComing().length === 1 ? "" : "me"} spole${mySpoolsComing().length === 1 ? "" : "r"} venter på at du bekrefter mottak`].filter(Boolean);
+  $("#stock-pending").textContent = n ? `Gjøremål: ${parts.join(", ")} – trykk for å se` : "";
 }
 
 // ---------- Gjøre opp med Vipps ----------
@@ -1163,6 +1184,17 @@ function spoolPrice(typeName) {
 }
 
 let vippsLoan = null;
+let vippsParts = null;
+
+// Beløp i Vipps-vinduet: uten spoletillegg når låntakeren leverer spolen tilbake.
+function setVippsAmount() {
+  const p = vippsParts;
+  const back = $("#v-return").checked;
+  const kr = p.filamentKr + (back ? 0 : p.spoolKr);
+  $("#v-amount").value = kr;
+  const how = back ? p.how.replace(/ \+ spole .*$/, "") + " (spolen leveres tilbake)" : p.how;
+  $("#v-price").textContent = `(${how}; pris fra ${p.src})`;
+}
 function openVipps(loanId) {
   const l = state.loans.find((x) => x.id === loanId);
   if (!l) return;
@@ -1184,8 +1216,10 @@ function openVipps(loanId) {
   $("#v-to").textContent = l.owner || "Ukjent eier";
   $("#v-phone").textContent = phone ? fmtPhone(phone) : `${l.owner || "Eieren"} har ikke lagt inn mobilnummer (kan gjøres under kontoen din).`;
   $("#v-phone").dataset.value = phone;
-  $("#v-amount").value = kr;
-  $("#v-price").textContent = `(${how}; pris fra ${price.src})`;
+  vippsParts = { filamentKr, spoolKr, how, src: price.src, total, used };
+  $("#v-return").checked = false;
+  $("#v-return-label").hidden = !spoolKr;
+  setVippsAmount();
   $("#v-msg").textContent = `Filament Universet: ${what}`;
   $("#v-error").textContent = "";
   $("#vipps").showModal();
@@ -1196,13 +1230,39 @@ async function vippsSubmit(e) {
   if (e.submitter?.value !== "paid") return $("#vipps").close();
   const kr = Math.round(Number($("#v-amount").value));
   if (!(kr > 0)) return ($("#v-error").textContent = "Skriv beløpet som ble betalt.");
+  const back = $("#v-return").checked && vippsParts.spoolKr > 0;
   try {
-    await closeLoan(vippsLoan.spool, "settledAt", `Betalt med Vipps: ${kr} kr`);
+    const id = vippsLoan.id;
+    await saveDoc((doc) => {
+      const l = doc.loans.find((x) => x.id === id);
+      if (!l) return "Lånet finnes ikke lenger.";
+      l.settledAt = new Date().toISOString();
+      l.settledBy = userName();
+      l.note = `Betalt med Vipps: ${kr} kr${back ? " (spolen leveres tilbake)" : ""}`;
+      if (back) l.spoolReturn = { promisedAt: l.settledAt };
+    }, `Lån gjort opp med Vipps: ${kr} kr${back ? ", spole leveres tilbake" : ""} (${userName()})`, "loans");
     $("#vipps").close();
     render();
   } catch (err) {
     $("#v-error").textContent = err.message;
   }
+}
+
+async function spoolReceived(loanId, btn) {
+  if (!confirmed(btn, "Mottatt? Trykk igjen")) return;
+  btn.disabled = true;
+  try {
+    await saveDoc((doc) => {
+      const l = doc.loans.find((x) => x.id === loanId);
+      if (!l?.spoolReturn) return "Finner ikke spolen.";
+      l.spoolReturn.receivedAt = new Date().toISOString();
+      l.spoolReturn.receivedBy = userName();
+    }, `Tom spole mottatt (${userName()})`, "loans");
+  } catch (err) {
+    $("#loan-error").textContent = err.message;
+    btn.disabled = false;
+  }
+  render();
 }
 
 async function copyValue(id, btn) {
@@ -3232,6 +3292,8 @@ document.addEventListener("click", (e) => {
   }
   const ams = e.target.closest("button[data-ams]");
   if (ams) return amsAction(ams.dataset.ams, ams);
+  const recv = e.target.closest("[data-spool-received]");
+  if (recv) return spoolReceived(recv.dataset.spoolReceived, recv);
   const vippsBtn = e.target.closest("[data-vipps]");
   if (vippsBtn) return openVipps(vippsBtn.dataset.vipps);
   const copyBtn = e.target.closest("[data-copy]");
@@ -3301,6 +3363,7 @@ $("#rk-close").addEventListener("click", () => $("#rekey").close());
 $("#login form").addEventListener("submit", login);
 $("#forgot form").addEventListener("submit", forgot);
 $("#vipps form").addEventListener("submit", vippsSubmit);
+$("#v-return").addEventListener("change", setVippsAmount);
 $("#a-phone").addEventListener("change", (e) => savePhone(e.target));
 $("#a-email").addEventListener("change", (e) => saveEmail(userName(), e.target, $("#a-msg")));
 // Enter i et felt i kontovinduet skal lagre feltet, ikke trykke første knapp (Logg ut).
