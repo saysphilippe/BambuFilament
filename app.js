@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008172517";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008172517";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008173239";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008173239";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1217,6 +1217,14 @@ function openVipps(loanId) {
   $("#v-phone").textContent = phone ? fmtPhone(phone) : `${l.owner || "Eieren"} har ikke lagt inn mobilnummer (kan gjøres under kontoen din).`;
   $("#v-phone").dataset.value = phone;
   vippsParts = { filamentKr, spoolKr, how, src: price.src, total, used };
+  // Åpne Vipps: Android trenger en intent-lenke (pakken no.dnb.vipps, ellers Google Play),
+  // iPhone bruker vipps://. På PC finnes ikke Vipps, så knappen byttes ut med en beskjed.
+  const ua = navigator.userAgent;
+  const open = $("#v-open");
+  const android = /Android/i.test(ua), ios = /iPhone|iPad|iPod/i.test(ua);
+  open.hidden = !(android || ios);
+  open.href = android ? "intent://#Intent;package=no.dnb.vipps;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dno.dnb.vipps;end" : "vipps://";
+  $("#v-desktop").hidden = android || ios;
   $("#v-return").checked = false;
   $("#v-return-label").hidden = !spoolKr;
   setVippsAmount();

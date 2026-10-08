@@ -321,6 +321,8 @@ dialog label input, dialog label select, dialog label textarea { margin-top: 4px
 .vipps-amount { display: flex; align-items: center; gap: 6px; }
 .vipps-amount input { width: 100px; }
 #v-price { font-size: 12px; }
+.v-desktop { align-self: center; font-size: 13px; }
+#v-open[hidden], .v-desktop[hidden] { display: none; }
 .loan-actions select { width: auto; padding: 4px 8px; font-size: 13px; }
 .loan-state.pending { background: color-mix(in srgb, var(--out) 30%, transparent); }
 .pending-box { margin-bottom: 14px; padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--out) 14%, transparent); }
