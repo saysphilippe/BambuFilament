@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008170945";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008170945";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008172139";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008172139";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1151,9 +1151,12 @@ function spoolPrice(typeName) {
   const spool = p?.withSpool && p?.refill && p.withSpool > p.refill
     ? { kr: Math.round(kr(p.withSpool - p.refill) / 5) * 5, src: `${String(p.withSpool).replace(".", ",")} € med spole − ${String(p.refill).replace(".", ",")} € refill` }
     : { kr: st.emptySpoolPrice, src: "spoletillegg fra Innstillinger" };
-  // Filamentet prises som refill (uten spole) når det finnes, ellers laveste pris.
-  const eur = p?.refill || p?.price;
-  if (eur) return { kr: Math.round(kr(eur) / 10) * 10, spool, src: `Bambu-butikken: ${String(eur).replace(".", ",")} € × ${String(st.eurRate).replace(".", ",")}${p?.refill ? " (refill)" : ""}` };
+  const fmt = (x) => String(x).replace(".", ",");
+  // Filamentet prises uten spole: refill-prisen når den finnes. Selges typen bare med spole,
+  // trekkes spoletillegget fra, så spolen ikke betales to ganger når rullen er brukt opp.
+  if (p?.refill) return { kr: Math.round(kr(p.refill) / 10) * 10, spool, src: `Bambu-butikken: ${fmt(p.refill)} € refill × ${fmt(st.eurRate)}` };
+  const eur = p?.withSpool || p?.price;
+  if (eur) return { kr: Math.max(0, Math.round((kr(eur) - spool.kr) / 10) * 10), spool, src: `Bambu-butikken: ${fmt(eur)} € med spole × ${fmt(st.eurRate)} − spoletillegg ${spool.kr} kr` };
   return { kr: st.spoolPrice, spool, src: "standardpris" };
 }
 
