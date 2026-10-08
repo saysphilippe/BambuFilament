@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008201339";
-import { toRecords } from "./worker/src/records.js?v=20261008201339";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008201339";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008202948";
+import { toRecords } from "./worker/src/records.js?v=20261008202948";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008202948";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -3128,14 +3128,22 @@ function renderNews() {
   const since = Math.max(new Date(c.baseline).getTime() + DAY, days ? Date.now() - days * DAY : 0);
   const owned = ownedKeys();
   const isNew = (d) => d && new Date(d).getTime() > since;
+  // Utgått: ikke i butikken (eller typen har ingen produktside) og kjent i over 60 dager.
+  // Nye farger som ikke er i butikken ennå, og det noen venter på, vises fortsatt.
+  // Utsolgte farger finnes i butikken og vises alltid.
+  const gone = (x, t) => (x.stock === "missing" || (!x.stock && !t.product)) &&
+    Date.now() - new Date(x.firstSeen).getTime() > 60 * DAY && !wishersOf(x.key).length;
+  const goneCount = c.types.reduce((a, t) => a + t.colors.filter((x) => gone(x, t)).length, 0);
+  const liveColors = (t) => t.colors.filter((x) => !gone(x, t));
+  const liveTypes = c.types.filter((t) => liveColors(t).length);
 
   const newTypes = c.types.filter((t) => isNew(t.firstSeen)).sort((a, b) => b.firstSeen.localeCompare(a.firstSeen));
   let newColors = c.types
-    .flatMap((t) => t.colors.filter((x) => isNew(x.firstSeen)).map((x) => ({ ...x, t })))
+    .flatMap((t) => t.colors.filter((x) => isNew(x.firstSeen) && !gone(x, t)).map((x) => ({ ...x, t })))
     .sort((a, b) => b.firstSeen.localeCompare(a.firstSeen) || a.t.type.localeCompare(b.t.type));
   if (state.newsOnlyMissing) newColors = newColors.filter((x) => !owned[x.key]);
   newColors = newColors.filter((x) => stockMatch(x.stock));
-  const visibleColors = (t) => t.colors.filter((x) => stockMatch(x.stock) && (!state.newsOnlyMissing || !owned[x.key]));
+  const visibleColors = (t) => t.colors.filter((x) => !gone(x, t) && stockMatch(x.stock) && (!state.newsOnlyMissing || !owned[x.key]));
   const shownTypes = c.types.filter((t) => visibleColors(t).length);
   const shownNewTypes = newTypes.filter((t) => visibleColors(t).length);
 
@@ -3172,7 +3180,8 @@ function renderNews() {
       <div>
         <b>${{ new: "Nye farger og typer fra Bambu Lab", all: "Alt filament fra Bambu Lab", wait: "Det venter vi på" }[sub]}</b>
         <p class="hint">Hentes daglig fra Bambu Lab sin offisielle fargeliste (Bambu Studio) og nettbutikken.
-        ${c.updated ? `Sist sjekket ${fmtTime(c.updated)}.` : ""} Lenkene går til produktsiden i Bambu-butikken.</p>
+        ${c.updated ? `Sist sjekket ${fmtTime(c.updated)}.` : ""} Lenkene går til produktsiden i Bambu-butikken.
+        ${goneCount ? `${goneCount} utgåtte farger som ikke har vært i butikken på over 60 dager, er skjult. Utsolgte farger vises.` : ""}</p>
       </div>
       <div class="news-controls">
         <select id="news-days" aria-label="Periode" ${sub === "new" ? "" : "hidden"}>
@@ -3217,21 +3226,22 @@ function renderNews() {
     ` : ""}
 
     ${sub === "all" ? `
-    <h2 class="section-title">Alle typer fra Bambu <span class="muted">${shownTypes.length}${shownTypes.length !== c.types.length ? ` av ${c.types.length}` : ""}</span></h2>
+    <h2 class="section-title">Alle typer fra Bambu <span class="muted">${shownTypes.length}${shownTypes.length !== liveTypes.length ? ` av ${liveTypes.length}` : ""}</span></h2>
     <p class="hint">Trykk på en type for å se fargene, lagerstatus i butikken og venteliste.</p>
     <div class="all-types">${shownTypes.map((t) => {
-      const have = t.colors.filter((x) => owned[x.key]).length;
-      const inStore = t.colors.filter((x) => x.stock === "in").length;
-      const known = t.colors.some((x) => x.stock);
+      const colors = liveColors(t);
+      const have = colors.filter((x) => owned[x.key]).length;
+      const inStore = colors.filter((x) => x.stock === "in").length;
+      const known = colors.some((x) => x.stock);
       return `<details class="all-type" data-type="${esc(t.type)}" ${state.openTypes.has(t.type) ? "open" : ""}>
         <summary>
           <div class="all-type-head">
             <b>${esc(t.type)}</b>
-            <span class="muted">${t.colors.length} farger${known ? ` · ${inStore} på lager i butikken` : ""}${have ? ` · ${have} hos oss` : ""}</span>
+            <span class="muted">${colors.length} farger${known ? ` · ${inStore} på lager i butikken` : ""}${have ? ` · ${have} hos oss` : ""}</span>
             ${typePrice(t)}
             ${productLink(t, "Produktside")}
           </div>
-          <div class="strip big">${t.colors.map((x) => `<span class="${owned[x.key] ? "have" : ""} ${x.stock && x.stock !== "in" ? "na" : ""}"
+          <div class="strip big">${colors.map((x) => `<span class="${owned[x.key] ? "have" : ""} ${x.stock && x.stock !== "in" ? "na" : ""}"
             style="background:${swatch({ colors: x.hex.length ? x.hex : ["#cccccc"] })}"
             title="${esc(x.name)}${STOCK[x.stock] ? " – " + STOCK[x.stock][0] : ""}${owned[x.key] ? " – har: " + esc(owned[x.key].join(", ")) : ""}"></span>`).join("")}</div>
         </summary>
