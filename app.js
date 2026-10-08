@@ -1,5 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008180542";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008180542";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008182548";
+import { toRecords } from "./worker/src/records.js?v=20261008182548";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008182548";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -168,10 +169,12 @@ async function loadFile(file) {
 async function loadDoc() {
   const auth = await loadFile("users");
   if (!token()) return { ...auth, spools: [], ams: {}, library: {}, wishes: {} };
-  const [main, shared, activity, contacts, loans] = await Promise.all([
-    loadFile("spools"), loadFile("shared"), loadFile("activity"), loadFile("contacts").catch(() => FILES.contacts.empty()),
-    loadFile("loans").catch(() => FILES.loans.empty()),
+  // Spoler, lån, delte data og statistikk ligger i databasen (via Workeren); e-post/mobil i GitHub.
+  const [db, contacts] = await Promise.all([
+    dbCall("/db/load", { files: [...DB_FILES] }),
+    loadFile("contacts").catch(() => FILES.contacts.empty()),
   ]);
+  const { spools: main, shared, activity, loans } = db;
   state.activity = cleanActivity(activity);
   state.loans = cleanLoans(loans);
   state.contacts = cleanContacts(contacts);
@@ -181,11 +184,99 @@ async function loadDoc() {
   };
 }
 
-// Henter siste versjon av filen, lar mutate endre den, og lagrer. Prøver på nytt ved konflikt.
-// file: "users" (brukere og innlogging), "spools" (spoler) eller "shared" (ams, library, wishes).
+// Data som ligger i databasen (Cloudflare D1 via Workeren). Resten (brukere, e-post/mobil) i GitHub.
+const DB_FILES = new Set(["spools", "shared", "activity", "loans"]);
+
+// Kall til Workerens database-endepunkter med innloggingens GitHub-token.
+async function dbCall(path, body) {
+  try {
+    return await proxy(path, body, token());
+  } catch (err) {
+    if (err.status === 401) {
+      setSession(null);
+      throw new Error("Innloggingen er ikke lenger gyldig. Logg inn på nytt.");
+    }
+    throw err;
+  }
+}
+
+function normalizeDoc(file, doc) {
+  if (file === "users") {
+    doc.users ||= [];
+  } else if (file === "activity") {
+    doc.logins = Array.isArray(doc.logins) ? doc.logins : [];
+    doc.seen = doc.seen && typeof doc.seen === "object" ? doc.seen : {};
+  } else if (file === "loans") {
+    doc.loans = Array.isArray(doc.loans) ? doc.loans : [];
+  } else if (file === "contacts") {
+    doc.emails = doc.emails && typeof doc.emails === "object" ? doc.emails : {};
+    doc.pending = Array.isArray(doc.pending) ? doc.pending : [];
+  } else if (file === "spools") {
+    doc.spools ||= [];
+    // Brukere ligger i auth-repoet og delte data i shared (eldre versjoner la dem her).
+    delete doc.users;
+    delete doc.ams;
+    delete doc.library;
+    delete doc.wishes;
+  } else {
+    doc.ams ||= {};
+    doc.library ||= {};
+    doc.wishes ||= {};
+  }
+  return doc;
+}
+
+// Oppdaterer siden etter lagring.
+function afterSave(file, doc) {
+  if (file === "activity") {
+    state.activity = cleanActivity(doc);
+    return state.doc;
+  }
+  if (file === "contacts") {
+    state.contacts = cleanContacts(doc);
+    return state.doc;
+  }
+  if (file === "loans") {
+    state.loans = cleanLoans(doc);
+    return state.doc;
+  }
+  const merged = file === "users" ? { ...state.doc, users: doc.users }
+    : file === "spools" ? { ...state.doc, spools: doc.spools, cards: doc.cards || {}, settings: doc.settings || {} }
+    : { ...state.doc, ams: doc.ams, library: doc.library, wishes: doc.wishes };
+  setDoc(merged);
+  return state.doc;
+}
+
+// Database: henter siste versjon, lar mutate endre den, og sender bare postene som er endret
+// (spole, lån, kort …). Samtidige endringer på ulike poster kolliderer derfor ikke.
+async function saveDb(mutate, message, file) {
+  const doc = normalizeDoc(file, (await dbCall("/db/load", { files: [file] }))[file]);
+  const key = (r) => `${r.coll}\u0000${r.id}`;
+  const before = new Map(toRecords(file, doc).map((r) => [key(r), JSON.stringify(r.data)]));
+  const error = mutate(doc);
+  if (error) throw new Error(error);
+  const ops = [];
+  const kept = new Set();
+  for (const r of toRecords(file, doc)) {
+    kept.add(key(r));
+    if (before.get(key(r)) !== JSON.stringify(r.data)) ops.push({ coll: r.coll, id: r.id, data: r.data });
+  }
+  for (const k of before.keys()) {
+    if (kept.has(k)) continue;
+    const [coll, id] = k.split("\u0000");
+    ops.push({ coll, id, data: null });
+  }
+  if (ops.length) await dbCall("/db/patch", { ops, message });
+  return afterSave(file, doc);
+}
+
+// Henter siste versjon av filen, lar mutate endre den, og lagrer.
+// file: "spools", "shared", "activity", "loans" (databasen) eller "users"/"contacts" (GitHub,
+// prøver på nytt ved konflikt).
 async function saveDoc(mutate, message, file = "spools") {
   if (DEMO) throw new Error("Demo-modus: endringer lagres ikke.");
   if (!token()) throw new Error("Logg inn for å kunne endre.");
+  if (DB_FILES.has(file)) return saveDb(mutate, message, file);
   const API = apiUrl(file);
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(`${API}?ref=${BRANCH}`, { headers: headers({ Accept: "application/vnd.github+json" }), cache: "no-store" });
@@ -197,28 +288,7 @@ async function saveDoc(mutate, message, file = "spools") {
     } else if (res.status !== 404) {
       throw new Error(`GitHub svarte ${res.status} ved henting`);
     }
-    if (file === "users") {
-      doc.users ||= [];
-    } else if (file === "activity") {
-      doc.logins = Array.isArray(doc.logins) ? doc.logins : [];
-      doc.seen = doc.seen && typeof doc.seen === "object" ? doc.seen : {};
-    } else if (file === "loans") {
-      doc.loans = Array.isArray(doc.loans) ? doc.loans : [];
-    } else if (file === "contacts") {
-      doc.emails = doc.emails && typeof doc.emails === "object" ? doc.emails : {};
-      doc.pending = Array.isArray(doc.pending) ? doc.pending : [];
-    } else if (file === "spools") {
-      doc.spools ||= [];
-      // Brukere ligger i auth-repoet og delte data i shared.json (eldre versjoner la dem her).
-      delete doc.users;
-      delete doc.ams;
-      delete doc.library;
-      delete doc.wishes;
-    } else {
-      doc.ams ||= {};
-      doc.library ||= {};
-      doc.wishes ||= {};
-    }
+    normalizeDoc(file, doc);
     const error = mutate(doc);
     if (error) throw new Error(error);
     const put = await fetch(API, {
@@ -226,25 +296,7 @@ async function saveDoc(mutate, message, file = "spools") {
       headers: headers({ Accept: "application/vnd.github+json", "Content-Type": "application/json" }),
       body: JSON.stringify({ message, branch: BRANCH, sha, content: encodeBase64(JSON.stringify(doc, null, 2) + "\n") }),
     });
-    if (put.ok) {
-      if (file === "activity") {
-        state.activity = cleanActivity(doc);
-        return state.doc;
-      }
-      if (file === "contacts") {
-        state.contacts = cleanContacts(doc);
-        return state.doc;
-      }
-      if (file === "loans") {
-        state.loans = cleanLoans(doc);
-        return state.doc;
-      }
-      const merged = file === "users" ? { ...state.doc, users: doc.users }
-        : file === "spools" ? { ...state.doc, spools: doc.spools, cards: doc.cards || {}, settings: doc.settings || {} }
-        : { ...state.doc, ams: doc.ams, library: doc.library, wishes: doc.wishes };
-      setDoc(merged);
-      return state.doc;
-    }
+    if (put.ok) return afterSave(file, doc);
     if (put.status === 401) {
       setSession(null);
       throw new Error("Innloggingen er ikke lenger gyldig (tokenen er utløpt eller trukket tilbake). Logg inn på nytt.");

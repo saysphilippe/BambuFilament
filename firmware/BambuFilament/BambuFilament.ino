@@ -32,7 +32,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "config.h"
-#include "github_roots.h"
+#include "worker_roots.h"
 
 static const int SECTORS = 5;               // Bambu-dataene ligger i sektor 0–4 (blokk 0–19)
 static const int BLOCKS = SECTORS * 4;
@@ -76,15 +76,15 @@ long waitMinutes = 0;                       // ved SCAN_NOOP: minutter til utsje
 
 String cardUser;                            // bruker fra personlig brikke, gjelder til cardUntil
 unsigned long cardUntil = 0;
-// Tidsvinduer, i minutter. Settes på siden under Innstillinger (spools.json: "settings"),
-// og leses hver gang et kort eller en spole skannes. Verdiene i config.h er standard.
+// Tidsvinduer, i minutter. Settes på siden under Innstillinger; Workeren sender dem med når
+// et kort tappes (utsjekk-vinduet brukes av Workeren selv). Verdiene i config.h er standard.
 float cardMinutes = CARD_SESSION_SECONDS / 60.0;
 long checkoutMinutes = CHECKOUT_AFTER_MINUTES;
 unsigned long cardMs() { return (unsigned long)(cardMinutes * 60000.0); }
 
 void readSettings(JsonDocument &doc) {
-  float c = doc["settings"]["cardMinutes"] | cardMinutes;
-  long o = doc["settings"]["checkoutMinutes"] | checkoutMinutes;
+  float c = doc["cardMinutes"] | cardMinutes;
+  long o = doc["checkoutMinutes"] | checkoutMinutes;
   if (c >= 0.25 && c <= 60) cardMinutes = c;
   if (o >= 1 && o <= 1440) checkoutMinutes = o;
 }
@@ -323,201 +323,80 @@ bool readTag(uint8_t blocks[BLOCKS][16], bool &notBambu) {
   return true;
 }
 
-// ---------- GitHub ----------
+// ---------- Workeren ----------
+//
+// Dataene ligger i en database bak Workeren (Filament Universet). Leseren sender én skanning
+// eller ett kort om gangen, og Workeren avgjør inn/ut og lagrer – ingen konflikter med andre
+// som lagrer samtidig. Tokenen er den samme som før (lesetilgang til BambuFilament-data holder).
 
-String apiUrl() {
-  return String("https://api.github.com/repos/") + GITHUB_REPO + "/contents/" + GITHUB_PATH;
-}
+#ifndef WORKER_URL
+#define WORKER_URL "https://bambufilament-proxy.saysphilippe.workers.dev"
+#endif
 
-void addHeaders(HTTPClient &http) {
-  http.addHeader("Authorization", String("Bearer ") + GITHUB_TOKEN);
-  http.addHeader("Accept", "application/vnd.github+json");
-  http.addHeader("User-Agent", "BambuFilament-ESP32");
-  http.addHeader("X-GitHub-Api-Version", "2022-11-28");
-}
-
-// Henter spools.json. Returnerer HTTP-status; fyller doc og sha ved 200.
-int fetchSpools(WiFiClientSecure &client, JsonDocument &doc, String &sha) {
+// POST til Workeren. Returnerer HTTP-status og fyller reply med svaret (JSON).
+int workerPost(const char *path, JsonDocument &body, JsonDocument &reply) {
+  connectWifi();
+  if (WiFi.status() != WL_CONNECTED) return -1;
+  // Sertifikatsjekk krever riktig klokke, så vent på NTP før tokenen sendes.
+  if (!waitForTime()) {
+    Serial.println("Klokken er ikke synkronisert (NTP) – kan ikke sjekke sertifikatet.");
+    return -1;
+  }
+  WiFiClientSecure client;
+  client.setCACert(WORKER_ROOT_CAS);        // sjekker at det faktisk er Workeren
   HTTPClient http;
-  http.begin(client, apiUrl() + "?ref=" + GITHUB_BRANCH);
-  addHeaders(http);
-  int code = http.GET();
-  if (code != 200) {
-    http.end();
-    return code;
-  }
-  int size = http.getSize();
-  if (size > MAX_RESPONSE_BYTES) {
-    Serial.printf("spools.json er for stor for leseren (%d byte, maks %d).\n", size, MAX_RESPONSE_BYTES);
-    http.end();
-    return -4;
-  }
-  JsonDocument meta;
-  DeserializationError err = deserializeJson(meta, http.getStream());
-  http.end();
-  if (err) return -1;
-
-  sha = meta["sha"].as<String>();
-  String b64 = meta["content"].as<String>();
-  b64.replace("\n", "");
-  size_t outLen = 0;
-  size_t cap = b64.length() * 3 / 4 + 4;
-  uint8_t *raw = (uint8_t *)malloc(cap);
-  if (!raw) return -2;
-  int rc = mbedtls_base64_decode(raw, cap, &outLen, (const uint8_t *)b64.c_str(), b64.length());
-  if (rc == 0) err = deserializeJson(doc, (const char *)raw, outLen);
-  free(raw);
-  return (rc == 0 && !err) ? 200 : -3;
-}
-
-// Lagrer spools.json. Returnerer HTTP-status (200/201 = OK, 409 = konflikt).
-int putSpools(WiFiClientSecure &client, JsonDocument &doc, const String &sha, const String &message) {
-  String json;
-  serializeJsonPretty(doc, json);
-  size_t cap = 4 * ((json.length() + 2) / 3) + 1;
-  uint8_t *b64 = (uint8_t *)malloc(cap);
-  if (!b64) return -2;
-  size_t b64Len = 0;
-  mbedtls_base64_encode(b64, cap, &b64Len, (const uint8_t *)json.c_str(), json.length());
-  json = String();
-
-  JsonDocument body;
-  body["message"] = message;
-  body["branch"] = GITHUB_BRANCH;
-  body["content"] = (const char *)b64;
-  if (sha.length()) body["sha"] = sha;
+  http.begin(client, String(WORKER_URL) + path);
+  http.addHeader("Authorization", String("Bearer ") + GITHUB_TOKEN);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("User-Agent", "BambuFilament-ESP32");
   String payload;
   serializeJson(body, payload);
-  free(b64);
-
-  HTTPClient http;
-  http.begin(client, apiUrl());
-  addHeaders(http);
-  http.addHeader("Content-Type", "application/json");
-  int code = http.PUT(payload);
+  int code = http.POST(payload);
+  if (code > 0 && deserializeJson(reply, http.getStream())) reply.clear();
   http.end();
+  if (code != 200) Serial.printf("Workeren svarte %d: %s\n", code, (const char *)(reply["error"] | ""));
   return code;
 }
 
 ScanResult uploadScan(const String &id, const String &blocksHex, String &summary) {
-  connectWifi();
-  if (WiFi.status() != WL_CONNECTED) return SCAN_FAIL;
-
-  // Sertifikatsjekk krever riktig klokke, så vent på NTP før tokenen sendes.
-  if (!waitForTime()) {
-    Serial.println("Klokken er ikke synkronisert (NTP) – kan ikke sjekke GitHub-sertifikatet.");
-    return SCAN_FAIL;
+  JsonDocument body, reply;
+  body["id"] = id;
+  body["blocks"] = blocksHex;
+  String by = currentUser();
+  if (by.length()) body["user"] = by;
+  if (strlen(OWNER)) body["owner"] = OWNER;
+  if (workerPost("/reader/scan", body, reply) != 200) return SCAN_FAIL;
+  String result = reply["result"] | "";
+  if (result == "noop") {
+    waitMinutes = reply["waitMinutes"] | 0;
+    summary = "allerede sjekket inn";
+    return SCAN_NOOP;
   }
-  WiFiClientSecure client;
-  client.setCACert(GITHUB_ROOT_CAS);        // sjekker at det faktisk er GitHub
-
-  for (int attempt = 1; attempt <= MAX_TRIES; attempt++) {
-    JsonDocument doc;
-    String sha;
-    int code = fetchSpools(client, doc, sha);
-    if (code == 404) {
-      doc["version"] = 1;
-      doc["spools"].to<JsonArray>();
-    } else if (code != 200) {
-      Serial.printf("Henting av spools.json feilet: %d\n", code);
-      return SCAN_FAIL;
-    }
-
-    JsonArray spools = doc["spools"].is<JsonArray>() ? doc["spools"].as<JsonArray>() : doc["spools"].to<JsonArray>();
-    String now = isoNow();
-    JsonObject spool;
-    for (JsonObject s : spools) {
-      if (s["id"] == id) { spool = s; break; }
-    }
-    bool isNew = spool.isNull();
-    if (isNew) {
-      spool = spools.add<JsonObject>();
-      spool["id"] = id;
-      spool["owner"] = currentUser();
-      spool["note"] = "";
-      spool["added"] = now;
-      spool["scans"] = 0;
-    }
-    readSettings(doc);
-    // Avgjør handlingen: ny eller ute -> inn; inne i minst checkoutMinutes -> ut.
-    bool checkOut = false;
-    if (!isNew && String(spool["status"] | "in") == "in") {
-      const char *since = spool["lastScan"] | spool["added"] | "";
-      JsonArray h = spool["history"].as<JsonArray>();
-      for (int i = (int)h.size() - 1; i >= 0; i--) {
-        if (String(h[i]["action"] | "") == "in") { since = h[i]["at"] | since; break; }
-      }
-      long minutes = (long)((time(nullptr) - parseIso(since)) / 60);
-      if (parseIso(since) && minutes < checkoutMinutes) {
-        waitMinutes = checkoutMinutes - minutes;
-        summary = "allerede sjekket inn";
-        return SCAN_NOOP;
-      }
-      checkOut = true;
-    }
-    const char *action = checkOut ? "out" : "in";
-    spool["status"] = action;
-    spool["blocks"] = blocksHex;
-    spool["lastScan"] = now;
-    spool["scans"] = spool["scans"].as<int>() + 1;
-
-    JsonArray history = spool["history"].is<JsonArray>() ? spool["history"].as<JsonArray>() : spool["history"].to<JsonArray>();
-    JsonObject event = history.add<JsonObject>();
-    event["at"] = now;
-    event["action"] = action;
-    String by = currentUser();
-    if (by.length()) event["by"] = by;
-    event["dev"] = "reader";
-    while (history.size() > MAX_HISTORY) history.remove(0);
-
-    summary = String(checkOut ? "sjekket ut" : "sjekket inn") + (isNew ? ", ny spole" : "");
-    code = putSpools(client, doc, sha, String(checkOut ? "Utsjekk " : "Innsjekk ") + id.substring(0, 8) + " (" + (by.length() ? by : "ukjent") + ")");
-    if (code == 200 || code == 201) return checkOut ? SCAN_OUT : SCAN_IN;
-    Serial.printf("Lagring feilet: %d (forsøk %d)\n", code, attempt);
-    if (code != 409) return SCAN_FAIL;
-    delay(500);
-  }
-  return SCAN_FAIL;
+  bool isNew = reply["isNew"] | false;
+  summary = String(result == "out" ? "sjekket ut" : "sjekket inn") + (isNew ? ", ny spole" : "");
+  return result == "out" ? SCAN_OUT : result == "in" ? SCAN_IN : SCAN_FAIL;
 }
 
-// RFID-kort: slår opp brukeren i spools.json ("cards"). Et nytt kort registreres uten navn,
-// så navnet kan legges til under «RFID-kort» på siden.
+// RFID-kort: Workeren slår opp navnet (eller registrerer et nytt kort uten navn).
 // Returnerer 1 = kort med navn (brukeren settes), 0 = kort uten navn, 2 = nytt kort, -1 = feil.
 int handleCard(const String &uid) {
-  connectWifi();
-  if (WiFi.status() != WL_CONNECTED || !waitForTime()) return -1;
-  WiFiClientSecure client;
-  client.setCACert(GITHUB_ROOT_CAS);
-  for (int attempt = 1; attempt <= MAX_TRIES; attempt++) {
-    JsonDocument doc;
-    String sha;
-    int code = fetchSpools(client, doc, sha);
-    if (code != 200) return -1;
-    readSettings(doc);
-    JsonVariant card = doc["cards"][uid];
-    if (!card.isNull()) {
-      // Eldre format: "UID": "navn". Nytt: "UID": { "user": "navn", ... }.
-      String user = card.is<const char *>() ? card.as<String>() : String(card["user"] | "");
-      if (!user.length()) return 0;
-      cardUser = user;
-      cardUntil = millis() + cardMs();
-      Serial.printf("Kort %s: %s (i %.1f minutter)\n", uid.c_str(), user.c_str(), cardMinutes);
-      return 1;
-    }
-    JsonObject cards = doc["cards"].is<JsonObject>() ? doc["cards"].as<JsonObject>() : doc["cards"].to<JsonObject>();
-    JsonObject added = cards[uid].to<JsonObject>();
-    added["user"] = "";
-    added["added"] = isoNow();
-    if (strlen(OWNER)) added["reader"] = OWNER;
-    code = putSpools(client, doc, sha, String("Nytt RFID-kort ") + uid);
-    if (code == 200 || code == 201) {
-      Serial.printf("Nytt kort %s registrert – legg til navn under RFID-kort på siden.\n", uid.c_str());
-      return 2;
-    }
-    if (code != 409) return -1;
-    delay(500);
+  JsonDocument body, reply;
+  body["uid"] = uid;
+  if (strlen(OWNER)) body["reader"] = OWNER;
+  if (workerPost("/reader/card", body, reply) != 200) return -1;
+  readSettings(reply);
+  String status = reply["status"] | "";
+  if (status == "known") {
+    cardUser = reply["user"] | "";
+    cardUntil = millis() + cardMs();
+    Serial.printf("Kort %s: %s (i %.1f minutter)\n", uid.c_str(), cardUser.c_str(), cardMinutes);
+    return 1;
   }
-  return -1;
+  if (status == "new") {
+    Serial.printf("Nytt kort %s registrert – legg til navn under RFID-kort på siden.\n", uid.c_str());
+    return 2;
+  }
+  return 0;
 }
 
 // ---------- Arduino ----------

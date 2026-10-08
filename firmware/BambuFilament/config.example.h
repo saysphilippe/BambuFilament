@@ -6,12 +6,12 @@
 #define WIFI_PASSWORD "passord"
 
 // Fine-grained token fra https://github.com/settings/personal-access-tokens
-// KUN repoet saysphilippe/BambuFilament-data, rettighet "Contents: Read and write".
-// Lag en egen token for hver leser, så den kan trekkes tilbake alene.
+// KUN repoet saysphilippe/BambuFilament-data, "Contents: Read" (eller Read and write).
+// Workeren bruker den til å sjekke at leseren har tilgang. Lag en egen token per leser.
 #define GITHUB_TOKEN  "github_pat_..."
-#define GITHUB_REPO   "saysphilippe/BambuFilament-data"
-#define GITHUB_BRANCH "main"
-#define GITHUB_PATH   "spools.json"
+
+// Workeren som tar imot skanninger og RFID-kort (lagrer i databasen).
+#define WORKER_URL    "https://bambufilament-proxy.saysphilippe.workers.dev"
 
 // Hvem som skanner når ingen personlig brikke er skannet, og eier av nye spoler da.
 // Deler flere leseren, kan den stå tom (""): da må eieren av spolen godkjenne hvem som tok den.

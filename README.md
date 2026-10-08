@@ -21,6 +21,23 @@ Bambu-spole ──RFID──> ESP32 + RC522 ──HTTPS──> spools.json i Bam
   Bambu Studio sin `filaments_color_codes.json`).
 - Hver spole identifiseres med Tray UID (blokk 9), så samme spole telles aldri to ganger.
 
+## Database
+
+Spoler (med historikk), RFID-kort, innstillinger, lån, delte AMS/bibliotek-data, venteliste og
+innloggingsstatistikk ligger i en Cloudflare D1-database (`filament-universet`, tabellen `records`:
+samling + nøkkel → JSON, se `worker/schema.sql` og `worker/src/records.js`). Brukerlisten
+(BambuFilament-auth) og e-post/mobil (`contacts.json` i BambuFilament-data) ligger fortsatt i GitHub.
+
+- Siden henter alt med `/db/load` og sender bare postene som er endret med `/db/patch`, så
+  samtidige endringer på ulike spoler/lån ikke kolliderer.
+- Leseren bruker `/reader/card` og `/reader/scan`; Workeren avgjør inn/ut i én operasjon.
+- Tilgang: GitHub-tokenen (samme som før) må kunne lese BambuFilament-data. Workeren sjekker den mot
+  GitHub og husker svaret i 10–15 minutter.
+- Sikkerhetskopi: hver natt kl. 03 UTC skriver Workeren hele databasen til `backup/*.json` i
+  BambuFilament-data. D1 har i tillegg egen gjenoppretting 30 dager tilbake.
+- Flytte data fra JSON-filer på nytt: `node scripts/import-d1.mjs ../BambuFilament-data > import.sql`,
+  så `npx wrangler d1 execute filament-universet --remote --file import.sql` i `worker/`.
+
 ## Sikkerhet
 
 - **Ingen data før innlogging.** Nettsiden viser bare en innloggingsside til man er logget inn.

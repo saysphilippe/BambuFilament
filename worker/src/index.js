@@ -10,6 +10,7 @@
 // (RESET_KV), lagt inn av siden når administrator er innlogget (/reset-token).
 
 import { connect } from "cloudflare:sockets";
+import { FILE_COLLS, toRecords, fromRecords } from "./records.js";
 
 const API = "https://api.bambulab.com";
 const MQTT_HOST = "us.mqtt.bambulab.com";
@@ -65,6 +66,7 @@ const LIMITS = {
   "/ams": "DATA_LIMIT", "/library": "DATA_LIMIT",
   "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
   "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/reset-token": "AUTH_LIMIT", "/approve": "AUTH_LIMIT",
+  "/db/load": "DB_LIMIT", "/db/patch": "DB_LIMIT", "/reader/card": "DB_LIMIT", "/reader/scan": "DB_LIMIT",
 };
 
 export default {
@@ -77,6 +79,9 @@ export default {
     // Godkjenning fra lenken i e-posten til administrator: egen HTML-side, uten Origin-sjekk
     // (den er beskyttet av en signert lenke).
     if (new URL(request.url).pathname === "/approve") return approvePage(request, env);
+    // Leseren (ESP32) sender ingen Origin; den har sin egen token og egne endepunkter.
+    const reqPath = new URL(request.url).pathname;
+    if (reqPath.startsWith("/reader/")) return readerRequest(request, env, reqPath);
     if (request.method !== "POST") return json({ error: "Bruk POST" }, 405, origin);
     if (!allowed.includes(sent)) return json({ error: "Ukjent opprinnelse" }, 403, origin);
 
@@ -111,6 +116,12 @@ export default {
           }
           return json(path === "/reset" ? await sendReset(who, env) : await register(body, env), 200, origin);
         }
+        case "/db/load":
+          await requireUser(token, env);
+          return json(await dbLoad(body, env), 200, origin);
+        case "/db/patch":
+          await requireUser(token, env);
+          return json(await dbPatch(body, env), 200, origin);
         case "/reset-token":
           if (!token) return json({ error: "Mangler GitHub-token" }, 401, origin);
           return json(await saveResetToken(token, env), 200, origin);
@@ -130,7 +141,29 @@ export default {
       return json({ error: err.message || String(err) }, err.status || 502, origin);
     }
   },
+
+  // Daglig sikkerhetskopi (se [triggers] i wrangler.toml).
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(backupToGitHub(env));
+  },
 };
+
+async function readerRequest(request, env, path) {
+  const reply = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+  if (request.method !== "POST") return reply({ error: "Bruk POST" }, 405);
+  try {
+    const ip = request.headers.get("CF-Connecting-IP") || "ukjent";
+    if (env.DB_LIMIT && !(await env.DB_LIMIT.limit({ key: `${path}:${ip}` })).success) return reply({ error: "For mange forsøk" }, 429);
+    const tok = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    await requireUser(tok, env);
+    const body = await request.json().catch(() => ({}));
+    if (path === "/reader/card") return reply(await readerCard(body, env));
+    if (path === "/reader/scan") return reply(await readerScan(body, env));
+    return reply({ error: "Ukjent endepunkt" }, 404);
+  } catch (err) {
+    return reply({ error: err.message || String(err) }, err.status || 502);
+  }
+}
 
 // ---------- Innlogging ----------
 
@@ -892,4 +925,141 @@ async function sendMail(env, to, subject, text, html) {
     clearTimeout(timer);
     socket.close().catch(() => {});
   }
+}
+
+// ---------- Database (Cloudflare D1) ----------
+//
+// Spoler, lån, RFID-kort, innstillinger, delte AMS/bibliotek-data, venteliste og
+// innloggingsstatistikk ligger i tabellen records (coll, id, data). Siden henter «filer»
+// (/db/load) og sender bare postene som er endret (/db/patch), så samtidige endringer på
+// ulike poster ikke kolliderer. Leseren bruker /reader/card og /reader/scan, der
+// inn/ut-avgjørelsen tas i Workeren. Tilgang: GitHub-tokenen må kunne lese BambuFilament-data
+// (samme token som siden og leserne bruker i dag).
+
+const DB_COLLS = new Set(Object.values(FILE_COLLS).flat());
+const AUTH_TTL_MS = 10 * 60 * 1000;
+const authCache = new Map();
+
+async function sha256Hex(text) {
+  const d = await crypto.subtle.digest("SHA-256", utf8(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Sjekker tokenen mot GitHub, med hurtigbuffer (minne + KV) så ikke hvert kall går til GitHub.
+async function requireUser(tok, env) {
+  if (!tok) throw fail("Logg inn først.", 401);
+  // Bare ved lokal testing (wrangler dev med DEV_TOKEN i worker/.dev.vars); ikke satt i produksjon.
+  if (env.DEV_TOKEN && tok === env.DEV_TOKEN) return;
+  const key = await sha256Hex(tok);
+  const hit = authCache.get(key);
+  if (hit && hit > Date.now()) return;
+  if (env.RESET_KV && (await env.RESET_KV.get(`auth:${key}`))) {
+    authCache.set(key, Date.now() + AUTH_TTL_MS);
+    return;
+  }
+  if (!(await isSiteUser(tok))) throw fail("Ugyldig eller utløpt token.", 401);
+  authCache.set(key, Date.now() + AUTH_TTL_MS);
+  if (env.RESET_KV) await env.RESET_KV.put(`auth:${key}`, "1", { expirationTtl: 900 });
+}
+
+async function loadRows(env, colls) {
+  const list = [...colls];
+  const marks = list.map(() => "?").join(",");
+  const { results } = await env.DB.prepare(`SELECT coll, id, data FROM records WHERE coll IN (${marks})`).bind(...list).all();
+  return results.map((r) => ({ coll: r.coll, id: r.id, data: JSON.parse(r.data) }));
+}
+
+async function dbLoad({ files }, env) {
+  const wanted = (Array.isArray(files) ? files : Object.keys(FILE_COLLS)).filter((f) => FILE_COLLS[f]);
+  const rows = await loadRows(env, new Set(wanted.flatMap((f) => FILE_COLLS[f])));
+  return Object.fromEntries(wanted.map((f) => [f, fromRecords(f, rows)]));
+}
+
+async function dbPatch({ ops }, env) {
+  if (!Array.isArray(ops) || !ops.length) return { ok: true, changed: 0 };
+  if (ops.length > 1000) throw fail("For mange endringer på én gang.");
+  const now = new Date().toISOString();
+  const stmts = ops.map((o) => {
+    if (!DB_COLLS.has(o?.coll) || typeof o.id !== "string" || !o.id || o.id.length > 300) throw fail("Ugyldig endring.");
+    if (o.data === null || o.data === undefined) return env.DB.prepare("DELETE FROM records WHERE coll = ? AND id = ?").bind(o.coll, o.id);
+    const json = JSON.stringify(o.data);
+    if (json.length > 200000) throw fail("En post er for stor.");
+    return env.DB.prepare("INSERT OR REPLACE INTO records (coll, id, data, updated) VALUES (?, ?, ?, ?)").bind(o.coll, o.id, json, now);
+  });
+  await env.DB.batch(stmts);
+  return { ok: true, changed: ops.length };
+}
+
+async function getRecord(env, coll, id) {
+  const r = await env.DB.prepare("SELECT data FROM records WHERE coll = ? AND id = ?").bind(coll, id).first();
+  return r ? JSON.parse(r.data) : null;
+}
+async function putRecord(env, coll, id, data) {
+  await env.DB.prepare("INSERT OR REPLACE INTO records (coll, id, data, updated) VALUES (?, ?, ?, ?)")
+    .bind(coll, id, JSON.stringify(data), new Date().toISOString()).run();
+}
+
+async function readerSettings(env) {
+  const s = (await getRecord(env, "settings", "settings")) || {};
+  const card = Number(s.cardMinutes), out = Number(s.checkoutMinutes);
+  return {
+    cardMinutes: card >= 0.25 && card <= 60 ? card : 1,
+    checkoutMinutes: out >= 1 && out <= 1440 ? Math.round(out) : 10,
+  };
+}
+
+// RFID-kort: kjent (med navn), uten navn, eller nytt (registreres uten navn).
+async function readerCard({ uid, reader }, env) {
+  uid = String(uid || "").toUpperCase();
+  if (!/^[0-9A-F]{8,20}$/.test(uid)) throw fail("Ugyldig kort-ID.");
+  const settings = await readerSettings(env);
+  const card = await getRecord(env, "cards", uid);
+  if (!card) {
+    await putRecord(env, "cards", uid, { user: "", added: new Date().toISOString(), ...(reader ? { reader: String(reader).slice(0, 40) } : {}) });
+    return { status: "new", ...settings };
+  }
+  const user = typeof card === "string" ? card : String(card.user || "");
+  return user ? { status: "known", user, ...settings } : { status: "unnamed", ...settings };
+}
+
+// Skanning av en spole: ny eller ute -> inn; inne i minst checkoutMinutes -> ut; ellers ingenting.
+async function readerScan({ id, blocks, user, owner }, env) {
+  id = String(id || "").toUpperCase();
+  if (!/^[0-9A-F]{8,32}$/.test(id)) throw fail("Ugyldig spole-ID.");
+  if (typeof blocks !== "string" || !/^[0-9A-F]{640}$/i.test(blocks)) throw fail("Ugyldige blokkdata.");
+  const by = String(user || "").slice(0, 40);
+  const now = new Date().toISOString();
+  const { checkoutMinutes } = await readerSettings(env);
+  let spool = await getRecord(env, "spools", id);
+  const isNew = !spool;
+  if (isNew) spool = { id, owner: by || String(owner || "").slice(0, 40), note: "", added: now, scans: 0, status: "in", history: [] };
+  let action = "in";
+  if (!isNew && (spool.status || "in") === "in") {
+    const lastIn = [...(spool.history || [])].reverse().find((e) => e.action === "in");
+    const since = new Date(lastIn?.at || spool.lastScan || spool.added || 0).getTime();
+    const minutes = Math.floor((Date.now() - since) / 60000);
+    if (since && minutes < checkoutMinutes) return { result: "noop", waitMinutes: checkoutMinutes - minutes };
+    action = "out";
+  }
+  spool.status = action;
+  spool.blocks = blocks.toUpperCase();
+  spool.lastScan = now;
+  spool.scans = (Number(spool.scans) || 0) + 1;
+  spool.history = [...(spool.history || []), { at: now, action, ...(by ? { by } : {}), dev: "reader" }].slice(-10);
+  await putRecord(env, "spools", id, spool);
+  return { result: action, isNew };
+}
+
+// Daglig sikkerhetskopi: hele databasen som JSON-filer i BambuFilament-data.
+async function backupToGitHub(env) {
+  const tok = await env.RESET_KV?.get("github-token");
+  if (!tok) return console.warn("Sikkerhetskopi: mangler GitHub-token i KV");
+  const docs = await dbLoad({}, env);
+  for (const [file, doc] of Object.entries(docs)) {
+    await updateJson(DATA_REPO, `backup/${file}.json`, tok, () => ({}), (d) => {
+      for (const k of Object.keys(d)) delete d[k];
+      Object.assign(d, doc, { backedUp: new Date().toISOString() });
+    }, `Sikkerhetskopi av databasen: ${file}`);
+  }
+  console.log("Sikkerhetskopi lagret", Object.keys(docs).join(", "));
 }

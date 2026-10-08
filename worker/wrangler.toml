@@ -19,6 +19,11 @@ namespace_id = "1003"
 simple = { limit = 120, period = 60 }
 
 [[ratelimits]]
+name = "DB_LIMIT"
+namespace_id = "1005"
+simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
 name = "EMAIL_LIMIT"
 namespace_id = "1004"
 simple = { limit = 1, period = 60 }
@@ -28,3 +33,14 @@ simple = { limit = 1, period = 60 }
 [[kv_namespaces]]
 binding = "RESET_KV"
 id = "0e498e5e33d14e12b632744ac454aead"
+
+# Database for spoler, lån, RFID-kort, innstillinger, delte AMS/bibliotek-data, venteliste og
+# innloggingsstatistikk (tabellen records, se schema.sql). Brukerliste og e-post/mobil ligger i GitHub.
+[[d1_databases]]
+binding = "DB"
+database_name = "filament-universet"
+database_id = "b37e1663-4cfc-4b40-9533-96952e18092c"
+
+# Daglig sikkerhetskopi av databasen til BambuFilament-data (JSON), kl. 03:00 UTC.
+[triggers]
+crons = ["0 3 * * *"]

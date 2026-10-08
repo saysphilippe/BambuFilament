@@ -77,7 +77,7 @@ li { margin: 4px 0; }
 <div class="wrap">
   <div class="eyebrow">Filament Universet · RFID-leser</div>
   <h1>Bygg din egen leser</h1>
-  <p class="lede">Velg ESP32-kortet du har. Siden gir deg riktige pinner, en ferdig <code>config.h</code>, koblingsskjema og kommandoene for å laste opp fastvaren. Leseren skanner Bambu Lab-spoler og RFID-kort, og lagrer alt i Filament Universet.</p>
+  <p class="lede">Velg ESP32-kortet du har. Siden gir deg riktige pinner, en ferdig <code>config.h</code>, koblingsskjema og kommandoene for å laste opp fastvaren. Leseren skanner Bambu Lab-spoler og RFID-kort, og lagrer alt i Filament Universet sin database via Workeren.</p>
 
   <section class="panel" aria-labelledby="h-board">
     <h3 id="h-board" style="margin-top:0">1. Velg kort</h3>
@@ -168,15 +168,15 @@ li { margin: 4px 0; }
     <tbody>
       <tr><td><code>RC522 versjon: 0x0</code> eller <code>0xFF</code></td><td>Leseren svarer ikke. Sjekk SPI-ledningene, at SDA på RC522 går til SS-pinnen, og at den får 3,3 V.</td></tr>
       <tr><td>Autentisering feilet i sektor …</td><td>Brikken er ikke en Bambu-spole, eller den ble flyttet under lesing. Hold den stille mot leseren. Et RFID-kort blir behandlet som brukerkort.</td></tr>
-      <tr><td>Klokken er ikke synkronisert (NTP)</td><td>Leseren trenger internett for å sette klokken før den kan snakke sikkert med GitHub. Sjekk Wi-Fi.</td></tr>
-      <tr><td>Henting av spools.json feilet: 401 / 403 / 404</td><td>Tokenen er feil, utløpt eller har ikke tilgang. Den skal gjelde <b>kun</b> <code>saysphilippe/BambuFilament-data</code> med <i>Contents: Read and write</i>.</td></tr>
+      <tr><td>Klokken er ikke synkronisert (NTP)</td><td>Leseren trenger internett for å sette klokken før den kan snakke sikkert med Workeren. Sjekk Wi-Fi.</td></tr>
+      <tr><td>Workeren svarte 401: Ugyldig eller utløpt token</td><td>Tokenen er feil, utløpt eller har ikke tilgang. Den skal gjelde <b>kun</b> <code>saysphilippe/BambuFilament-data</code> med <i>Contents: Read</i> (eller Read and write).</td></tr>
       <tr><td>Fant ikke OLED-skjermen</td><td>Sjekk SDA/SCL og adressen (0x3C, noen skjermer bruker 0x3D).</td></tr>
       <tr><td>Ingen utskrift i seriemonitoren (C3/S3)</td><td>Bruk riktig USB-port, eller slå på «USB CDC On Boot» (se steg 4).</td></tr>
     </tbody>
   </table></div>
 
   <h2>Token til leseren</h2>
-  <p>Lag en egen token for hver leser på <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>: <i>Only select repositories</i> → <code>BambuFilament-data</code>, <i>Repository permissions</i> → <i>Contents: Read and write</i>. Da kan du trekke tilbake én leser uten å påvirke de andre, og leseren kan ikke endre nettsidens kode.</p>
+  <p>Lag en egen token for hver leser på <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>: <i>Only select repositories</i> → <code>BambuFilament-data</code>, <i>Repository permissions</i> → <i>Contents: Read</i>. Workeren bruker tokenen bare til å sjekke at leseren har tilgang, og lagrer selv i databasen. Da kan du trekke tilbake én leser uten å påvirke de andre, og leseren kan ikke endre nettsidens kode.</p>
 </div>
 
 <script>
@@ -342,12 +342,12 @@ function configText(b, opt) {
 #define WIFI_SSID     ${q(ssid)}
 #define WIFI_PASSWORD ${q(pass)}
 
-// Fine-grained token KUN for saysphilippe/BambuFilament-data, "Contents: Read and write".
-// Lag en egen token for hver leser, så den kan trekkes tilbake alene.
+// Fine-grained token KUN for saysphilippe/BambuFilament-data, "Contents: Read" (eller Read and write).
+// Workeren bruker den til å sjekke at leseren har tilgang. Lag en egen token for hver leser.
 #define GITHUB_TOKEN  "github_pat_..."
-#define GITHUB_REPO   "saysphilippe/BambuFilament-data"
-#define GITHUB_BRANCH "main"
-#define GITHUB_PATH   "spools.json"
+
+// Workeren som tar imot skanninger og RFID-kort (lagrer i databasen).
+#define WORKER_URL    "https://bambufilament-proxy.saysphilippe.workers.dev"
 
 // Hvem som skanner når ingen RFID-kort er tappet (og eier av nye spoler da). Tom = ukjent.
 #define OWNER         ${q(owner)}
