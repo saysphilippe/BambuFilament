@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008165738";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008165738";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008170105";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008170105";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1157,13 +1157,19 @@ function openVipps(loanId) {
   const s = state.spools.find((x) => x.id === l.spool);
   const what = s ? `${title(s)} ${s.typeName}` : l.title || "spole";
   const price = spoolPrice(s?.typeName || l.type);
+  // Beløpet følger mengden: brukt mengde (utlånt minus levert tilbake) av en full rull.
+  const total = s?.tag?.weight || 1000;
+  const used = l.gramsOut === null ? null : Math.max(0, l.gramsOut - (l.gramsIn ?? 0));
+  const kr = used === null ? price.kr : Math.max(5, Math.round((price.kr * used) / total / 5) * 5);
+  const how = used === null ? `${price.kr} kr for en full rull; mengden er ukjent`
+    : `${used}g av ${total}g × ${price.kr} kr = ${kr} kr`;
   const phone = state.contacts.phones?.[l.owner] || "";
   $("#v-what").textContent = `${l.to} gjør opp for ${what}, lånt av ${l.owner || "ukjent eier"}.`;
   $("#v-to").textContent = l.owner || "Ukjent eier";
   $("#v-phone").textContent = phone ? fmtPhone(phone) : `${l.owner || "Eieren"} har ikke lagt inn mobilnummer (kan gjøres under kontoen din).`;
   $("#v-phone").dataset.value = phone;
-  $("#v-amount").value = price.kr;
-  $("#v-price").textContent = `(${price.src})`;
+  $("#v-amount").value = kr;
+  $("#v-price").textContent = `(${how}; pris fra ${price.src})`;
   $("#v-msg").textContent = `Filament Universet: ${what}`;
   $("#v-error").textContent = "";
   $("#vipps").showModal();
@@ -1644,20 +1650,20 @@ async function sendPassword(name, btn) {
   if (btn) btn.disabled = false;
 }
 
-async function saveEmail(name, input) {
+async function saveEmail(name, input, out = $("#u-error")) {
   const email = input.value.trim();
   if (email === (state.contacts.emails[name] || "")) return;
-  if (email && !cleanEmail(email)) return ($("#u-error").textContent = "E-postadressen ser ikke riktig ut.");
-  $("#u-error").textContent = "Lagrer e-post…";
+  if (email && !cleanEmail(email)) return (out.textContent = "E-postadressen ser ikke riktig ut.");
+  out.textContent = "Lagrer e-post…";
   try {
     await saveDoc((doc) => {
       if (!adminIn(state.doc) && name !== userName()) return "Du kan bare endre din egen bruker.";
       if (email) doc.emails[name] = email; else delete doc.emails[name];
     }, `E-post for ${name} (${userName()})`, "contacts");
-    $("#u-error").textContent = email ? `Lagret e-post for ${name}.` : `Fjernet e-post for ${name}.`;
+    out.textContent = email ? `Lagret e-post for ${name}.` : `Fjernet e-post for ${name}.`;
     renderUsers();
   } catch (err) {
-    $("#u-error").textContent = err.message;
+    out.textContent = err.message;
   }
 }
 
@@ -1680,10 +1686,10 @@ async function savePhoneFor(name, input) {
   }
 }
 
-async function saveColor(name, input) {
+async function saveColor(name, input, out = $("#u-error")) {
   const color = safeColor(input.value, "");
   if (!color) return;
-  $("#u-error").textContent = "Lagrer farge…";
+  out.textContent = "Lagrer farge…";
   try {
     await saveDoc((doc) => {
       if (!adminIn(doc) && name !== userName()) return "Du kan bare endre din egen bruker.";
@@ -1691,11 +1697,11 @@ async function saveColor(name, input) {
       if (!u) return `${name} finnes ikke lenger.`;
       u.color = color;
     }, `Farge for ${name} (${userName()})`, "users");
-    $("#u-error").textContent = `Lagret farge for ${name}.`;
+    out.textContent = `Lagret farge for ${name}.`;
     render();
     renderUsers();
   } catch (err) {
-    $("#u-error").textContent = err.message;
+    out.textContent = err.message;
   }
 }
 
@@ -1943,6 +1949,8 @@ function openAccount() {
   if (!session) return openLogin();
   $("#a-name").textContent = session.user;
   $("#a-phone").value = fmtPhone(state.contacts.phones?.[session.user] || "");
+  $("#a-email").value = state.contacts.emails[session.user] || "";
+  $("#a-color").value = state.doc.users.find((u) => u.name === session.user)?.color || "#2563eb";
   $("#a-msg").textContent = "";
   openQuiet("#account-dialog");
 }
@@ -3277,6 +3285,15 @@ $("#login form").addEventListener("submit", login);
 $("#forgot form").addEventListener("submit", forgot);
 $("#vipps form").addEventListener("submit", vippsSubmit);
 $("#a-phone").addEventListener("change", (e) => savePhone(e.target));
+$("#a-email").addEventListener("change", (e) => saveEmail(userName(), e.target, $("#a-msg")));
+// Enter i et felt i kontovinduet skal lagre feltet, ikke trykke første knapp (Logg ut).
+$("#account-dialog").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches("input")) {
+    e.preventDefault();
+    e.target.blur();
+  }
+});
+$("#a-color").addEventListener("change", (e) => saveColor(userName(), e.target, $("#a-msg")));
 $("#register form").addEventListener("submit", registerUser);
 $("#u-list").addEventListener("change", (e) => {
   const t = e.target;

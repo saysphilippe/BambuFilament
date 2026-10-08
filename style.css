@@ -315,9 +315,12 @@ dialog label input, dialog label select, dialog label textarea { margin-top: 4px
 .loan-actions { display: flex; gap: 6px; align-items: center; }
 .btn.btn-vipps { background: #ff5b24; border-color: #ff5b24; color: #fff; }
 .vipps-rows { display: grid; gap: 8px; margin: 10px 0; }
-.vipps-row { display: grid; grid-template-columns: 70px 1fr auto auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--bg); font-size: 14px; }
+.a-color { display: flex; align-items: center; gap: 10px; }
+.a-color input { width: 44px; height: 32px; padding: 2px; margin: 0; }
+.vipps-row { display: grid; grid-template-columns: 70px auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--bg); font-size: 14px; }
 .vipps-amount { display: flex; align-items: center; gap: 6px; }
 .vipps-amount input { width: 100px; }
+#v-price { font-size: 12px; }
 .loan-actions select { width: auto; padding: 4px 8px; font-size: 13px; }
 .loan-state.pending { background: color-mix(in srgb, var(--out) 30%, transparent); }
 .pending-box { margin-bottom: 14px; padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--out) 14%, transparent); }

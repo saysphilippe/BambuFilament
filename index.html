@@ -10,7 +10,7 @@
   <title>Filament Universet</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008165738">
+  <link rel="stylesheet" href="style.css?v=20261008170105">
 </head>
 <body>
   <header>
@@ -307,7 +307,10 @@
     <form method="dialog">
       <h2>Innlogget som <span id="a-name"></span></h2>
       <p class="hint">Du er innlogget i denne nettleseren til du logger ut.</p>
+      <p class="hint">Her endrer du din egen bruker. Endringene lagres med en gang.</p>
+      <label>E-post (for nytt passord og varsler)<input id="a-email" type="email" autocomplete="email" maxlength="100" placeholder="navn@eksempel.no"></label>
       <label>Mobilnummer (for Vipps når noen gjør opp med deg)<input id="a-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="F.eks. 912 34 567" maxlength="20"></label>
+      <label class="a-color">Din farge (på spolene dine)<input id="a-color" type="color"></label>
       <p id="a-msg" class="hint" role="status"></p>
       <div class="d-buttons">
         <button value="logout" class="btn btn-danger">Logg ut</button>
@@ -380,6 +383,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=20261008165738"></script>
+  <script type="module" src="app.js?v=20261008170105"></script>
 </body>
 </html>
