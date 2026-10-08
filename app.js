@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008175223";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008175223";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008180542";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008180542";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1946,7 +1946,7 @@ async function registerUser(e) {
   $("#r-send").disabled = true;
   try {
     await proxy("/register", { name, email, phone: $("#r-phone").value.trim() });
-    $("#r-status").textContent = "Forespørselen er sendt. Når administrator har godkjent den, får du et midlertidig passord på e-post.";
+    $("#r-status").textContent = "Forespørselen er sendt. Når administrator har godkjent den, får du et midlertidig passord på e-post. Sjekk også søppelpost, og merk e-posten som «Ikke søppelpost».";
   } catch (err) {
     $("#r-status").textContent = "";
     $("#r-error").textContent = err.message;
