@@ -13,6 +13,10 @@
 //
 // Biblioteker i tillegg: Adafruit SSD1306 og Adafruit GFX (bare hvis skjermen brukes).
 //
+// Ingen knapper: leseren avgjør selv. Ny spole eller spole som er ute -> innsjekk.
+// Spole som er inne -> utsjekk hvis det er minst CHECKOUT_AFTER_MINUTES siden den ble
+// sjekket inn; ellers skjer ingenting. Samme brikke igjen innen IGNORE_REPEAT_MS ignoreres.
+//
 // Biblioteker: MFRC522 (GithubCommunity), ArduinoJson 7. Kort: ESP32 Dev Module.
 
 #include <WiFi.h>
@@ -38,6 +42,10 @@ static const int MAX_HISTORY = 10;          // antall hendelser per spole (holde
 // JSON-dokumentet må få plass i minnet samtidig (ca. 280 kB ledig). Delte AMS- og
 // bibliotekdata ligger i shared.json, som leseren ikke henter, så spools.json holdes liten.
 static const int MAX_RESPONSE_BYTES = 120000;
+static const unsigned long IGNORE_REPEAT_MS = 6000;  // samme brikke igjen innen 6 s ignoreres
+#ifndef CHECKOUT_AFTER_MINUTES
+#define CHECKOUT_AFTER_MINUTES 10
+#endif
 #ifndef CARD_SESSION_SECONDS
 #define CARD_SESSION_SECONDS 60
 #endif
@@ -62,7 +70,10 @@ bool hasOled = false;
 
 String lastUid;
 unsigned long lastUidAt = 0;
-bool checkOutMode = false;                  // false = innsjekk, true = utsjekk (velges med knappene)
+// Resultat av en skanning: lagret innsjekk/utsjekk, ingenting (for kort tid siden innsjekk), eller feil.
+enum ScanResult { SCAN_IN, SCAN_OUT, SCAN_NOOP, SCAN_FAIL };
+long waitMinutes = 0;                       // ved SCAN_NOOP: minutter til utsjekk blir mulig
+
 String cardUser;                            // bruker fra personlig brikke, gjelder til cardUntil
 unsigned long cardUntil = 0;
 
@@ -116,18 +127,16 @@ void screen(const String &title, const String &line2 = "", const String &line3 =
   oled.display();
 }
 
-// Hvileskjerm: modus og hvem som bruker leseren (med nedtelling for kortet).
+// Hvileskjerm: hvem som bruker leseren (med nedtelling for kortet).
 String lastIdle;
 void showIdle(bool force = false) {
   if (!hasOled) return;
-  String mode = checkOutMode ? "UTSJEKK" : "INNSJEKK";
-  String who;
-  if (cardUser.length() && millis() < cardUntil) who = cardUser + " (" + String((cardUntil - millis()) / 1000 + 1) + " s)";
-  else who = strlen(OWNER) ? String(OWNER) + " (standard)" : "Tapp kortet ditt";
-  String key = mode + who;
-  if (!force && key == lastIdle) return;
-  lastIdle = key;
-  screen(mode, who, "Skann en spole");
+  bool card = cardUser.length() && millis() < cardUntil;
+  String who = card ? cardUser + " (" + String((cardUntil - millis()) / 1000 + 1) + " s)"
+                    : strlen(OWNER) ? String(OWNER) + " (standard)" : "ukjent";
+  if (!force && who == lastIdle) return;
+  lastIdle = who;
+  screen("Skann spole", "Bruker: " + who, card ? "" : "Tapp kortet ditt først");
 }
 
 // ---------- LED ----------
@@ -136,10 +145,10 @@ void setLed(int pin, bool on) {
   if (pin >= 0) digitalWrite(pin, on ? HIGH : LOW);
 }
 
-// LED-en for aktiv modus lyser fast.
+// I hvile er begge LED-ene av.
 void showMode() {
-  setLed(PIN_LED_IN, !checkOutMode);
-  setLed(PIN_LED_OUT, checkOutMode);
+  setLed(PIN_LED_IN, false);
+  setLed(PIN_LED_OUT, false);
 }
 
 // Innebygd LED lyser mens brikken leses og lagres.
@@ -147,12 +156,18 @@ void busy(bool on) {
   setLed(PIN_LED_BUSY, on);
 }
 
-// Lagret: LED-en for aktiv modus blinker rolig tre ganger.
-void signalOk() {
-  int pin = checkOutMode ? PIN_LED_OUT : PIN_LED_IN;
+// Lagret: grønn (innsjekk) eller rød (utsjekk) blinker rolig tre ganger.
+void signalOk(bool checkedOut) {
+  int pin = checkedOut ? PIN_LED_OUT : PIN_LED_IN;
   for (int i = 0; i < 3; i++) {
-    setLed(pin, false); delay(250); setLed(pin, true); delay(250);
+    setLed(pin, true); delay(250); setLed(pin, false); delay(250);
   }
+  showMode();
+}
+
+// Ingenting endret (allerede sjekket inn): grønn blinker kort én gang.
+void signalNoop() {
+  setLed(PIN_LED_IN, true); delay(120); setLed(PIN_LED_IN, false);
   showMode();
 }
 
@@ -172,24 +187,6 @@ void signalCard() {
     setLed(PIN_LED_IN, false); setLed(PIN_LED_OUT, true); delay(200);
   }
   showMode();
-}
-
-void setMode(bool checkOut) {
-  checkOutMode = checkOut;
-  Serial.println(checkOut ? "Modus: UTSJEKK" : "Modus: INNSJEKK");
-  showMode();
-  showIdle(true);
-}
-
-// Knappene er koblet mellom pinnen og GND (INPUT_PULLUP), så trykket = LOW.
-void checkButtons() {
-  if (PIN_BUTTON_IN >= 0 && digitalRead(PIN_BUTTON_IN) == LOW) setMode(false);
-  else if (PIN_BUTTON_OUT >= 0 && digitalRead(PIN_BUTTON_OUT) == LOW) setMode(true);
-  else return;
-  // Vent til knappen slippes, så ett trykk gir én hendelse.
-  while ((PIN_BUTTON_IN >= 0 && digitalRead(PIN_BUTTON_IN) == LOW) ||
-         (PIN_BUTTON_OUT >= 0 && digitalRead(PIN_BUTTON_OUT) == LOW)) delay(10);
-  delay(50);
 }
 
 // ---------- Nøkkelutledning ----------
@@ -241,6 +238,20 @@ String isoNow() {
   char buf[25];
   strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &t);
   return String(buf);
+}
+
+// "2026-10-08T12:34:56Z" (også med millisekunder) -> sekunder siden 1970 (UTC). 0 ved feil.
+time_t parseIso(const char *iso) {
+  int y, mo, d, h, mi, se;
+  if (!iso || sscanf(iso, "%d-%d-%dT%d:%d:%d", &y, &mo, &d, &h, &mi, &se) != 6) return 0;
+  // Dager siden 1970-01-01 (Howard Hinnants days_from_civil).
+  y -= mo <= 2;
+  long era = (y >= 0 ? y : y - 399) / 400;
+  long yoe = y - era * 400;
+  long doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  long days = era * 146097 + doe - 719468;
+  return (time_t)days * 86400 + h * 3600 + mi * 60 + se;
 }
 
 // Venter inntil 10 sekunder på at NTP har satt klokken.
@@ -376,14 +387,14 @@ int putSpools(WiFiClientSecure &client, JsonDocument &doc, const String &sha, co
   return code;
 }
 
-bool uploadScan(const String &id, const String &blocksHex, bool checkOut, String &summary) {
+ScanResult uploadScan(const String &id, const String &blocksHex, String &summary) {
   connectWifi();
-  if (WiFi.status() != WL_CONNECTED) return false;
+  if (WiFi.status() != WL_CONNECTED) return SCAN_FAIL;
 
   // Sertifikatsjekk krever riktig klokke, så vent på NTP før tokenen sendes.
   if (!waitForTime()) {
     Serial.println("Klokken er ikke synkronisert (NTP) – kan ikke sjekke GitHub-sertifikatet.");
-    return false;
+    return SCAN_FAIL;
   }
   WiFiClientSecure client;
   client.setCACert(GITHUB_ROOT_CAS);        // sjekker at det faktisk er GitHub
@@ -397,7 +408,7 @@ bool uploadScan(const String &id, const String &blocksHex, bool checkOut, String
       doc["spools"].to<JsonArray>();
     } else if (code != 200) {
       Serial.printf("Henting av spools.json feilet: %d\n", code);
-      return false;
+      return SCAN_FAIL;
     }
 
     JsonArray spools = doc["spools"].is<JsonArray>() ? doc["spools"].as<JsonArray>() : doc["spools"].to<JsonArray>();
@@ -414,6 +425,22 @@ bool uploadScan(const String &id, const String &blocksHex, bool checkOut, String
       spool["note"] = "";
       spool["added"] = now;
       spool["scans"] = 0;
+    }
+    // Avgjør handlingen: ny eller ute -> inn; inne i minst CHECKOUT_AFTER_MINUTES -> ut.
+    bool checkOut = false;
+    if (!isNew && String(spool["status"] | "in") == "in") {
+      const char *since = spool["lastScan"] | spool["added"] | "";
+      JsonArray h = spool["history"].as<JsonArray>();
+      for (int i = (int)h.size() - 1; i >= 0; i--) {
+        if (String(h[i]["action"] | "") == "in") { since = h[i]["at"] | since; break; }
+      }
+      long minutes = (long)((time(nullptr) - parseIso(since)) / 60);
+      if (parseIso(since) && minutes < CHECKOUT_AFTER_MINUTES) {
+        waitMinutes = CHECKOUT_AFTER_MINUTES - minutes;
+        summary = "allerede sjekket inn";
+        return SCAN_NOOP;
+      }
+      checkOut = true;
     }
     const char *action = checkOut ? "out" : "in";
     spool["status"] = action;
@@ -432,12 +459,12 @@ bool uploadScan(const String &id, const String &blocksHex, bool checkOut, String
 
     summary = String(checkOut ? "sjekket ut" : "sjekket inn") + (isNew ? ", ny spole" : "");
     code = putSpools(client, doc, sha, String(checkOut ? "Utsjekk " : "Innsjekk ") + id.substring(0, 8) + " (" + (by.length() ? by : "ukjent") + ")");
-    if (code == 200 || code == 201) return true;
+    if (code == 200 || code == 201) return checkOut ? SCAN_OUT : SCAN_IN;
     Serial.printf("Lagring feilet: %d (forsøk %d)\n", code, attempt);
-    if (code != 409) return false;
+    if (code != 409) return SCAN_FAIL;
     delay(500);
   }
-  return false;
+  return SCAN_FAIL;
 }
 
 // RFID-kort: slår opp brukeren i spools.json ("cards"). Et nytt kort registreres uten navn,
@@ -486,8 +513,6 @@ void setup() {
   for (int pin : { PIN_LED_IN, PIN_LED_OUT, PIN_LED_BUSY }) {
     if (pin >= 0) pinMode(pin, OUTPUT);
   }
-  if (PIN_BUTTON_IN >= 0) pinMode(PIN_BUTTON_IN, INPUT_PULLUP);
-  if (PIN_BUTTON_OUT >= 0) pinMode(PIN_BUTTON_OUT, INPUT_PULLUP);
   if (PIN_OLED_SDA >= 0) {
     Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
     hasOled = oled.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
@@ -514,11 +539,10 @@ void setup() {
     screen("Ingen WiFi", WIFI_SSID, "Sjekk config.h");
     signalError();
   }
-  Serial.println("Klar – skann brikken din og så en Bambu-spole. Modus: INNSJEKK.");
+  Serial.println("Klar – tapp kortet ditt (valgfritt) og skann en Bambu-spole.");
 }
 
 void loop() {
-  checkButtons();
   if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
     showIdle();
     delay(50);
@@ -526,7 +550,7 @@ void loop() {
   }
 
   String uid = toHex(rfid.uid.uidByte, rfid.uid.size);
-  if (uid == lastUid && millis() - lastUidAt < 5000) {
+  if (uid == lastUid && millis() - lastUidAt < IGNORE_REPEAT_MS) {
     rfid.PICC_HaltA();
     return;
   }
@@ -548,7 +572,7 @@ void loop() {
     int known = handleCard(uid);
     busy(false);
     if (known == 1) {
-      screen("Hei " + cardUser + "!", checkOutMode ? "Modus: UTSJEKK" : "Modus: INNSJEKK", "Skann spoler i " + String(CARD_SESSION_SECONDS) + " s");
+      screen("Hei " + cardUser + "!", "Skann spoler i " + String(CARD_SESSION_SECONDS) + " s");
       signalCard();
     } else if (known == 2) {
       screen("Nytt kort", uid, "Gi det navn på siden");
@@ -583,15 +607,19 @@ void loop() {
   Serial.printf("%s, farge #%s – lagrer...\n", type, toHex(blocks[5], 3).c_str());
 
   String summary;
-  bool saved = uploadScan(id, toHex(&blocks[0][0], BLOCKS * 16), checkOutMode, summary);
+  ScanResult result = uploadScan(id, toHex(&blocks[0][0], BLOCKS * 16), summary);
   busy(false);
   String who = currentUser();
-  if (saved) {
+  String what = String(type).substring(0, 14) + " #" + toHex(blocks[5], 3);
+  if (result == SCAN_IN || result == SCAN_OUT) {
     Serial.printf("Lagret (%s).\n", summary.c_str());
-    screen(checkOutMode ? "Sjekket ut" : "Sjekket inn", String(type).substring(0, 21) + " #" + toHex(blocks[5], 3),
-           who.length() ? "av " + who : "av ukjent");
+    screen(result == SCAN_OUT ? "Sjekket ut" : "Sjekket inn", what, who.length() ? "av " + who : "av ukjent");
     if (cardUser.length() && millis() < cardUntil) cardUntil = millis() + CARD_SESSION_SECONDS * 1000UL;
-    signalOk();
+    signalOk(result == SCAN_OUT);
+  } else if (result == SCAN_NOOP) {
+    Serial.printf("Allerede sjekket inn – utsjekk mulig om %ld min.\n", waitMinutes);
+    screen("Er inne", what, "Utsjekk om " + String(waitMinutes) + " min");
+    signalNoop();
   } else {
     screen("Ikke lagret", "Sjekk WiFi og", "prøv igjen.");
     signalError();

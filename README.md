@@ -199,8 +199,6 @@ manuelt under *Actions* → *Oppdater Bambu-katalog* → *Run workflow*.
 | RC522 MISO | GPIO 19 |
 | RC522 RST | GPIO 22 |
 | RC522 3.3V / GND | 3V3 / GND (ikke 5 V) |
-| Knapp **Innsjekk** | GPIO 32 ↔ GND |
-| Knapp **Utsjekk** | GPIO 33 ↔ GND |
 | Grønn LED (Innsjekk) | GPIO 25 → 220–330 Ω → LED → GND |
 | Rød/gul LED (Utsjekk) | GPIO 26 → 220–330 Ω → LED → GND |
 | OLED SSD1306 128×64 (I2C) SDA / SCL | GPIO 21 / GPIO 4 (valgfri; GPIO 22 brukes av RC522) |
@@ -211,12 +209,17 @@ Bruk:
    neste 60 sekundene registreres på deg. Et nytt kort registreres uten navn; velg navnet i fanen
    **RFID-kort** på siden, så viser leseren det neste gang. Uten kort brukes `OWNER` fra `config.h`
    (tom = ukjent, og eieren av spolen må godkjenne hvem som tok den).
-1. Trykk **Innsjekk** eller **Utsjekk**. LED-en for valgt modus lyser fast (starter i innsjekk).
-2. Hold spolen mot leseren. Den innebygde LED-en lyser mens den leser og lagrer.
-3. Tre rolige blink på modus-LED-en betyr lagret. Begge LED-ene blinker raskt ved feil
-   (ikke en Bambu-brikke, ingen WiFi eller GitHub-feil). Se seriellmonitoren (115200) for detaljer.
+1. Hold spolen mot leseren. Leseren avgjør selv hva som skjer (ingen knapper):
+   - **Ny spole**, eller en spole som er **ute** (sjekket ut / brukt opp): sjekkes **inn**.
+   - Spole som er **inne**: sjekkes **ut** hvis den ble sjekket inn for minst 10 minutter siden
+     (`CHECKOUT_AFTER_MINUTES`). Ellers skjer ingenting, og skjermen viser når utsjekk blir mulig.
+   - Samme brikke igjen innen 6 sekunder ignoreres.
+2. Den innebygde LED-en lyser mens den leser og lagrer.
+3. Tre rolige blink: grønn = sjekket inn, rød = sjekket ut. Ett kort grønt blink = allerede inne.
+   Begge LED-ene blinker raskt ved feil (ingen WiFi, GitHub-feil, ukjent kort). Se seriellmonitoren
+   (115200) for detaljer.
 
-Skjermen (valgfri) viser modus, hvem som bruker leseren (med nedtelling), og hva som ble lagret.
+Skjermen (valgfri) viser hvem som bruker leseren (med nedtelling), og hva som ble lagret.
 Ø vises som ö, siden skjermens skrift ikke har ø. Krever bibliotekene Adafruit SSD1306 og Adafruit GFX.
 
 ### Flashe firmware

@@ -24,18 +24,16 @@
 #define PIN_RC522_SS  5
 #define PIN_RC522_RST 22
 
-// LED-er for modus (anode via 220–330 Ω til pinnen, katode til GND). -1 = ingen LED.
-// Aktiv modus lyser fast. Tre rolige blink = lagret, begge blinker raskt = feil.
+// LED-er (anode via 220–330 Ω til pinnen, katode til GND). -1 = ingen LED.
+// Tre rolige blink: grønn = sjekket inn, rød = sjekket ut. Begge raskt = feil.
 #define PIN_LED_IN    25   // grønn: Innsjekk
 #define PIN_LED_OUT   26   // rød/gul: Utsjekk
 
 // Innebygd LED på ESP32 DevKit, lyser mens brikken leses og lagres. -1 = ikke bruk.
 #define PIN_LED_BUSY  2
 
-// Knappene "Innsjekk" og "Utsjekk", koblet mellom pinnen og GND (ingen motstand trengs).
-// Trykk velger modus for de neste skanningene. Starter i innsjekk. -1 = ingen knapp.
-#define PIN_BUTTON_IN  32
-#define PIN_BUTTON_OUT 33
+// Skann en spole som er inne på nytt etter så mange minutter = utsjekk.
+#define CHECKOUT_AFTER_MINUTES 10
 
 // OLED-skjerm SSD1306 128x64 (I2C): VCC 3V3, GND, SDA og SCL til pinnene under.
 // (GPIO 22 brukes av RC522, så SCL ligger på GPIO 4.) -1 = ingen skjerm.
