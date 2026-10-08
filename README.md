@@ -226,6 +226,10 @@ leser dem ved hver skanning): *RFID-kort gjelder i* (standard 1 minutt) og *Utsj
 Skjermen (valgfri) viser hvem som bruker leseren (med nedtelling), og hva som ble lagret.
 Ø vises som ö, siden skjermens skrift ikke har ø. Krever bibliotekene Adafruit SSD1306 og Adafruit GFX.
 
+**Bygg din egen leser:** https://claude.ai/artifact/4PxCr7dD1bRuCPpwZpn3t3 (kilde: `docs/leserbygger.html`).
+Velg kort (ESP32 DevKit, ESP32-S3-DevKitC-1, ESP32-C3 SuperMini, XIAO ESP32-C3 eller XIAO ESP32-S3) og få pinner,
+`config.h`, koblingsskjema og opplastingskommandoer. Fastvaren er den samme; bare `config.h` og `--fqbn` endres.
+
 ### Flashe firmware
 
 1. Arduino IDE med ESP32-kortpakken. Biblioteker: **MFRC522** (GithubCommunity) og **ArduinoJson** 7.

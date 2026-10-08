@@ -1,0 +1,425 @@
+<title>Filament Universet-leseren</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: smal lesekolonne med en bred arbeidsflate for valg + koblingsskjema; seksjoner i rekkefølgen man bygger. */
+:root {
+  --bg: #f3f5f2; --surface: #ffffff; --fg: #18201b; --muted: #5d6a62; --line: #d7ddd8;
+  --accent: #0a7a3d; --accent-soft: #e2f1e8; --pcb: #123a2a; --pcb-fg: #d9f2e3;
+  --w-spi: #3559c7; --w-i2c: #0e8f8f; --w-pwr: #c62828; --w-gnd: #2b2f2d; --w-green: #1f9d4c; --w-red: #d0531c; --w-rst: #8a4fc7;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111613; --surface: #19201c; --fg: #e6ece8; --muted: #9aa8a0; --line: #2d3832;
+  --accent: #4cc27f; --accent-soft: #173826; --pcb: #0c2a1e; --pcb-fg: #cdebd9;
+  --w-spi: #7c9bff; --w-i2c: #3fd0cc; --w-pwr: #ff6b6b; --w-gnd: #b9c4be; --w-green: #4fd17f; --w-red: #ff8a50; --w-rst: #c39bff; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #19201c; --fg: #e6ece8; --muted: #9aa8a0; --line: #2d3832;
+  --accent: #4cc27f; --accent-soft: #173826; --pcb: #0c2a1e; --pcb-fg: #cdebd9;
+  --w-spi: #7c9bff; --w-i2c: #3fd0cc; --w-pwr: #ff6b6b; --w-gnd: #b9c4be; --w-green: #4fd17f; --w-red: #ff8a50; --w-rst: #c39bff; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); }
+.wrap { max-width: 1060px; margin: 0 auto; padding-inline: 18px; padding-block: 28px 64px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; }
+h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 800; letter-spacing: -.02em; margin: 0 0 8px; }
+h2 { font-size: 24px; font-weight: 800; margin: 44px 0 10px; }
+h3 { font-size: 17px; font-weight: 600; margin: 22px 0 6px; }
+p, li { max-width: 68ch; }
+.lede { color: var(--muted); font-size: 18px; margin: 0 0 22px; }
+.eyebrow { font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+code, .mono { font-family: var(--mono); font-size: .9em; }
+a { color: var(--accent); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.board-opt { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.board-opt input { position: absolute; opacity: 0; }
+.board-opt b { font-family: var(--display); font-size: 16px; }
+.board-opt span { color: var(--muted); font-size: 13px; }
+.board-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; }
+.board-opt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; margin-top: 16px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.form input[type=text], .form input[type=password] { font: 15px var(--body); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+.checks { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; }
+.checks label { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+
+.diagram-wrap { overflow-x: auto; margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.diagram-wrap svg { display: block; min-width: 720px; width: 100%; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+td.mono { white-space: nowrap; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+pre { position: relative; margin: 10px 0 0; padding: 14px; background: var(--pcb); color: var(--pcb-fg); border-radius: 10px; overflow-x: auto; font: 13px/1.5 var(--mono); }
+.codehead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.btn { font: 600 14px var(--body); padding: 7px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.note { padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; font-size: 14px; }
+.warn { border-left-color: var(--w-red); background: color-mix(in srgb, var(--w-red) 12%, var(--surface)); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.grid2 > * { min-width: 0; }
+ol, ul { padding-left: 22px; }
+li { margin: 4px 0; }
+.kbd { font: 600 12px var(--mono); padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--surface); }
+@media (prefers-reduced-motion: no-preference) { .board-opt { transition: border-color .15s, background .15s; } }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Filament Universet · RFID-leser</div>
+  <h1>Bygg din egen leser</h1>
+  <p class="lede">Velg ESP32-kortet du har. Siden gir deg riktige pinner, en ferdig <code>config.h</code>, koblingsskjema og kommandoene for å laste opp fastvaren. Leseren skanner Bambu Lab-spoler og RFID-kort, og lagrer alt i Filament Universet.</p>
+
+  <section class="panel" aria-labelledby="h-board">
+    <h3 id="h-board" style="margin-top:0">1. Velg kort</h3>
+    <div class="picker" id="picker"></div>
+    <div class="checks">
+      <label><input type="checkbox" id="opt-oled" checked> OLED-skjerm (SSD1306 128×64, I2C)</label>
+      <label><input type="checkbox" id="opt-leds" checked> To lysdioder (grønn og rød)</label>
+    </div>
+    <div class="form">
+      <label>Wi-Fi-navn (SSID)<input type="text" id="f-ssid" value="MittWiFi" autocomplete="off"></label>
+      <label>Wi-Fi-passord<input type="password" id="f-pass" value="" placeholder="passord" autocomplete="off"></label>
+      <label>Standardbruker uten kort (OWNER, tom = ukjent)<input type="text" id="f-owner" value="Philippe" autocomplete="off"></label>
+    </div>
+    <p class="note" style="margin-top:14px">Det du skriver inn her, blir bare brukt til å lage <code>config.h</code> i nettleseren din. Ingenting sendes noe sted. GitHub-tokenen limer du inn i filen selv etterpå.</p>
+  </section>
+
+  <h2>2. Koble sammen</h2>
+  <p id="board-notes"></p>
+  <div class="diagram-wrap"><svg id="diagram" role="img" aria-labelledby="diagram-title"><title id="diagram-title">Koblingsskjema</title></svg></div>
+  <div class="legend" id="legend"></div>
+  <h3>Koblingstabell</h3>
+  <div class="table-wrap"><table id="wiring"><thead><tr><th>Fra modul</th><th>Til kortet</th><th>Signal</th></tr></thead><tbody></tbody></table></div>
+  <p class="note warn" style="margin-top:14px">RC522 og OLED skal ha <b>3,3 V</b>, ikke 5 V. Lysdiodene trenger en motstand på 220–330 Ω i serie, ellers kan pinnen eller dioden ta skade.</p>
+
+  <h2>3. config.h</h2>
+  <p>Lagre som <code>firmware/BambuFilament/config.h</code> (ved siden av <code>BambuFilament.ino</code>). Bytt ut <code>github_pat_...</code> med din egen token.</p>
+  <div class="codehead"><b class="mono">config.h</b><button class="btn" id="copy-config" type="button">Kopier config.h</button></div>
+  <pre id="config"></pre>
+
+  <h2>4. Kompiler og last opp</h2>
+  <div class="grid2">
+    <div>
+      <h3>Med Arduino IDE</h3>
+      <ol>
+        <li>Installer kortpakken <b>esp32 by Espressif Systems</b> (Verktøy → Kort → Kortbehandler).</li>
+        <li>Installer bibliotekene <b>MFRC522</b> (GithubCommunity), <b>ArduinoJson</b> (versjon 7)<span class="if-oled">, <b>Adafruit SSD1306</b> og <b>Adafruit GFX</b></span>.</li>
+        <li>Last ned mappen <a href="https://github.com/saysphilippe/BambuFilament/tree/main/firmware/BambuFilament" target="_blank" rel="noopener">firmware/BambuFilament</a> og legg <code>config.h</code> i den.</li>
+        <li>Åpne <code>BambuFilament.ino</code>, velg kortet <b id="ide-board"></b><span id="ide-extra"></span>, og trykk Last opp.</li>
+        <li>Åpne seriemonitoren på <b>115200</b> baud for å se hva leseren gjør.</li>
+      </ol>
+    </div>
+    <div>
+      <h3>Med arduino-cli</h3>
+      <div class="codehead"><b class="mono">Kommandoer</b><button class="btn ghost" id="copy-cli" type="button">Kopier</button></div>
+      <pre id="cli"></pre>
+    </div>
+  </div>
+
+  <h2>5. Slik brukes leseren</h2>
+  <div class="grid2">
+    <div>
+      <h3>Skanne spoler</h3>
+      <ul>
+        <li><b>Ny spole</b> eller spole som er ute: sjekkes <b>inn</b>.</li>
+        <li>Spole som er inne: sjekkes <b>ut</b> når den skannes igjen etter tidsvinduet (standard 10 minutter). Før det skjer ingenting.</li>
+        <li>Samme brikke igjen innen 6 sekunder blir ignorert.</li>
+        <li>Utsjekk fra leseren blir et gjøremål for eieren av spolen på nettsiden: <b>OK</b> for eget lager, ellers velger eieren hvem som tok den.</li>
+      </ul>
+      <h3>RFID-kort for flere brukere</h3>
+      <ul>
+        <li>Tapp kortet ditt først. Da registreres spolene på deg i 1 minutt etter siste tapp (kan endres under Innstillinger på nettsiden).</li>
+        <li>Et nytt kort registreres uten navn. Gi det navn i fanen <b>RFID-kort</b>, så viser leseren navnet neste gang.</li>
+        <li>Uten kort brukes standardbrukeren fra <code>config.h</code>.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lys og skjerm</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Signal</th><th>Betyr</th></tr></thead>
+        <tbody>
+          <tr><td>Grønn, 3 rolige blink</td><td>Sjekket inn</td></tr>
+          <tr><td>Rød, 3 rolige blink</td><td>Sjekket ut</td></tr>
+          <tr><td>Grønn, ett kort blink</td><td>Allerede inne, ingenting endret</td></tr>
+          <tr><td>Vekselvis grønn/rød</td><td>Kort gjenkjent («Hei Niklas!»)</td></tr>
+          <tr><td>Begge raskt</td><td>Feil: Wi-Fi, GitHub, ukjent kort eller lesefeil</td></tr>
+        </tbody>
+      </table></div>
+      <p class="if-oled">Skjermen viser hvem som bruker leseren (med nedtelling), hva som ble skannet og om det ble lagret. Ø vises som ö.</p>
+    </div>
+  </div>
+
+  <h2>Deleliste</h2>
+  <div class="table-wrap"><table id="bom"><thead><tr><th>Del</th><th>Antall</th><th>Merknad</th></tr></thead><tbody></tbody></table></div>
+
+  <h2>Feilsøking</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Seriemonitoren sier</th><th>Gjør dette</th></tr></thead>
+    <tbody>
+      <tr><td><code>RC522 versjon: 0x0</code> eller <code>0xFF</code></td><td>Leseren svarer ikke. Sjekk SPI-ledningene, at SDA på RC522 går til SS-pinnen, og at den får 3,3 V.</td></tr>
+      <tr><td>Autentisering feilet i sektor …</td><td>Brikken er ikke en Bambu-spole, eller den ble flyttet under lesing. Hold den stille mot leseren. Et RFID-kort blir behandlet som brukerkort.</td></tr>
+      <tr><td>Klokken er ikke synkronisert (NTP)</td><td>Leseren trenger internett for å sette klokken før den kan snakke sikkert med GitHub. Sjekk Wi-Fi.</td></tr>
+      <tr><td>Henting av spools.json feilet: 401 / 403 / 404</td><td>Tokenen er feil, utløpt eller har ikke tilgang. Den skal gjelde <b>kun</b> <code>saysphilippe/BambuFilament-data</code> med <i>Contents: Read and write</i>.</td></tr>
+      <tr><td>Fant ikke OLED-skjermen</td><td>Sjekk SDA/SCL og adressen (0x3C, noen skjermer bruker 0x3D).</td></tr>
+      <tr><td>Ingen utskrift i seriemonitoren (C3/S3)</td><td>Bruk riktig USB-port, eller slå på «USB CDC On Boot» (se steg 4).</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Token til leseren</h2>
+  <p>Lag en egen token for hver leser på <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>: <i>Only select repositories</i> → <code>BambuFilament-data</code>, <i>Repository permissions</i> → <i>Contents: Read and write</i>. Da kan du trekke tilbake én leser uten å påvirke de andre, og leseren kan ikke endre nettsidens kode.</p>
+</div>
+
+<script>
+// Kortene: standard SPI-pinner er fra Arduino-kortdefinisjonen (SPI.begin() uten argumenter);
+// SS, RST, lysdioder og OLED er valgt blant ledige pinner som ikke er oppstartspinner.
+const BOARDS = {
+  devkit: {
+    name: "ESP32 DevKit (WROOM-32)", short: "Klassisk DevKit V1, 30 eller 38 pinner",
+    fqbn: "esp32:esp32:esp32", ide: "ESP32 Dev Module",
+    pins: { sck: 18, miso: 19, mosi: 23, ss: 5, rst: 22, ledIn: 25, ledOut: 26, busy: 2, sda: 21, scl: 4 },
+    label: (g) => `GPIO${g}`,
+    notes: "Pinnene er merket med GPIO-nummer (D18, G18 eller bare 18). GPIO22 brukes til RST på RC522, så skjermen bruker GPIO4 som SCL. Den blå lysdioden på kortet (GPIO2) lyser mens en brikke leses og lagres.",
+  },
+  s3devkit: {
+    name: "ESP32-S3-DevKitC-1", short: "S3 med to USB-porter",
+    fqbn: "esp32:esp32:esp32s3", ide: "ESP32S3 Dev Module", cdcNote: true,
+    pins: { sck: 12, miso: 13, mosi: 11, ss: 10, rst: 14, ledIn: 4, ledOut: 5, busy: -1, sda: 8, scl: 9 },
+    label: (g) => `GPIO${g}`,
+    notes: "Lysdioden på kortet er en RGB-diode (GPIO48) og brukes ikke. Bruker du porten merket USB (ikke UART), må «USB CDC On Boot» være slått på for å se utskriften.",
+  },
+  c3super: {
+    name: "ESP32-C3 SuperMini", short: "Bitteliten C3 med USB-C",
+    fqbn: "esp32:esp32:esp32c3:CDCOnBoot=cdc", ide: "ESP32C3 Dev Module", ideExtra: " og slå på «USB CDC On Boot: Enabled»",
+    pins: { sck: 4, miso: 5, mosi: 6, ss: 7, rst: 10, ledIn: 0, ledOut: 1, busy: -1, sda: 8, scl: 9 },
+    label: (g) => `GPIO${g}`,
+    notes: "Pinnene er merket med nummer på kortet. GPIO8 og GPIO9 er oppstartspinner, men tåler skjermens pull-up-motstander. Den innebygde dioden (GPIO8) brukes ikke, siden den deles med skjermen.",
+  },
+  xiaoc3: {
+    name: "Seeed XIAO ESP32-C3", short: "XIAO, 11 pinner merket D0–D10",
+    fqbn: "esp32:esp32:XIAO_ESP32C3", ide: "XIAO_ESP32C3",
+    pins: { sck: 8, miso: 9, mosi: 10, ss: 20, rst: 21, ledIn: 3, ledOut: 4, busy: -1, sda: 6, scl: 7 },
+    dpin: { 2: "D0", 3: "D1", 4: "D2", 5: "D3", 6: "D4", 7: "D5", 21: "D6", 20: "D7", 8: "D8", 9: "D9", 10: "D10" },
+    notes: "Pinnene på XIAO er merket D0–D10, så tabellen viser både D-navn og GPIO. D6 og D7 er vanligvis seriepinner, men utskriften går over USB, så de er ledige. D0 (GPIO2) er oppstartspinne og står ubrukt. XIAO-kortet har ingen egen diode for «opptatt».",
+  },
+  xiaos3: {
+    name: "Seeed XIAO ESP32-S3", short: "XIAO S3, merket D0–D10",
+    fqbn: "esp32:esp32:XIAO_ESP32S3", ide: "XIAO_ESP32S3",
+    pins: { sck: 7, miso: 8, mosi: 9, ss: 1, rst: 2, ledIn: 4, ledOut: 43, busy: -1, sda: 5, scl: 6 },
+    dpin: { 1: "D0", 2: "D1", 3: "D2", 4: "D3", 5: "D4", 6: "D5", 43: "D6", 44: "D7", 7: "D8", 8: "D9", 9: "D10" },
+    notes: "Pinnene er merket D0–D10. D2 (GPIO3) er oppstartspinne og står ubrukt. Den gule dioden på kortet (GPIO21) lyser når pinnen er lav, så den brukes ikke som «opptatt»-diode.",
+  },
+};
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const pinName = (b, g) => (b.dpin ? `${b.dpin[g] ?? "?"} (GPIO${g})` : `GPIO${g}`);
+
+// Valg av kort
+$("#picker").innerHTML = Object.entries(BOARDS).map(([k, b], i) => `
+  <label class="board-opt"><input type="radio" name="board" value="${k}" id="board-${k}"${i === 0 ? " checked" : ""}><b>${esc(b.name)}</b><span>${esc(b.short)}</span></label>`).join("");
+try { const saved = localStorage.getItem("leser.board"); if (saved && BOARDS[saved]) document.getElementById("board-" + saved).checked = true; } catch {}
+
+const WIRE = { spi: "var(--w-spi)", i2c: "var(--w-i2c)", pwr: "var(--w-pwr)", gnd: "var(--w-gnd)", green: "var(--w-green)", red: "var(--w-red)", rst: "var(--w-rst)" };
+
+function connections(b, opt) {
+  const p = b.pins;
+  const list = [
+    { comp: "RC522", pin: "SDA (SS)", gpio: p.ss, sig: "SPI chip select", c: "spi" },
+    { comp: "RC522", pin: "SCK", gpio: p.sck, sig: "SPI klokke", c: "spi" },
+    { comp: "RC522", pin: "MOSI", gpio: p.mosi, sig: "SPI data ut", c: "spi" },
+    { comp: "RC522", pin: "MISO", gpio: p.miso, sig: "SPI data inn", c: "spi" },
+    { comp: "RC522", pin: "RST", gpio: p.rst, sig: "Reset", c: "rst" },
+    { comp: "RC522", pin: "GND", power: "GND", sig: "Jord", c: "gnd" },
+    { comp: "RC522", pin: "3.3V", power: "3V3", sig: "Strøm 3,3 V", c: "pwr" },
+  ];
+  if (opt.oled) list.push(
+    { comp: "OLED", pin: "GND", power: "GND", sig: "Jord", c: "gnd" },
+    { comp: "OLED", pin: "VCC", power: "3V3", sig: "Strøm 3,3 V", c: "pwr" },
+    { comp: "OLED", pin: "SCL", gpio: p.scl, sig: "I2C klokke", c: "i2c" },
+    { comp: "OLED", pin: "SDA", gpio: p.sda, sig: "I2C data", c: "i2c" });
+  if (opt.leds) list.push(
+    { comp: "Grønn LED", pin: "+ via 220 Ω", gpio: p.ledIn, sig: "Innsjekk-lys", c: "green" },
+    { comp: "Grønn LED", pin: "−", power: "GND", sig: "Jord", c: "gnd" },
+    { comp: "Rød LED", pin: "+ via 220 Ω", gpio: p.ledOut, sig: "Utsjekk-lys", c: "red" },
+    { comp: "Rød LED", pin: "−", power: "GND", sig: "Jord", c: "gnd" });
+  return list;
+}
+
+// Koblingsskjema: kortet til venstre, modulene til høyre, hver ledning i sitt eget løp.
+function drawDiagram(b, opt) {
+  const conns = connections(b, opt);
+  const comps = [...new Set(conns.map((c) => c.comp))];
+  const ROW = 24, CW = 190, PAD = 14;
+  // Modulenes posisjoner
+  let y = 30;
+  const compBox = {};
+  for (const name of comps) {
+    const pins = conns.filter((c) => c.comp === name);
+    const h = 34 + pins.length * ROW;
+    compBox[name] = { y, h, pins };
+    y += h + 26;
+  }
+  const height = Math.max(y, 120);
+  // Kortets pinner i samme rekkefølge som modulene, strøm og jord nederst
+  const sigRows = [], seen = new Set();
+  for (const c of conns) {
+    const key = c.gpio !== undefined ? "g" + c.gpio : c.power;
+    if (c.gpio !== undefined && !seen.has(key)) { seen.add(key); sigRows.push({ key, label: pinName(b, c.gpio) }); }
+  }
+  sigRows.push({ key: "3V3", label: "3V3" }, { key: "GND", label: "GND" });
+  const boardX = 20, boardW = 210;
+  const boardTop = 30, rowsTop = boardTop + 44;
+  const boardH = 44 + sigRows.length * ROW + 30;
+  const rowY = {};
+  sigRows.forEach((r, i) => (rowY[r.key] = rowsTop + i * ROW + ROW / 2));
+  const compX = 660;
+  const W = compX + CW + 20, H = Math.max(height, boardTop + boardH + 20);
+  let svg = `<title>Koblingsskjema for ${esc(b.name)}</title>`;
+  // Kort
+  svg += `<rect x="${boardX}" y="${boardTop}" width="${boardW}" height="${boardH}" rx="12" fill="var(--pcb)"/>`;
+  svg += `<text x="${boardX + 14}" y="${boardTop + 26}" fill="var(--pcb-fg)" font-family="var(--display)" font-weight="800" font-size="15">${esc(b.name)}</text>`;
+  sigRows.forEach((r) => {
+    const yy = rowY[r.key];
+    svg += `<text x="${boardX + boardW - 18}" y="${yy + 4}" text-anchor="end" fill="var(--pcb-fg)" font-family="var(--mono)" font-size="12">${esc(r.label)}</text>`;
+    svg += `<circle cx="${boardX + boardW - 7}" cy="${yy}" r="4" fill="#d9b44a"/>`;
+  });
+  svg += `<rect x="${boardX + 70}" y="${boardTop + boardH - 14}" width="60" height="10" rx="3" fill="#9aa59f"/><text x="${boardX + 100}" y="${boardTop + boardH + 12}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="11">USB</text>`;
+  // Moduler
+  for (const name of comps) {
+    const box = compBox[name];
+    const fill = name === "RC522" ? "#1f4fa3" : name === "OLED" ? "#121212" : "var(--surface)";
+    const isLed = name.endsWith(" LED");
+    const fg = isLed ? "var(--fg)" : "#ffffff";
+    svg += `<rect x="${compX}" y="${box.y}" width="${CW}" height="${box.h}" rx="10" fill="${fill}" stroke="var(--line)"/>`;
+    const title = name === "RC522" ? "RC522 RFID-leser" : name === "OLED" ? "OLED SSD1306 (I2C)" : name;
+    svg += `<text x="${compX + 12}" y="${box.y + 22}" fill="${fg}" font-family="var(--display)" font-weight="800" font-size="14">${esc(title)}</text>`;
+    if (isLed) svg += `<circle cx="${compX + CW - 22}" cy="${box.y + 18}" r="8" fill="${name.startsWith("Grønn") ? "var(--w-green)" : "var(--w-red)"}"/>`;
+    box.pins.forEach((p, i) => {
+      const yy = box.y + 34 + i * ROW + ROW / 2;
+      p.y = yy;
+      svg += `<circle cx="${compX + 7}" cy="${yy}" r="4" fill="#d9b44a"/>`;
+      svg += `<text x="${compX + 18}" y="${yy + 4}" fill="${fg}" font-family="var(--mono)" font-size="12">${esc(p.pin)}</text>`;
+    });
+  }
+  // Ledninger: ut fra kortet, ned/opp i eget løp, inn til modulen
+  const laneStart = boardX + boardW + 40, laneEnd = compX - 50;
+  const step = conns.length > 1 ? (laneEnd - laneStart) / (conns.length - 1) : 0;
+  conns.forEach((c, i) => {
+    const from = rowY[c.gpio !== undefined ? "g" + c.gpio : c.power];
+    const x0 = boardX + boardW - 3, x1 = compX + 3;
+    const lane = laneStart + i * step;
+    const path = `M${x0},${from} H${lane} V${c.y} H${x1}`;
+    svg += `<path d="${path}" fill="none" stroke="${WIRE[c.c]}" stroke-width="2.4" stroke-linejoin="round"/>`;
+    if (c.pin.includes("220")) svg += `<rect x="${x1 - 40}" y="${c.y - 6}" width="26" height="12" rx="3" fill="#d8c7a0" stroke="${WIRE[c.c]}"/>`;
+  });
+  const el = $("#diagram");
+  el.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  el.innerHTML = svg;
+  $("#legend").innerHTML = [["spi", "SPI (RC522)"], ["rst", "Reset"], ["i2c", "I2C (skjerm)"], ["pwr", "3,3 V"], ["gnd", "GND"], ["green", "Grønn LED"], ["red", "Rød LED"]]
+    .filter(([k]) => conns.some((c) => c.c === k)).map(([k, t]) => `<span><i style="background:${WIRE[k]}"></i>${t}</span>`).join("");
+  // Tabell
+  $("#wiring tbody").innerHTML = conns.map((c) => `<tr><td><span class="swatch" style="background:${WIRE[c.c]}"></span>${esc(c.comp)} ${esc(c.pin)}</td><td class="mono">${esc(c.gpio !== undefined ? pinName(b, c.gpio) : c.power)}</td><td>${esc(c.sig)}</td></tr>`).join("");
+}
+
+function configText(b, opt) {
+  const p = b.pins, v = (x) => (x === undefined ? -1 : x);
+  const ssid = $("#f-ssid").value || "MittWiFi", pass = $("#f-pass").value || "passord", owner = $("#f-owner").value;
+  const q = (s) => JSON.stringify(s);
+  return `// config.h for ${b.name} – laget av «Bygg din egen leser».
+// config.h er i .gitignore og blir aldri lastet opp til GitHub.
+#pragma once
+
+#define WIFI_SSID     ${q(ssid)}
+#define WIFI_PASSWORD ${q(pass)}
+
+// Fine-grained token KUN for saysphilippe/BambuFilament-data, "Contents: Read and write".
+// Lag en egen token for hver leser, så den kan trekkes tilbake alene.
+#define GITHUB_TOKEN  "github_pat_..."
+#define GITHUB_REPO   "saysphilippe/BambuFilament-data"
+#define GITHUB_BRANCH "main"
+#define GITHUB_PATH   "spools.json"
+
+// Hvem som skanner når ingen RFID-kort er tappet (og eier av nye spoler da). Tom = ukjent.
+#define OWNER         ${q(owner)}
+
+// RC522 (SPI). SCK=${pinName(b, p.sck)}, MISO=${pinName(b, p.miso)}, MOSI=${pinName(b, p.mosi)} er kortets standard-SPI.
+#define PIN_RC522_SS  ${p.ss}   // ${pinName(b, p.ss)}
+#define PIN_RC522_RST ${p.rst}   // ${pinName(b, p.rst)}
+
+// Lysdioder (anode via 220–330 Ω til pinnen, katode til GND). -1 = ingen.
+#define PIN_LED_IN    ${opt.leds ? p.ledIn : -1}   // grønn: sjekket inn${opt.leds ? " – " + pinName(b, p.ledIn) : ""}
+#define PIN_LED_OUT   ${opt.leds ? p.ledOut : -1}   // rød: sjekket ut${opt.leds ? " – " + pinName(b, p.ledOut) : ""}
+#define PIN_LED_BUSY  ${v(p.busy)}   // innebygd diode mens brikken leses og lagres
+
+// Ingen knapper: leseren avgjør selv inn/ut. Tidsvinduene settes under Innstillinger på nettsiden.
+#define PIN_BUTTON_IN  -1
+#define PIN_BUTTON_OUT -1
+#define CHECKOUT_AFTER_MINUTES 10
+#define CARD_SESSION_SECONDS   60
+
+// OLED-skjerm SSD1306 128x64 (I2C). -1 = ingen skjerm.
+#define PIN_OLED_SDA  ${opt.oled ? p.sda : -1}${opt.oled ? "   // " + pinName(b, p.sda) : ""}
+#define PIN_OLED_SCL  ${opt.oled ? p.scl : -1}${opt.oled ? "   // " + pinName(b, p.scl) : ""}
+#define OLED_ADDRESS  0x3C
+`;
+}
+
+function cliText(b, opt) {
+  const libs = ['"MFRC522"', '"ArduinoJson@7"'].concat(opt.oled ? ['"Adafruit SSD1306"', '"Adafruit GFX Library"'] : []);
+  return `arduino-cli core install esp32:esp32
+arduino-cli lib install ${libs.join(" ")}
+cd firmware/BambuFilament
+arduino-cli compile --fqbn ${b.fqbn} .
+arduino-cli upload  --fqbn ${b.fqbn} -p COM5 .   # bytt COM5 med porten din
+arduino-cli monitor -p COM5 -c baudrate=115200`;
+}
+
+function bom(b, opt) {
+  const rows = [
+    [b.name, 1, "Mikrokontrolleren"],
+    ["RC522 RFID-modul (13,56 MHz)", 1, "Leser Bambu-spolene og RFID-kortene"],
+    ["RFID-kort eller nøkkelringer (MIFARE)", "1 per bruker", "Følger ofte med RC522-settet"],
+  ];
+  if (opt.oled) rows.push(["OLED 0,96″ SSD1306 128×64, I2C (4 pinner)", 1, "Valgfri, viser hvem som bruker leseren"]);
+  if (opt.leds) rows.push(["Lysdiode grønn + rød (3 eller 5 mm)", "1 + 1", "Viser inn/ut"], ["Motstand 220–330 Ω", 2, "En per lysdiode"]);
+  rows.push(["Koblingsledninger (hun–hun eller koblingsbrett)", "ca. 15", ""], ["USB-kabel og 5 V-lader", 1, "Til strøm og opplasting"]);
+  $("#bom tbody").innerHTML = rows.map((r) => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join("");
+}
+
+function render() {
+  const key = document.querySelector('input[name="board"]:checked').value;
+  try { localStorage.setItem("leser.board", key); } catch {}
+  const b = BOARDS[key];
+  const opt = { oled: $("#opt-oled").checked, leds: $("#opt-leds").checked };
+  $("#board-notes").textContent = b.notes;
+  drawDiagram(b, opt);
+  $("#config").textContent = configText(b, opt);
+  $("#cli").textContent = cliText(b, opt);
+  $("#ide-board").textContent = b.ide;
+  $("#ide-extra").textContent = b.ideExtra || (b.cdcNote ? " (bruker du USB-porten: slå på «USB CDC On Boot»)" : "");
+  document.querySelectorAll(".if-oled").forEach((el) => (el.hidden = !opt.oled));
+  bom(b, opt);
+}
+
+async function copy(id, btn) {
+  const text = $(id).textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Kopiert"; }
+  catch { const r = document.createRange(); r.selectNodeContents($(id)); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Merket – trykk Ctrl+C"; }
+  setTimeout(() => (btn.textContent = id === "#config" ? "Kopier config.h" : "Kopier"), 1800);
+}
+$("#copy-config").addEventListener("click", (e) => copy("#config", e.currentTarget));
+$("#copy-cli").addEventListener("click", (e) => copy("#cli", e.currentTarget));
+document.addEventListener("change", render);
+document.addEventListener("input", (e) => e.target.matches(".form input") && render());
+render();
+</script>
