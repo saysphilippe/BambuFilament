@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008130841";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008130841";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008131032";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008131032";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -2275,8 +2275,11 @@ function renderAms() {
     const tag = live ? `Ditt · ${shared ? `deler ${shared}` : "bare synlig for deg"}` : `Delt ${fmtTime((data || lib).updated)}`;
     return `<section class="ams-owner" style="--owner:${u.color}">
       <h2><span class="owner-dot"></span>${esc(u.name)} <span class="muted">${tag}</span></h2>
-      ${data ? `<div class="printers">${data.printers.map(renderPrinter).join("") || `<p class="muted">Ingen printere.</p>`}</div>` : ""}
-      ${lib ? renderLibrary(lib) : ""}
+      ${data ? `<details class="ams-fold" data-fold="ams:${esc(u.name)}"${folded(`ams:${u.name}`) ? "" : " open"}>
+        <summary><b>AMS</b> <span class="muted">${amsSummary(data)}</span></summary>
+        <div class="printers">${data.printers.map(renderPrinter).join("") || `<p class="muted">Ingen printere.</p>`}</div>
+      </details>` : ""}
+      ${lib ? renderLibrary(lib, u.name) : ""}
     </section>`;
   }).join("");
   $("#ams-list").innerHTML = sections || `<p class="empty-msg">Ingen AMS-data eller filamentbibliotek er delt ennå.</p>`;
@@ -2288,7 +2291,22 @@ function libSwatch(x) {
   return cols.length ? swatch({ colors: cols }) : "var(--muted-bg)";
 }
 
-function renderLibrary(lib) {
+// Lukkede AMS-/bibliotekseksjoner huskes i nettleseren («ams:Navn» / «lib:Navn»).
+const foldedSet = new Set((() => { try { return JSON.parse(store("bf.folded") || "[]"); } catch { return []; } })());
+const folded = (key) => foldedSet.has(key);
+function setFolded(key, closed) {
+  if (closed) foldedSet.add(key); else foldedSet.delete(key);
+  store("bf.folded", JSON.stringify([...foldedSet]));
+}
+
+function amsSummary(data) {
+  const printers = data.printers.length;
+  const units = data.printers.reduce((n, p) => n + p.ams.length, 0);
+  const loaded = data.printers.reduce((n, p) => n + p.ams.reduce((m, a) => m + a.trays.filter((t) => !t.empty).length, 0) + p.external.filter((t) => !t.empty).length, 0);
+  return `${printers} ${printers === 1 ? "printer" : "printere"} · ${units} AMS · ${loaded} spoler i bruk`;
+}
+
+function renderLibrary(lib, owner = "") {
   const scanned = new Set(state.spools.map((s) => s.id.toUpperCase()));
   const where = amsLocations(true);
   const list = lib.spools.slice().sort((a, b) => (b.net > 0) - (a.net > 0) || a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
@@ -2310,7 +2328,7 @@ function renderLibrary(lib) {
     </div>`;
   }).join("");
   const kg = (grams / 1000).toLocaleString("nb-NO", { maximumFractionDigits: 1 });
-  return `<details class="library" open>
+  return `<details class="library" data-fold="lib:${esc(owner)}"${folded(`lib:${owner}`) ? "" : " open"}>
     <summary><b>Filamentbibliotek</b> <span class="muted">${left.length} spoler med filament · ${kg} kg igjen${list.length > left.length ? ` · ${list.length - left.length} tomme` : ""}</span></summary>
     ${list.length ? `<div class="lib-grid">${items}</div>` : `<p class="muted">Biblioteket er tomt.</p>`}
   </details>`;
@@ -2972,6 +2990,7 @@ document.addEventListener("click", (e) => {
 // Husk hvilke typer som er åpne i «Alle typer», så de ikke lukkes ved oppdatering.
 document.addEventListener("toggle", (e) => {
   const d = e.target;
+  if (d.matches?.("details[data-fold]")) return setFolded(d.dataset.fold, !d.open);
   if (!d.matches?.("details.all-type")) return;
   if (d.open) state.openTypes.add(d.dataset.type); else state.openTypes.delete(d.dataset.type);
 }, true);
