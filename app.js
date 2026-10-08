@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008141819";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008141819";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008142005";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008142005";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -651,11 +651,13 @@ function render() {
   const fl = state.filters;
   const statBtn = (key, active, value, label, extra = "") =>
     `<button type="button" class="stat stat-filter${active ? " active" : ""}${extra}" data-stat="${esc(key)}" aria-pressed="${active}"><b>${value}</b><span>${label}</span></button>`;
+  // Lager: bare registrert med leseren, ikke vært i bruk. Bibliotek: har stått i en AMS og er tatt ut igjen.
+  // Står under materialfilteret.
+  $("#kind-stats").innerHTML =
+    statBtn("kind:rfid", fl.kind === "rfid", inStock.filter((s) => s.kind === "rfid").length, "lager (ubrukt)") +
+    statBtn("kind:library", fl.kind === "library", inStock.filter((s) => s.kind === "library").length, "bibliotek (brukt)");
   $("#stats").innerHTML =
     statBtn("all", fl.status === "in" && !fl.owner && !fl.ams && !fl.kind, inStock.length, "spoler på lager") +
-    // Lager: bare registrert med leseren, ikke vært i bruk. Bibliotek: har stått i en AMS og er tatt ut igjen.
-    statBtn("kind:rfid", fl.kind === "rfid", inStock.filter((s) => s.kind === "rfid").length, "lager (ubrukt)") +
-    statBtn("kind:library", fl.kind === "library", inStock.filter((s) => s.kind === "library").length, "bibliotek (brukt)") +
     `<div class="stat"><b>${kg.toLocaleString("nb-NO", { maximumFractionDigits: 1 })} kg</b><span>filament igjen (ca.)</span></div>` +
     statBtn("ams", fl.ams, inAms, "i AMS nå") +
     statBtn("out", fl.status === "out", items.filter((s) => s.status === "out").length, "tatt ut") +
