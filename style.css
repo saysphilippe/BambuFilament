@@ -408,7 +408,8 @@ body.demo .demo-banner { display: block; }
 .ams-fold[open] > summary { margin-bottom: 8px; }
 .printers { display: grid; grid-template-columns: 1fr; gap: 12px; }
 /* AMS-enhetene to og to ved siden av hverandre (én kolonne på smale skjermer). */
-.ams-units { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); column-gap: 20px; }
+.ams-units { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; }
+@media (max-width: 760px) { .ams-units { grid-template-columns: 1fr; } }
 .printer { padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--owner); border-radius: 14px; box-shadow: var(--shadow); }
 .printer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .online-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
@@ -485,8 +486,11 @@ body.demo .demo-banner { display: block; }
 .all-type-head .btn { margin-left: auto; }
 a.btn { text-decoration: none; display: inline-block; }
 
-.library { margin-top: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--owner); border-radius: 14px; }
-.library summary { cursor: pointer; margin-bottom: 4px; }
+.library { margin-bottom: 12px; }
+.library[open] > summary { margin-bottom: 8px; }
+/* Samme boks som printerne i AMS-delen. */
+.lib-card { padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--owner); border-radius: 14px; box-shadow: var(--shadow); }
+.lib-card .lib-grid { margin-top: 0; }
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; margin-top: 10px; }
 .lib-item { display: flex; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg); }
 .lib-empty { opacity: .5; }

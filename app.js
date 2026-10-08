@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008131111";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008131111";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008131302";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008131302";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -2330,7 +2330,7 @@ function renderLibrary(lib, owner = "") {
   const kg = (grams / 1000).toLocaleString("nb-NO", { maximumFractionDigits: 1 });
   return `<details class="library" data-fold="lib:${esc(owner)}"${folded(`lib:${owner}`) ? "" : " open"}>
     <summary><b>Filamentbibliotek</b> <span class="muted">${left.length} spoler med filament · ${kg} kg igjen${list.length > left.length ? ` · ${list.length - left.length} tomme` : ""}</span></summary>
-    ${list.length ? `<div class="lib-grid">${items}</div>` : `<p class="muted">Biblioteket er tomt.</p>`}
+    <div class="lib-card">${list.length ? `<div class="lib-grid">${items}</div>` : `<p class="muted">Biblioteket er tomt.</p>`}</div>
   </details>`;
 }
 
