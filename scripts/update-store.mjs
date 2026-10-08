@@ -1,5 +1,7 @@
-// Henter alle produkter i Bambu Lab-butikken (EU) med pris og lagerstatus per variant,
-// og skriver data/store.json for fanen «Butikk».
+// Henter alle produkter i Bambu Lab-butikken (EU) med pris og lagerstatus per variant, og
+// eurokursen fra Norges Bank, og sender alt til databasen via Workeren (/store/ingest, med
+// STORE_INGEST_KEY). Workeren lagrer prishistorikk for hver prisendring. Uten nøkkel (lokalt)
+// skrives data/store.json i stedet.
 //
 // Produktlisten kommer fra nettstedskartet, lagerstatus fra butikkens queryDrawer.
 // Kjøres to ganger i døgnet av .github/workflows/catalog.yml, med få samtidige kall.
@@ -56,9 +58,11 @@ const rows = await mapLimit(products, CONCURRENCY, async (p) => {
     price: prices.length ? Math.min(...prices) : null,
     ...(refill ? { refill } : {}),
     ...(withSpool ? { withSpool } : {}),
+    // [navn, utsolgt, pris i euro]
     variants: skus.map((s) => [
       (s.productSkuPropertyList || []).map((x) => x.propertyValue).join(" / ") || name,
       s.isSoldOut ? 1 : 0,
+      Number.isFinite(Number(s.discountPrice ?? s.price)) ? Number(s.discountPrice ?? s.price) : null,
     ]),
     status: !d ? "unknown" : !skus.length ? "unknown" : soldOut === 0 ? "in" : soldOut === skus.length ? "out" : "partial",
     isNew: d?.newFlag === 1,
@@ -74,13 +78,41 @@ const categories = Object.fromEntries([
 const counts = {};
 for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
 
-await writeFile("data/store.json", JSON.stringify({
-  updated: new Date().toISOString(),
-  store: STORE,
-  currency: "EUR",
-  categories,
+// Eurokurs (NOK per EUR) fra Norges Bank, siste publiserte dag.
+async function eurNok() {
+  try {
+    const res = await fetch("https://data.norges-bank.no/api/data/EXR/B.EUR.NOK.SP?lastNObservations=1&format=sdmx-json");
+    const j = await res.json();
+    const series = Object.values(j.data.dataSets[0].series)[0];
+    const i = Object.keys(series.observations).at(-1);
+    return { eurNok: Number(series.observations[i][0]), date: j.data.structure.dimensions.observation[0].values[i].id, source: "Norges Bank" };
+  } catch (err) {
+    console.warn("Fant ikke eurokurs:", err.message);
+    return null;
+  }
+}
+
+const store = {
+  meta: { updated: new Date().toISOString(), store: STORE, currency: "EUR", categories, fx: await eurNok() },
   products: rows.sort((a, b) => a.name.localeCompare(b.name)),
-}) + "\n");
+};
+console.log(`Eurokurs: ${JSON.stringify(store.meta.fx)}`);
+
+const KEY = process.env.STORE_INGEST_KEY;
+const WORKER = process.env.WORKER_URL || "https://bambufilament-proxy.saysphilippe.workers.dev";
+if (KEY) {
+  const res = await fetch(`${WORKER}/store/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Store-Key": KEY },
+    body: JSON.stringify(store),
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Workeren svarte ${res.status}: ${out.error || ""}`);
+  console.log(`Lagret i databasen: ${JSON.stringify(out)}`);
+} else {
+  await writeFile("data/store.json", JSON.stringify({ ...store.meta, products: store.products }) + "\n");
+  console.log("Ingen STORE_INGEST_KEY: skrev data/store.json lokalt");
+}
 
 console.log(`Lagerstatus: ${JSON.stringify(counts)}, feilet: ${failed}, nye forsøk: ${stats.retries}, via proxy: ${stats.viaProxy}`);
 const byCat = {};

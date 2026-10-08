@@ -66,7 +66,7 @@ const LIMITS = {
   "/ams": "DATA_LIMIT", "/library": "DATA_LIMIT",
   "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
   "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/reset-token": "AUTH_LIMIT", "/approve": "AUTH_LIMIT",
-  "/db/load": "DB_LIMIT", "/db/patch": "DB_LIMIT", "/reader/card": "DB_LIMIT", "/reader/scan": "DB_LIMIT",
+  "/db/load": "DB_LIMIT", "/db/patch": "DB_LIMIT", "/store/load": "DB_LIMIT", "/store/history": "DB_LIMIT", "/reader/card": "DB_LIMIT", "/reader/scan": "DB_LIMIT",
 };
 
 export default {
@@ -82,6 +82,8 @@ export default {
     // Leseren (ESP32) sender ingen Origin; den har sin egen token og egne endepunkter.
     const reqPath = new URL(request.url).pathname;
     if (reqPath.startsWith("/reader/")) return readerRequest(request, env, reqPath);
+    // Butikkdata fra GitHub Actions (egen nøkkel, ingen Origin).
+    if (reqPath === "/store/ingest") return storeIngest(request, env);
     if (request.method !== "POST") return json({ error: "Bruk POST" }, 405, origin);
     if (!allowed.includes(sent)) return json({ error: "Ukjent opprinnelse" }, 403, origin);
 
@@ -122,6 +124,12 @@ export default {
         case "/db/patch":
           await requireUser(token, env);
           return json(await dbPatch(body, env), 200, origin);
+        case "/store/load":
+          await requireUser(token, env);
+          return json(await storeLoad(env), 200, origin);
+        case "/store/history":
+          await requireUser(token, env);
+          return json(await storeHistory(body, env), 200, origin);
         case "/reset-token":
           if (!token) return json({ error: "Mangler GitHub-token" }, 401, origin);
           return json(await saveResetToken(token, env), 200, origin);
@@ -1062,4 +1070,65 @@ async function backupToGitHub(env) {
     }, `Sikkerhetskopi av databasen: ${file}`);
   }
   console.log("Sikkerhetskopi lagret", Object.keys(docs).join(", "));
+}
+
+// ---------- Bambu-butikken i databasen ----------
+//
+// GitHub Actions henter butikken (scripts/update-store.mjs) og sender alt hit (/store/ingest,
+// med nøkkelen STORE_INGEST_KEY). Produktene erstattes, og prishistorikken får en ny rad bare
+// for varianter der prisen er endret. Siden henter med /store/load og /store/history.
+// Alt gjøres med få spørringer (json_each), så det holder seg innenfor Workerens grenser.
+
+async function storeIngest(request, env) {
+  const reply = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+  if (request.method !== "POST") return reply({ error: "Bruk POST" }, 405);
+  const key = request.headers.get("X-Store-Key") || "";
+  if (!env.STORE_INGEST_KEY || key.length < 32 || key !== env.STORE_INGEST_KEY) return reply({ error: "Ugyldig nøkkel" }, 401);
+  const body = await request.json().catch(() => null);
+  const products = Array.isArray(body?.products) ? body.products.filter((p) => p && typeof p.handle === "string") : null;
+  if (!products?.length) return reply({ error: "Mangler produkter" }, 400);
+  const now = new Date().toISOString();
+  const day = now.slice(0, 10);
+  // Varianter med pris, for historikken: { h, v, p }.
+  const prices = [];
+  for (const p of products) for (const v of p.variants || []) {
+    const price = Number(v[2]);
+    if (Number.isFinite(price) && price > 0) prices.push({ h: p.handle, v: String(v[0]).slice(0, 200), p: price });
+  }
+  const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM price_history").first();
+  await env.DB.batch([
+    // Ny pris bare når den skiller seg fra siste kjente for samme variant.
+    env.DB.prepare(`INSERT OR IGNORE INTO price_history (handle, variant, at, price)
+      SELECT x.h, x.v, ?1, x.p FROM (
+        SELECT json_extract(value, '$.h') AS h, json_extract(value, '$.v') AS v, json_extract(value, '$.p') AS p FROM json_each(?2)
+      ) AS x
+      WHERE x.p IS NOT (SELECT ph.price FROM price_history ph WHERE ph.handle = x.h AND ph.variant = x.v ORDER BY ph.at DESC LIMIT 1)`)
+      .bind(day, JSON.stringify(prices)),
+    env.DB.prepare("DELETE FROM store_products"),
+    env.DB.prepare(`INSERT INTO store_products (handle, data, updated)
+      SELECT json_extract(value, '$.handle'), value, ?1 FROM json_each(?2)`).bind(now, JSON.stringify(products)),
+    env.DB.prepare("INSERT OR REPLACE INTO store_meta (key, data) VALUES ('meta', ?1)")
+      .bind(JSON.stringify({ ...(body.meta || {}), updated: body.meta?.updated || now })),
+  ]);
+  const after = await env.DB.prepare("SELECT COUNT(*) AS n FROM price_history").first();
+  return reply({ ok: true, products: products.length, variants: prices.length, priceChanges: after.n - before.n });
+}
+
+async function storeLoad(env) {
+  const meta = await env.DB.prepare("SELECT data FROM store_meta WHERE key = 'meta'").first();
+  if (!meta) return null;
+  const { results } = await env.DB.prepare("SELECT data FROM store_products").all();
+  const counts = await env.DB.prepare("SELECT handle, COUNT(DISTINCT at) AS n FROM price_history GROUP BY handle HAVING n > 1").all();
+  return {
+    ...JSON.parse(meta.data),
+    products: results.map((r) => JSON.parse(r.data)).sort((a, b) => a.name.localeCompare(b.name)),
+    // Produkter som har prisendringer (mer enn ett datapunkt), så siden kan vise graf-knapp.
+    changed: Object.fromEntries(counts.results.map((r) => [r.handle, r.n])),
+  };
+}
+
+async function storeHistory({ handle }, env) {
+  if (typeof handle !== "string" || !handle) throw fail("Mangler produkt");
+  const { results } = await env.DB.prepare("SELECT variant, at, price FROM price_history WHERE handle = ? ORDER BY at").bind(handle).all();
+  return { handle, history: results };
 }
