@@ -322,6 +322,11 @@ dialog label input, dialog label select, dialog label textarea { margin-top: 4px
 .vipps-amount input { width: 100px; }
 #v-price { font-size: 12px; }
 .v-desktop { align-self: center; font-size: 13px; }
+.v-qr { display: flex; gap: 14px; align-items: center; margin: 4px 0 10px; }
+.v-qr[hidden] { display: none; }
+.v-qr-code { flex: none; width: 150px; padding: 6px; background: #fff; border-radius: 10px; border: 1px solid var(--border); }
+.v-qr-code svg { display: block; width: 100%; height: auto; }
+.v-qr .hint { margin: 0; }
 #v-open[hidden], .v-desktop[hidden] { display: none; }
 .loan-actions select { width: auto; padding: 4px 8px; font-size: 13px; }
 .loan-state.pending { background: color-mix(in srgb, var(--out) 30%, transparent); }

@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008173239";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008173239";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008173513";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008173513";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -480,6 +480,7 @@ async function refresh() {
   try {
     setDoc(DEMO ? demoDoc() : await loadDoc());
     if (token()) {
+      setTimeout(openVippsFromUrl);
       recordSeen();
       shareToken();
       syncReaderCheckouts();
@@ -1225,12 +1226,35 @@ function openVipps(loanId) {
   open.hidden = !(android || ios);
   open.href = android ? "intent://#Intent;package=no.dnb.vipps;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dno.dnb.vipps;end" : "vipps://";
   $("#v-desktop").hidden = android || ios;
+  // PC: QR-kode som åpner det samme vinduet på mobilen (der Vipps finnes).
+  const qrBox = $("#v-qr");
+  qrBox.hidden = android || ios || typeof qrcode !== "function";
+  if (!qrBox.hidden) {
+    const url = `${location.origin}${location.pathname}?vipps=${encodeURIComponent(l.id)}`;
+    const qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    qrBox.innerHTML = `<div class="v-qr-code">${qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true })}</div>
+      <p class="hint">Skann med mobilkameraet for å åpne dette vinduet på mobilen, og trykk «Åpne Vipps» der. Du må være innlogget på Filament Universet på mobilen.</p>`;
+  }
   $("#v-return").checked = false;
   $("#v-return-label").hidden = !spoolKr;
   setVippsAmount();
   $("#v-msg").textContent = `Filament Universet: ${what}`;
   $("#v-error").textContent = "";
   $("#vipps").showModal();
+}
+
+// Lenke fra QR-koden (?vipps=<lån>): åpne lånefanen og Vipps-vinduet når dataene er lastet.
+let vippsFromUrl = new URLSearchParams(location.search).get("vipps") || "";
+function openVippsFromUrl() {
+  if (!vippsFromUrl || !token()) return;
+  const id = vippsFromUrl;
+  if (!state.loans.some((l) => l.id === id)) return;
+  vippsFromUrl = "";
+  history.replaceState(null, "", location.pathname);
+  showTab("loans");
+  openVipps(id);
 }
 
 async function vippsSubmit(e) {

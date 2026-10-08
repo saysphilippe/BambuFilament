@@ -10,7 +10,7 @@
   <title>Filament Universet</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008173239">
+  <link rel="stylesheet" href="style.css?v=20261008173513">
 </head>
 <body>
   <header>
@@ -260,6 +260,7 @@
         <div class="vipps-row"><span class="muted">Beløp</span><span class="vipps-amount"><input id="v-amount" type="number" min="1" max="10000" step="1"> kr</span><span id="v-price" class="muted"></span><button type="button" class="btn btn-small" data-copy="v-amount">Kopier</button></div>
         <div class="vipps-row"><span class="muted">Melding</span><span id="v-msg"></span><span></span><button type="button" class="btn btn-small" data-copy="v-msg">Kopier</button></div>
       </div>
+      <div id="v-qr" class="v-qr" hidden></div>
       <label id="v-return-label" class="switch"><input id="v-return" type="checkbox"> Jeg leverer den tomme spolen tilbake (betal uten spoletillegg)</label>
       <p class="hint">Vipps lar ikke andre fylle inn mottaker og beløp for betaling mellom privatpersoner. Åpne Vipps, velg mottakeren, lim inn beløpet og meldingen, og betal. Trykk så «Betalt med Vipps» her, så blir lånet gjort opp.</p>
       <p id="v-error" class="error"></p>
@@ -385,6 +386,7 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=20261008173239"></script>
+  <script src="vendor/qrcode.js"></script>
+  <script type="module" src="app.js?v=20261008173513"></script>
 </body>
 </html>
