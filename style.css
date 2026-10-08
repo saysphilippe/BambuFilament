@@ -250,6 +250,27 @@ dialog label input, dialog label select, dialog label textarea { margin-top: 4px
 
 .d-quick { display: flex; gap: 8px; margin-bottom: 12px; }
 .d-quick .btn { flex: 1; padding: 10px; font-size: 15px; }
+.d-quick .d-borrow { flex: 1; margin: 0; }
+.d-quick .d-borrow select { width: 100%; }
+
+/* Lånt filament */
+.loan-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.loan-debt { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--out) 15%, transparent); font-size: 14px; }
+.loan-debt.clear { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.loans h2 { font-size: 16px; margin: 18px 0 8px; }
+.loan-list { list-style: none; margin: 0; padding: 0; }
+.loan-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+.loan-list li:first-child { border-top: 0; }
+.loan-list .dot { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); }
+.loan-what { flex: 1 1 220px; min-width: 0; }
+.loan-what b { display: block; }
+.loan-who { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.loan-who .owner-dot { display: inline-block; }
+.loan-state { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--muted-bg); }
+.loan-state.out { background: color-mix(in srgb, var(--out) 20%, transparent); }
+.loan-state.owes { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.loan-state.returned, .loan-state.settled { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.loan-actions { display: flex; gap: 6px; }
 
 .d-rows { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 14px; }
 .d-rows dt { color: var(--muted); }
@@ -503,6 +524,8 @@ details.all-type > .news-colors { margin-top: 10px; }
 .card.kind-library, .card.kind-ams { cursor: default; }
 .card.kind-library:hover, .card.kind-ams:hover { transform: none; }
 .card-loc { font-size: 12px; font-weight: 600; color: var(--accent); }
+.card-use { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; font-weight: 600; }
+.card-use .owner-dot { flex: none; }
 
 body.locked .tabs, body.locked main, body.locked #open-users, body.locked #refresh, body.locked #sync { display: none !important; }
 .gate { display: grid; place-items: center; min-height: 70vh; padding: 16px; }

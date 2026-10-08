@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008120841";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008120841";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008121939";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008121939";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -17,6 +17,8 @@ const FILES = {
   shared: { repo: DATA_REPO, path: "shared.json", empty: () => ({ version: 1, ams: {}, library: {}, wishes: {} }) },
   // Innlogginger og sist aktiv, for innloggingsstatistikken (bare admin ser den).
   activity: { repo: DATA_REPO, path: "activity.json", empty: () => ({ version: 1, logins: [], seen: {} }) },
+  // Utlån: hvem som har lånt hvilken spole, og om det er levert tilbake eller gjort opp.
+  loans: { repo: DATA_REPO, path: "loans.json", empty: () => ({ version: 1, loans: [] }) },
   // E-postadresser og ventende registreringer (skrives også av Workeren, se worker/).
   contacts: { repo: DATA_REPO, path: "contacts.json", empty: () => ({ version: 1, emails: {}, pending: [] }) },
 };
@@ -57,6 +59,7 @@ const state = {
   colorIndex: {},
   activity: { logins: [], seen: {} },
   contacts: { emails: {}, pending: [] },
+  loans: [],
   usersTab: "list",
   tab: "stock",
   amsLive: null,
@@ -165,10 +168,12 @@ async function loadFile(file) {
 async function loadDoc() {
   const auth = await loadFile("users");
   if (!token()) return { ...auth, spools: [], ams: {}, library: {}, wishes: {} };
-  const [main, shared, activity, contacts] = await Promise.all([
+  const [main, shared, activity, contacts, loans] = await Promise.all([
     loadFile("spools"), loadFile("shared"), loadFile("activity"), loadFile("contacts").catch(() => FILES.contacts.empty()),
+    loadFile("loans").catch(() => FILES.loans.empty()),
   ]);
   state.activity = cleanActivity(activity);
+  state.loans = cleanLoans(loans);
   state.contacts = cleanContacts(contacts);
   return { users: auth.users || [], spools: main.spools || [], ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {} };
 }
@@ -194,6 +199,8 @@ async function saveDoc(mutate, message, file = "spools") {
     } else if (file === "activity") {
       doc.logins = Array.isArray(doc.logins) ? doc.logins : [];
       doc.seen = doc.seen && typeof doc.seen === "object" ? doc.seen : {};
+    } else if (file === "loans") {
+      doc.loans = Array.isArray(doc.loans) ? doc.loans : [];
     } else if (file === "contacts") {
       doc.emails = doc.emails && typeof doc.emails === "object" ? doc.emails : {};
       doc.pending = Array.isArray(doc.pending) ? doc.pending : [];
@@ -223,6 +230,10 @@ async function saveDoc(mutate, message, file = "spools") {
       }
       if (file === "contacts") {
         state.contacts = cleanContacts(doc);
+        return state.doc;
+      }
+      if (file === "loans") {
+        state.loans = cleanLoans(doc);
         return state.doc;
       }
       const merged = file === "users" ? { ...state.doc, users: doc.users }
@@ -280,10 +291,13 @@ function family(tag) {
 
 function enrich(spool) {
   const tag = parseTag(spool.blocks);
+  const inAms = spool.inAms && str(spool.inAms.user) && !isNaN(new Date(spool.inAms.at))
+    ? { user: clip(spool.inAms.user, MAX.user), at: str(spool.inAms.at) } : null;
   const code = tag?.variantId.split("-")[1];
   const official = tag && state.colorNames[`${tag.materialId}-${code}`];
   return {
     ...spool,
+    inAms,
     status: statusOf(spool),
     tag,
     colorName: official?.[0] || "",
@@ -364,6 +378,18 @@ function cleanContacts(c) {
   return { emails, pending };
 }
 
+function cleanLoans(d) {
+  const time = (x) => (x && !isNaN(new Date(x)) ? str(x) : "");
+  return (Array.isArray(d?.loans) ? d.loans : []).map((l) => ({
+    id: str(l.id), spool: str(l.spool), owner: clip(l.owner, MAX.user), to: clip(l.to, MAX.user), by: clip(l.by, MAX.user),
+    at: time(l.at), returnedAt: time(l.returnedAt), usedAt: time(l.usedAt), settledAt: time(l.settledAt),
+    settledBy: clip(l.settledBy, MAX.user), note: clip(l.note, MAX.note),
+    // Kopi av spolens navn, så lånet kan vises også om spolen slettes.
+    title: clip(l.title, MAX.name), type: clip(l.type, MAX.name), color: hexOnly(l.color),
+    gramsOut: num(l.gramsOut), gramsSrc: l.gramsSrc === "new" ? "new" : l.gramsSrc === "lib" ? "lib" : "", gramsIn: num(l.gramsIn),
+  })).filter((l) => l.id && l.spool && l.to && l.at);
+}
+
 const cleanMap = (obj, fn) => Object.fromEntries(Object.entries(obj || {}).map(([k, v]) => [k, fn(v)]).filter(([, v]) => v));
 
 function setDoc(doc) {
@@ -378,9 +404,20 @@ function setDoc(doc) {
   state.spools = state.doc.spools.map(enrich);
 }
 
-function addEvent(spool, action) {
-  spool.history = [...(spool.history || []), { at: new Date().toISOString(), action, by: userName() }].slice(-10);
+function addEvent(spool, action, extra = {}) {
+  spool.history = [...(spool.history || []), { at: new Date().toISOString(), action, by: userName(), ...extra }].slice(-10);
 }
+
+// Hvor mye som er igjen på en RFID-spole: fra Bambu-biblioteket hvis den finnes der,
+// ellers full rull hvis den aldri er sjekket ut før (ubrukt). Ellers ukjent (null).
+function gramsLeftNow(s, { beforeAt = "" } = {}) {
+  const lib = libraryWeight(s.id);
+  if (lib && lib.total) return { g: lib.net, src: "lib" };
+  const earlierOut = (s.history || []).some((e) => e.action === "out" && (!beforeAt || e.at < beforeAt));
+  if (!earlierOut && s.tag?.weight) return { g: s.tag.weight, src: "new" };
+  return null;
+}
+const gramsText = (x) => (x ? `${x.g} g${x.src === "new" ? " (ubrukt rull)" : ""}` : "");
 
 // Brukere fra listen, pluss eiere som finnes på spoler uten å være lagt inn.
 function users() {
@@ -408,6 +445,7 @@ async function refresh() {
     if (token()) {
       recordSeen();
       shareToken();
+      syncReaderLoans();
     }
     setSync(DEMO ? "Demo – eksempeldata" : `Oppdatert ${new Date().toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })}`);
   } catch (e) {
@@ -554,7 +592,7 @@ function filtered({ ignoreType = false } = {}) {
     (!type || s.typeName === type) &&
     (!fam || s.family === fam) &&
     (!status || s.status === status) &&
-    (!needle || [title(s), s.typeName, s.colorName, s.tag?.colors.join(" "), s.owner, s.note, s.location, SOURCE[s.kind]].join(" ").toLowerCase().includes(needle))
+    (!needle || [title(s), s.typeName, s.colorName, s.tag?.colors.join(" "), s.owner, s.note, s.location, SOURCE[s.kind], usage(s)?.user].join(" ").toLowerCase().includes(needle))
   );
   const by = {
     type: (a, b) => a.typeName.localeCompare(b.typeName) || hueOf(a) - hueOf(b),
@@ -573,6 +611,7 @@ function chip(group, value, label, active, dot) {
 function render() {
   renderAms();
   if (state.tab === "news") renderNews();
+  if (state.tab === "loans") renderLoans();
   const all = users();
   const items = stockItems();
   const inStock = items.filter((s) => s.status === "in");
@@ -640,11 +679,204 @@ function render() {
             ${weightLabel(s)}
           </div>
           ${s.location ? `<div class="card-loc">${esc(s.location)}</div>` : ""}
+          ${usageLine(s)}
           ${s.note ? `<div class="card-note">${esc(s.note)}</div>` : ""}
         </div>
       </${tagName}>`;
     }).join("")
     : `<p class="empty-msg">${items.length ? "Ingen spoler passer filteret." : `Ingen spoler ennå. Skann en spole med leseren, eller del Bambu-biblioteket ditt under «AMS og bibliotek»${DEMO ? "" : `, eller <a href="?demo">se demo med eksempeldata</a>`}.`}</p>`;
+}
+
+// Hvem som bruker en lagerspole: «I AMS hos X» (fra X sin egen AMS) eller «Tatt ut av X».
+// En AMS-merking eldre enn siste innsjekk gjelder ikke (spolen er tilbake på hylla).
+function usage(s) {
+  if (s.kind !== "rfid") return null;
+  const history = s.history || [];
+  const lastIn = [...history].reverse().find((e) => e.action === "in");
+  if (s.inAms && (!lastIn || s.inAms.at > lastIn.at)) return { kind: "ams", user: s.inAms.user, at: s.inAms.at };
+  if (s.status === "out") {
+    const loan = openLoan(s.id);
+    if (loan) return { kind: "loan", user: loan.to, at: loan.at };
+    const out = [...history].reverse().find((e) => e.action === "out");
+    if (out?.by) return { kind: "out", user: out.by, at: out.at };
+  }
+  return null;
+}
+
+function usageLine(s) {
+  const u = usage(s);
+  if (!u) return "";
+  const text = u.kind === "ams" ? `I AMS hos ${u.user}` : u.kind === "loan" ? `Utlånt til ${u.user}` : `Tatt ut av ${u.user}`;
+  const tip = u.kind === "ams" ? `Sist sett i AMS-en ${fmtTime(u.at)}` : fmtTime(u.at);
+  return `<div class="card-use" style="--owner:${userColor(u.user)}" title="${esc(tip)}"><span class="owner-dot"></span>${esc(text)}</div>`;
+}
+
+// ---------- Lånt filament ----------
+//
+// Et lån opprettes når en spole sjekkes ut til noen andre enn eieren: valgt i «Lånes ut til»,
+// eller automatisk når noen sjekker ut en spole de ikke eier (også med RFID-leseren).
+// Status regnes ut fra lånet og spolen: utlånt → levert tilbake (sjekket inn) eller
+// skylder (brukt opp) → gjort opp.
+
+const MAX_LOANS = 300;
+const LOAN_STATE = { out: "Utlånt", owes: "Skylder", returned: "Levert tilbake", settled: "Gjort opp" };
+
+function loanState(l) {
+  if (l.settledAt) return "settled";
+  if (l.returnedAt) return "returned";
+  if (l.usedAt) return "owes";
+  const s = state.spools.find((x) => x.id === l.spool);
+  if (!s) return "owes";
+  const after = (s.history || []).filter((e) => e.at > l.at);
+  const last = after.at(-1);
+  if (s.status === "empty" && after.some((e) => e.action === "empty")) return "owes";
+  if (s.status === "in" && last?.action === "in") return "returned";
+  return "out";
+}
+
+const openLoan = (spoolId) => [...state.loans].reverse().find((l) => l.spool === spoolId && loanState(l) === "out");
+
+function loanFor(spool, to, at, by, left = gramsLeftNow(spool, { beforeAt: at })) {
+  return {
+    id: `${spool.id}:${at}`, spool: spool.id, owner: spool.owner || "", to, by, at,
+    title: title(spool), type: spool.typeName || "", color: spool.tag?.colors[0]?.slice(1, 7) || "",
+    ...(left ? { gramsOut: left.g, gramsSrc: left.src } : {}),
+  };
+}
+
+// Eldste avsluttede lån fjernes når listen blir for lang.
+function trimLoans(doc) {
+  while (doc.loans.length > MAX_LOANS) {
+    const i = doc.loans.findIndex((l) => l.settledAt || l.returnedAt);
+    doc.loans.splice(i >= 0 ? i : 0, 1);
+  }
+}
+
+async function addLoan(spool, to, at, by, left) {
+  const loan = loanFor(spool, to, at, by, left || undefined);
+  await saveDoc((doc) => {
+    if (doc.loans.some((l) => l.id === loan.id)) return;
+    doc.loans.push(loan);
+    trimLoans(doc);
+  }, `Lån: ${loan.title} til ${to} (${by})`, "loans");
+}
+
+async function closeLoan(spoolId, field, note = "", lib = null) {
+  const loan = openLoan(spoolId) || state.loans.find((l) => l.spool === spoolId && loanState(l) === "owes");
+  if (!loan) return;
+  await saveDoc((doc) => {
+    const l = doc.loans.find((x) => x.id === loan.id);
+    if (!l) return "Lånet finnes ikke lenger.";
+    l[field] = new Date().toISOString();
+    if (field === "settledAt") l.settledBy = userName();
+    if (note) l.note = clip(note, MAX.note);
+    // Vekt ved innlevering fra Bambu-biblioteket, så man ser hvor mye som ble brukt.
+    if (field === "returnedAt" && lib?.total) l.gramsIn = lib.net;
+  }, `Lån ${{ returnedAt: "levert tilbake", usedAt: "brukt opp", settledAt: "gjort opp" }[field]}: ${loan.title} (${userName()})`, "loans");
+}
+
+// Utsjekk med RFID-leseren av en spole man ikke eier, blir et lån automatisk.
+async function syncReaderLoans() {
+  if (DEMO || !token()) return;
+  const fresh = [];
+  for (const s of state.spools) {
+    if (s.status !== "out" || !s.owner) continue;
+    const out = (s.history || []).filter((e) => e.action === "out").at(-1);
+    if (!out?.by || out.by === s.owner) continue;
+    if (state.loans.some((l) => l.spool === s.id && l.at >= out.at)) continue;
+    fresh.push(loanFor(s, out.by, out.at, out.by));
+  }
+  if (!fresh.length) return;
+  try {
+    await saveDoc((doc) => {
+      for (const l of fresh) if (!doc.loans.some((x) => x.id === l.id)) doc.loans.push(l);
+      trimLoans(doc);
+    }, `Lån fra utsjekk (${fresh.map((l) => l.to).join(", ")})`, "loans");
+    render();
+  } catch (err) {
+    console.warn("Kunne ikke registrere lån:", err.message);
+  }
+}
+
+async function loanAction(action, spoolId, btn) {
+  const labels = { returned: "Levert? Trykk igjen", used: "Brukt opp? Trykk igjen", settled: "Gjort opp? Trykk igjen" };
+  if (!confirmed(btn, labels[action])) return;
+  btn.disabled = true;
+  try {
+    if (action === "returned" || action === "used") {
+      const status = action === "returned" ? "in" : "empty";
+      await saveDoc((doc) => {
+        const s = doc.spools.find((x) => x.id === spoolId);
+        if (!s) return;
+        if (statusOf(s) !== status) addEvent(s, status);
+        s.status = status;
+      }, `${action === "returned" ? "Innsjekk" : "Brukt opp"} spole ${spoolId.slice(0, 8)} (${userName()}, lån)`);
+      await closeLoan(spoolId, action === "returned" ? "returnedAt" : "usedAt", "", libraryWeight(spoolId));
+    } else {
+      await closeLoan(spoolId, "settledAt");
+    }
+  } catch (err) {
+    $("#loan-error").textContent = err.message;
+    btn.disabled = false;
+  }
+  render();
+}
+
+function renderLoans() {
+  const box = $("#tab-loans");
+  const loans = state.loans.map((l) => ({ ...l, state: loanState(l) }));
+  const out = loans.filter((l) => l.state === "out");
+  const owes = loans.filter((l) => l.state === "owes");
+  const done = loans.filter((l) => l.state === "returned" || l.state === "settled")
+    .sort((a, b) => (b.settledAt || b.returnedAt || b.at).localeCompare(a.settledAt || a.returnedAt || a.at)).slice(0, 25);
+
+  // Hvem skylder hvem: én linje per låntaker → eier.
+  const debts = {};
+  for (const l of owes) {
+    const k = `${l.to}\u0000${l.owner}`;
+    debts[k] = (debts[k] || 0) + 1;
+  }
+  const debtChips = Object.entries(debts).map(([k, n]) => {
+    const [to, owner] = k.split("\u0000");
+    return `<span class="loan-debt"><span class="owner-dot" style="--owner:${userColor(to)}"></span><b>${esc(to)}</b> skylder <b>${esc(owner || "ukjent eier")}</b> ${n} ${n === 1 ? "spole" : "spoler"}</span>`;
+  }).join("");
+
+  const spoolOf = (l) => state.spools.find((x) => x.id === l.spool);
+  const row = (l) => {
+    const s = spoolOf(l);
+    const color = s?.tag ? swatch(s.tag) : l.color ? "#" + l.color : "var(--muted-bg)";
+    const use = s && usage(s);
+    const when = l.state === "settled" ? `gjort opp ${fmtTime(l.settledAt)}${l.settledBy ? ` av ${esc(l.settledBy)}` : ""}`
+      : l.state === "returned" ? `levert ${fmtTime(l.returnedAt || (s?.history || []).filter((e) => e.at > l.at && e.action === "in").at(-1)?.at)}`
+      : l.state === "owes" ? `brukt opp${l.usedAt ? " " + fmtTime(l.usedAt) : ""}` : `siden ${fmtTime(l.at)}`;
+    const grams = l.gramsOut === null ? "" : [
+      `${l.gramsOut} g ved utlån${l.gramsSrc === "new" ? " (ubrukt rull)" : ""}`,
+      l.gramsIn !== null && l.gramsIn <= l.gramsOut ? `brukt ${l.gramsOut - l.gramsIn} g` : l.state === "owes" ? `brukt ca. ${l.gramsOut} g` : "",
+    ].filter(Boolean).join(" · ");
+    const actions = !token() ? ""
+      : l.state === "out" ? `<button class="btn btn-small" data-loan="returned" data-spool="${esc(l.spool)}">Levert tilbake</button>
+          <button class="btn btn-small" data-loan="used" data-spool="${esc(l.spool)}">Brukt opp</button>`
+      : l.state === "owes" ? `<button class="btn btn-primary btn-small" data-loan="settled" data-spool="${esc(l.spool)}">Gjort opp</button>` : "";
+    return `<li>
+      <span class="dot" style="background:${color}"></span>
+      <span class="loan-what"><b>${esc(s ? title(s) : l.title || "Slettet spole")}</b><span class="muted">${esc(s?.typeName || l.type)}${use?.kind === "ams" ? ` · i AMS hos ${esc(use.user)}` : ""}</span></span>
+      <span class="loan-who"><span class="owner-dot" style="--owner:${userColor(l.owner)}"></span>${esc(l.owner || "Ingen eier")} → <span class="owner-dot" style="--owner:${userColor(l.to)}"></span><b>${esc(l.to)}</b></span>
+      <span class="loan-state ${l.state}">${LOAN_STATE[l.state]}</span>
+      <span class="muted">${when}${grams ? ` · ${grams}` : ""}</span>
+      <span class="loan-actions">${actions}</span>
+    </li>`;
+  };
+  const section = (h, list, empty) => `<h2>${h} (${list.length})</h2>` +
+    (list.length ? `<ul class="loan-list">${list.map(row).join("")}</ul>` : `<p class="muted">${empty}</p>`);
+
+  box.innerHTML = `<section class="panel loans">
+    <div class="loan-sum">${debtChips || `<span class="loan-debt clear">Ingen skylder filament akkurat nå</span>`}</div>
+    <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Lånes ut til» når du sjekker ut, eller sjekk ut en spole du ikke eier (også med RFID-leseren). Lånet avsluttes når spolen sjekkes inn igjen. Brukes den opp, står låntakeren som skyldig til noen trykker «Gjort opp».</p>
+    <p id="loan-error" class="error"></p>
+    ${section("Utlånt nå", out, "Ingen spoler er utlånt.")}
+    ${section("Skylder", owes, "Ingen skylder filament.")}
+    ${section("Avsluttet", done, "Ingen avsluttede lån ennå.")}
+  </section>`;
 }
 
 // ---------- Detaljer og redigering ----------
@@ -682,9 +914,19 @@ function openDetail(id) {
     ["Bambu-ID", `${t.materialId} · ${t.variantId}`],
   ] : [["Data", "Kunne ikke tolke brikken"]];
   rows.push(["Lagt inn", fmtDate(s.added)], ["Sist skannet", `${fmtDate(s.lastScan)} (${num(s.scans) || 1}×)`]);
+  const left = s.status !== "out" && gramsLeftNow(s);
+  if (left) rows.splice(2, 0, [left.src === "lib" ? "Igjen (Bambu-biblioteket)" : "Igjen", gramsText(left)]);
+  const use = usage(s);
+  if (use) rows.splice(2, 0, [{ ams: "I AMS hos", loan: "Utlånt til", out: "Tatt ut av" }[use.kind], `${use.user} (${use.kind === "ams" ? "sist sett " : ""}${fmtTime(use.at)})`]);
+  // Lån: velg hvem spolen lånes ut til ved utsjekk. Standard: deg selv hvis du ikke eier den.
+  const others = users().map((u) => u.name).filter((n) => n !== s.owner);
+  const def = userName() !== s.owner ? userName() : "";
+  $("#d-borrower").innerHTML = `<option value="">Ingen (eier tar den selv)</option>` +
+    others.map((n) => `<option${n === def ? " selected" : ""}>${esc(n)}</option>`).join("");
+  $("#d-borrow-label").hidden = s.status === "out";
   $("#d-rows").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("");
   $("#d-history").innerHTML = (s.history || []).slice().reverse()
-    .map((e) => `<li><span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span> ${esc(e.by || "")} · ${fmtTime(e.at)}</li>`)
+    .map((e) => `<li><span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span> ${esc(e.by || "")} · ${fmtTime(e.at)}${num(e.g) !== null ? ` · ${num(e.g)} g igjen${e.src === "new" ? " (ubrukt)" : ""}` : ""}</li>`)
     .join("") || "<li class='muted'>Ingen hendelser ennå</li>";
   $("#d-checkin").hidden = s.status === "in";
   $("#d-checkout").hidden = s.status === "out";
@@ -720,14 +962,22 @@ async function saveDetail(e) {
     note: clip(form.elements.note.value, MAX.note),
   };
   form.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  const before = state.spools.find((x) => x.id === id);
+  const left = fields.status === "out" && before && before.status !== "out" ? gramsLeftNow(before) : null;
   try {
     await saveDoc((doc) => {
       if (action === "delete") { doc.spools = doc.spools.filter((s) => s.id !== id); return; }
       const spool = doc.spools.find((s) => s.id === id);
       if (!spool) return "Spolen finnes ikke lenger.";
-      if (fields.status !== statusOf(spool)) addEvent(spool, fields.status);
+      if (fields.status !== statusOf(spool)) addEvent(spool, fields.status, left ? { g: left.g, src: left.src } : {});
       Object.assign(spool, fields);
     }, `${{ delete: "Slettet", in: "Innsjekk", out: "Utsjekk" }[action] || "Oppdaterte"} spole ${id.slice(0, 8)} (${userName()})`);
+    const borrower = $("#d-borrower").value;
+    const spool = state.spools.find((x) => x.id === id);
+    if (action === "out" && borrower && spool && borrower !== spool.owner) {
+      await addLoan(spool, borrower, spool.history?.at(-1)?.at || new Date().toISOString(), userName(), left);
+    }
+    if (action === "in" && openLoan(id)) await closeLoan(id, "returnedAt", "", libraryWeight(id));
     render();
     $("#detail").close();
   } catch (err) {
@@ -1567,6 +1817,7 @@ async function refreshAms() {
     const failed = amsRes.status === "rejected" ? amsRes.reason : libRes.status === "rejected" ? libRes.reason : null;
     if (failed) state.amsError = `${amsRes.status === "rejected" ? "AMS" : "Filamentbiblioteket"}: ${failed.message}`;
     await publishSnapshot();
+    if (amsRes.status === "fulfilled") await markAmsSpools();
   } catch (err) {
     state.amsError = err.message;
     if (err.status === 401) {
@@ -1576,6 +1827,60 @@ async function refreshAms() {
   }
   state.amsBusy = false;
   // Hele siden tegnes på nytt, så «Våre lokale lager» også viser de nye AMS- og bibliotekdataene.
+  render();
+}
+
+// Merker lagerspoler (RFID) som står i brukerens egen AMS med navnet hans/hennes og tidspunktet,
+// så andre ser hvem som bruker dem. Resten av AMS-dataene lagres ikke (det styres av «Del AMS»).
+// Merkingen fornyes høyst hver 6. time, og fjernes når spolen ikke lenger står i AMS-en.
+const MARK_EVERY_MS = 6 * 3600e3;
+const marksAms = (name) => state.doc.users.find((u) => u.name === name)?.markAms !== false;
+
+async function markAmsSpools({ clear = false } = {}) {
+  const me = userName();
+  if (!me || DEMO || (!clear && !state.amsLive)) return;
+  const here = new Set();
+  if (!clear && marksAms(me)) {
+    for (const p of state.amsLive.printers) {
+      for (const a of p.ams) for (const t of a.trays) if (!t.empty && t.uuid) here.add(t.uuid.toUpperCase());
+      for (const t of p.external) if (!t.empty && t.uuid) here.add(t.uuid.toUpperCase());
+    }
+  }
+  const now = new Date().toISOString();
+  const update = (spool) => {
+    const present = here.has(String(spool.id).toUpperCase());
+    const mine = spool.inAms?.user === me;
+    const lastEvent = (spool.history || []).at(-1)?.at || "";
+    const stale = !mine || Date.now() - new Date(spool.inAms.at).getTime() > MARK_EVERY_MS || spool.inAms.at < lastEvent;
+    if (present && stale) { spool.inAms = { user: me, at: now }; return true; }
+    if (!present && mine) { delete spool.inAms; return true; }
+    return false;
+  };
+  // Sjekk på en kopi først, så det bare lagres når noe faktisk endres.
+  if (!state.doc.spools.some((s) => update(JSON.parse(JSON.stringify(s))))) return;
+  try {
+    await saveDoc((doc) => {
+      let changed = false;
+      for (const s of doc.spools) changed = update(s) || changed;
+      if (!changed) return;
+    }, `AMS-merking (${me})`);
+  } catch (err) {
+    console.warn("Kunne ikke merke spoler i AMS:", err.message);
+  }
+}
+
+async function setMarkAms(on) {
+  state.amsError = "";
+  try {
+    await saveDoc((doc) => {
+      const u = doc.users.find((x) => x.name === userName());
+      if (!u) return "Brukeren din finnes ikke.";
+      if (on) delete u.markAms; else u.markAms = false;
+    }, `${on ? "Viser" : "Viser ikke"} lagerspoler i AMS (${userName()})`, "users");
+    await markAmsSpools({ clear: !on });
+  } catch (err) {
+    state.amsError = err.message;
+  }
   render();
 }
 
@@ -1698,6 +2003,7 @@ function renderAms() {
         <div class="share-toggles">
           <label class="switch"><input type="checkbox" data-ams="share-ams" ${meUser?.shareAms ? "checked" : ""}> Del AMS med alle</label>
           <label class="switch"><input type="checkbox" data-ams="share-library" ${meUser?.shareLibrary ? "checked" : ""}> Del filamentbibliotek med alle</label>
+          <label class="switch" title="Lagerspoler som står i AMS-en din, får navnet ditt (ikke printer eller plass), så andre ser hvem som bruker dem."><input type="checkbox" data-ams="share-mark" ${meUser?.markAms !== false ? "checked" : ""}> Vis at lagerspoler står i AMS-en min</label>
         </div>
         <button class="btn" data-ams="refresh" ${state.amsBusy ? "disabled" : ""}>Oppdater</button>
         <button class="btn btn-danger" data-ams="disconnect">Koble fra</button>
@@ -1847,10 +2153,12 @@ async function amsAction(action, el) {
   if (action === "refresh") refreshAms();
   if (action === "share-ams") await setShare("ams", el.checked);
   if (action === "share-library") await setShare("library", el.checked);
+  if (action === "share-mark") await setMarkAms(el.checked);
   if (action === "disconnect") {
     if (!confirmed(el, "Koble fra? Trykk igjen")) return;
     store(bambuKey(), "");
     state.amsLive = null;
+    markAmsSpools({ clear: true });
     renderAms();
   }
 }
@@ -2217,7 +2525,7 @@ function renderShop() {
 
 // ---------- Faner ----------
 
-const TABS = ["stock", "ams", "news", "shop"];
+const TABS = ["stock", "loans", "ams", "news", "shop"];
 
 function showTab(tab) {
   state.tab = TABS.includes(tab) ? tab : "stock";
@@ -2227,6 +2535,7 @@ function showTab(tab) {
   if (state.tab === "ams" && !state.amsLive && !state.amsBusy) refreshAms();
   if (state.tab === "news") renderNews();
   if (state.tab === "shop") renderShop();
+  if (state.tab === "loans") renderLoans();
   // Faner med søkefelt: markøren rett i feltet (ikke på berøringsskjerm, der tastaturet ville sprette opp).
   const search = { stock: "#q", shop: "#shop-q" }[state.tab];
   if (search && !matchMedia("(pointer: coarse)").matches) $(search).focus({ preventScroll: true });
@@ -2356,6 +2665,8 @@ document.addEventListener("click", (e) => {
   if (ok) return approve(ok.dataset.approve, ok);
   const no = e.target.closest("[data-reject]");
   if (no) return reject(no.dataset.reject, no);
+  const loanBtn = e.target.closest("[data-loan]");
+  if (loanBtn) return loanAction(loanBtn.dataset.loan, loanBtn.dataset.spool, loanBtn);
   const pub = e.target.closest("[data-open]");
   if (pub) openPublic(pub.dataset.open);
 });

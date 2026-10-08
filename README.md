@@ -132,6 +132,22 @@ Fanen samler alt som finnes i lagrene våre:
 En spole som finnes flere steder (samme RFID / Tray UID) vises bare én gang. Plassering
 («Printer · AMS A1») hentes fra AMS-dataene.
 
+## Lånt filament
+
+- Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg «Lånes ut til» ved
+  utsjekk, eller sjekk ut en spole du ikke eier (også med RFID-leseren; siden lager lånet når den lastes).
+- Status: *Utlånt* → *Levert tilbake* (spolen sjekkes inn) eller *Skylder* (brukt opp) → *Gjort opp*.
+  Øverst står hvem som skylder hvem.
+- Gram ved utsjekk: fra Bambu-biblioteket hvis spolen er der, ellers full rull hvis den aldri er sjekket
+  ut før. Ved innlevering lagres vekten fra biblioteket, så man ser hvor mye som ble brukt.
+- Lånene ligger i `loans.json` i data-repoet (maks 300; eldste avsluttede fjernes først).
+
+### Hvem bruker spolen
+
+Når en bruker henter sin egen AMS, merkes lagerspoler som står der med navnet og tidspunktet
+(`spools[].inAms`), men ikke printer eller plass. Kortet viser «I AMS hos …», «Utlånt til …» eller
+«Tatt ut av …». Kan skrus av per bruker under «AMS og bibliotek» (`users[].markAms = false`).
+
 ## Butikk
 
 Fanen **Butikk** viser alle produktene i Bambu Lab sin EU-butikk (rundt 1100): filament, printere,
