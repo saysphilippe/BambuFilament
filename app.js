@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008124756";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008124756";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008125243";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008125243";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -2353,14 +2353,23 @@ function openBambu() {
   $("#bambu").showModal();
 }
 
-function showBambuStep() {
+function showBambuStep(note = "") {
   const s = bambuLogin.step;
   $("#b-step-password").hidden = s !== "password";
   $("#b-step-code").hidden = s === "password";
   $("#b-code-hint").textContent = s === "tfa"
     ? "Skriv inn koden fra autentiseringsappen din."
-    : `Bambu har sendt en kode til ${bambuLogin.email}. Skriv den inn her.`;
+    : `${note}Bambu har sendt en kode til ${bambuLogin.email}. Skriv den inn her (sjekk også søppelpost).`;
   $("#b-error").textContent = "";
+}
+
+// Kode på e-post i stedet for passord: ingen robotsjekk hos Bambu.
+async function bambuCodeLogin(note = "") {
+  bambuLogin.email = $("#b-email").value.trim();
+  if (!bambuLogin.email) throw new Error("Skriv e-postadressen til Bambu-kontoen først.");
+  await proxy("/send-code", { email: bambuLogin.email }, token());
+  bambuLogin.step = "code";
+  showBambuStep(note);
 }
 
 async function bambuSubmit(e) {
@@ -2370,6 +2379,7 @@ async function bambuSubmit(e) {
   err.textContent = "Kobler til…";
   try {
     let res;
+    if (e.submitter?.value === "code") return await bambuCodeLogin();
     if (bambuLogin.step === "password") {
       bambuLogin.email = $("#b-email").value.trim();
       res = await proxy("/login", { account: bambuLogin.email, password: $("#b-password").value });
@@ -2386,6 +2396,7 @@ async function bambuSubmit(e) {
       refreshAms();
       return;
     }
+    if (res.step === "robot") return await bambuCodeLogin("Bambu ville sjekke at du ikke er en robot, så vi bruker kode på e-post i stedet. ");
     bambuLogin.step = res.step;
     bambuLogin.tfaKey = res.tfaKey || "";
     showBambuStep();

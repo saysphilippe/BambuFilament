@@ -99,7 +99,7 @@ export default {
           if (env?.EMAIL_LIMIT && !(await env.EMAIL_LIMIT.limit({ key: email })).success) {
             return json({ error: "Det er nettopp sendt en kode. Vent et minutt." }, 429, origin);
           }
-          return json(await sendCode(body, env), 200, origin);
+          return json(await sendCode(body, env, token), 200, origin);
         }
         case "/reset":
         case "/register": {
@@ -175,17 +175,37 @@ async function login({ account, password, code }, env) {
   if (data.accessToken) return { token: data.accessToken, refreshToken: data.refreshToken || "", expiresIn: data.expiresIn || null };
   if (data.loginType === "verifyCode") return { step: "code", ticket: await makeTicket(account, env) };
   if (data.loginType === "tfa") return { step: "tfa", tfaKey: data.tfaKey };
-  throw fail(data.error || data.message || `Innlogging feilet (${status})`, status === 200 ? 400 : status);
+  // Bambu ber iblant om robotsjekk (captcha) ved passordinnlogging. Den kan ikke løses via
+  // proxyen, så siden går over til innlogging med kode på e-post i stedet.
+  const message = String(data.error || data.message || "");
+  if (status === 418 || /robot|captcha|human/i.test(message)) return { step: "robot", message };
+  throw fail(message || `Innlogging feilet (${status})`, status === 200 ? 400 : status);
 }
 
-async function sendCode({ email, ticket }, env) {
+// Innlogget BambuFilament-bruker: GitHub-tokenen gir lesetilgang til det private data-repoet.
+async function isSiteUser(tok) {
+  if (!tok || !/^(github_pat_|ghp_)/.test(tok)) return false;
+  const res = await fetch(`https://api.github.com/repos/${DATA_REPO}`, {
+    headers: { Authorization: `Bearer ${tok}`, "User-Agent": "BambuFilament-proxy", "X-GitHub-Api-Version": "2022-11-28" },
+  });
+  return res.ok;
+}
+
+// Kode på e-post kan bes om med en billett fra en passordinnlogging, eller av en innlogget
+// BambuFilament-bruker (GitHub-tokenen i Authorization). Ellers kunne proxyen brukes til å
+// sende Bambu-e-post til vilkårlige adresser.
+async function sendCode({ email, ticket }, env, tok) {
   if (typeof email !== "string" || !email) throw fail("Mangler e-post");
-  if (!(await checkTicket(email, ticket, env))) throw fail("Logg inn med e-post og passord først.", 403);
+  if (!(await checkTicket(email, ticket, env)) && !(await isSiteUser(tok))) throw fail("Logg inn på BambuFilament først.", 403);
   const { status, data } = await bambu("/v1/user-service/user/sendemail/code", {
     method: "POST",
     body: { email, type: "codeLogin" },
   });
-  if (status >= 400) throw fail(data.error || data.message || `Kunne ikke sende kode (${status})`, status);
+  if (status >= 400) {
+    const message = String(data.error || data.message || "");
+    if (status === 418 || /robot|captcha|human/i.test(message)) throw fail("Bambu ber om robotsjekk også for kode på e-post. Prøv igjen om en stund, eller logg inn i Bambu Handy-appen først.", 429);
+    throw fail(message || `Kunne ikke sende kode (${status})`, status);
+  }
   return { sent: true };
 }
 

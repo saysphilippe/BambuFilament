@@ -37,7 +37,7 @@ Bambu-spole ──RFID──> ESP32 + RC522 ──HTTPS──> spools.json i Bam
 - **Content-Security-Policy:** bare egne skript, og data sendes bare til GitHub, proxyen og Bambu sine bilde-CDN-er.
 - **Passordbytte** krever nåværende passord (unntatt tvunget bytte etter midlertidig passord).
 - **Beskyttet `main`** i begge repoene: tvungen push og sletting av greinen blir avvist, så historikken (sikkerhetskopien) ikke kan slettes.
-- **E-postkoder fra Bambu** kan bare bes om med en signert billett fra en innlogging (`TICKET_SECRET` i Workeren) og maks én gang i minuttet per adresse.
+- **E-postkoder fra Bambu** kan bare bes om med en signert billett fra en passordinnlogging (`TICKET_SECRET` i Workeren) eller av en innlogget BambuFilament-bruker (GitHub-tokenen sjekkes), og maks én gang i minuttet per adresse. Ber Bambu om robotsjekk (captcha) ved passordinnlogging, bytter siden til kode på e-post, siden captchaen ikke kan løses via proxyen.
 - **Størrelse:** fritekst har lengdegrenser, historikken holder 10 hendelser per spole, og leseren avviser `spools.json` over 120 kB (omtrent 60–80 spoler).
 - **Proxyen** godtar bare forespørsler fra `saysphilippe.github.io`. Lokal testing med `wrangler dev` bruker `worker/.dev.vars`.
 - Alle GitHub Pages-sider under `saysphilippe.github.io` deler nettleserlagring. Ikke publiser andre Pages-sider på kontoen uten å tenke over det, eller gi BambuFilament et eget domene.
