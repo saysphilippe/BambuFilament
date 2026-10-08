@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008174315";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008174315";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008174615";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008174615";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1056,7 +1056,8 @@ function renderLoans() {
     const actions = !token() ? ""
       : l.state === "out" ? `<button class="btn btn-small" data-loan="returned" data-spool="${esc(l.spool)}">Levert tilbake</button>
           <button class="btn btn-small" data-loan="used" data-spool="${esc(l.spool)}">Brukt opp</button>`
-      : l.state === "owes" ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Betal med Vipps</button>
+      : l.state === "owes" ? `${l.to === me ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Betal med Vipps</button>`
+          : l.owner === me ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Be om penger med Vipps</button>` : ""}
           <button class="btn btn-primary btn-small" data-loan="settled" data-spool="${esc(l.spool)}">Gjort opp</button>` : "";
     return `<li>
       <span class="dot" style="background:${color}"></span>
@@ -1197,6 +1198,7 @@ function spoolPrice(typeName) {
 }
 
 let vippsLoan = null;
+let vippsRequest = false;
 let vippsParts = null;
 
 // Beløp i Vipps-vinduet: uten spoletillegg når låntakeren leverer spolen tilbake.
@@ -1229,11 +1231,22 @@ function openVipps(loanId) {
   vippsLoan = l;
   const { kr, filamentKr, spoolKr, how, price, total, used, spool: s } = loanAmount(l);
   const what = s ? `${title(s)} ${s.typeName}` : l.title || "spole";
-  const phone = state.contacts.phones?.[l.owner] || "";
-  $("#v-what").textContent = `${l.to} gjør opp for ${what}, lånt av ${l.owner || "ukjent eier"}.`;
-  $("#v-to").textContent = l.owner || "Ukjent eier";
-  $("#v-phone").textContent = phone ? fmtPhone(phone) : `${l.owner || "Eieren"} har ikke lagt inn mobilnummer (kan gjøres under kontoen din).`;
+  // Låntakeren betaler eieren; eieren ber låntakeren om pengene.
+  const request = l.owner === userName() && l.to !== userName();
+  vippsRequest = request;
+  const other = request ? l.to : l.owner;
+  const phone = state.contacts.phones?.[other] || "";
+  $("#v-title").textContent = request ? "Be om penger med Vipps" : "Betal med Vipps";
+  $("#v-what").textContent = request ? `${l.to} skylder deg for ${what}.` : `Du gjør opp for ${what}, lånt av ${l.owner || "ukjent eier"}.`;
+  $("#v-to-label").textContent = request ? "Fra" : "Til";
+  $("#v-to").textContent = other || "Ukjent";
+  $("#v-phone").textContent = phone ? fmtPhone(phone) : `${other || "Personen"} har ikke lagt inn mobilnummer (gjøres ved å trykke på navnet sitt øverst til høyre).`;
   $("#v-phone").dataset.value = phone;
+  $("#v-return-text").textContent = request ? `${l.to} leverer den tomme spolen tilbake (uten spoletillegg)` : "Jeg leverer den tomme spolen tilbake (betal uten spoletillegg)";
+  $("#v-howto").textContent = request
+    ? `Vipps lar ikke andre fylle inn mottaker og beløp. Åpne Vipps, trykk «Be om penger», velg ${l.to}, lim inn beløpet og meldingen, og send. Når pengene har kommet, trykker du «Pengene er mottatt» her, så blir lånet gjort opp.`
+    : "Vipps lar ikke andre fylle inn mottaker og beløp. Åpne Vipps, velg mottakeren, lim inn beløpet og meldingen, og betal. Trykk så «Betalt med Vipps» her, så blir lånet gjort opp.";
+  $("#v-paid").textContent = request ? "Pengene er mottatt" : "Betalt med Vipps";
   vippsParts = { filamentKr, spoolKr, how, src: price.src, total, used };
   // Åpne Vipps: Android trenger en intent-lenke (pakken no.dnb.vipps, ellers Google Play),
   // iPhone bruker vipps://. På PC finnes ikke Vipps, så knappen byttes ut med en beskjed.
@@ -1287,7 +1300,7 @@ async function vippsSubmit(e) {
       if (!l) return "Lånet finnes ikke lenger.";
       l.settledAt = new Date().toISOString();
       l.settledBy = userName();
-      l.note = `Betalt med Vipps: ${kr} kr${back ? " (spolen leveres tilbake)" : ""}`;
+      l.note = `Betalt med Vipps: ${kr} kr${vippsRequest ? " (mottatt)" : ""}${back ? " (spolen leveres tilbake)" : ""}`;
       if (back) l.spoolReturn = { promisedAt: l.settledAt };
     }, `Lån gjort opp med Vipps: ${kr} kr${back ? ", spole leveres tilbake" : ""} (${userName()})`, "loans");
     $("#vipps").close();

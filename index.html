@@ -10,7 +10,7 @@
   <title>Filament Universet</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008174315">
+  <link rel="stylesheet" href="style.css?v=20261008174615">
 </head>
 <body>
   <header>
@@ -253,23 +253,23 @@
 
   <dialog id="vipps">
     <form method="dialog">
-      <h2>Betal med Vipps</h2>
+      <h2 id="v-title">Betal med Vipps</h2>
       <p id="v-what" class="hint"></p>
       <div class="vipps-rows">
-        <div class="vipps-row"><span class="muted">Til</span><b id="v-to"></b><span id="v-phone"></span><button type="button" class="btn btn-small" data-copy="v-phone">Kopier</button></div>
+        <div class="vipps-row"><span id="v-to-label" class="muted">Til</span><b id="v-to"></b><span id="v-phone"></span><button type="button" class="btn btn-small" data-copy="v-phone">Kopier</button></div>
         <div class="vipps-row"><span class="muted">Beløp</span><span class="vipps-amount"><input id="v-amount" type="number" min="1" max="10000" step="1"> kr</span><span id="v-price" class="muted"></span><button type="button" class="btn btn-small" data-copy="v-amount">Kopier</button></div>
         <div class="vipps-row"><span class="muted">Melding</span><span id="v-msg"></span><span></span><button type="button" class="btn btn-small" data-copy="v-msg">Kopier</button></div>
       </div>
       <div id="v-qr" class="v-qr" hidden></div>
-      <label id="v-return-label" class="switch"><input id="v-return" type="checkbox"> Jeg leverer den tomme spolen tilbake (betal uten spoletillegg)</label>
-      <p class="hint">Vipps lar ikke andre fylle inn mottaker og beløp for betaling mellom privatpersoner. Åpne Vipps, velg mottakeren, lim inn beløpet og meldingen, og betal. Trykk så «Betalt med Vipps» her, så blir lånet gjort opp.</p>
+      <label id="v-return-label" class="switch"><input id="v-return" type="checkbox"> <span id="v-return-text">Jeg leverer den tomme spolen tilbake (betal uten spoletillegg)</span></label>
+      <p id="v-howto" class="hint"></p>
       <p id="v-error" class="error"></p>
       <div class="d-buttons">
         <a id="v-open" class="btn btn-vipps" href="vipps://" rel="noopener">Åpne Vipps</a>
-        <span id="v-desktop" class="muted v-desktop">Åpne Vipps på mobilen og betal der</span>
+        <span id="v-desktop" class="muted v-desktop">Åpne Vipps på mobilen</span>
         <span class="spacer"></span>
         <button value="cancel" class="btn" formnovalidate>Avbryt</button>
-        <button value="paid" class="btn btn-primary">Betalt med Vipps</button>
+        <button id="v-paid" value="paid" class="btn btn-primary">Betalt med Vipps</button>
       </div>
     </form>
   </dialog>
@@ -387,6 +387,6 @@ Peter</textarea></label>
   </dialog>
 
   <script src="vendor/qrcode.js"></script>
-  <script type="module" src="app.js?v=20261008174315"></script>
+  <script type="module" src="app.js?v=20261008174615"></script>
 </body>
 </html>
