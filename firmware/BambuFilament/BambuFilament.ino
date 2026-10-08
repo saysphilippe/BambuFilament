@@ -2,12 +2,12 @@
 //
 // Leser MIFARE Classic-brikken på en Bambu Lab-spole, utleder sektornøklene
 // fra brikkens UID (HKDF-SHA256, se github.com/Bambu-Research-Group/RFID-Tag-Guide)
-// og legger rådataene inn i spools.json i GitHub-repoet BambuFilament-data. Web-appen på
+// og sender rådataene til Workeren, som lagrer dem i databasen til Filament Universet. Web-appen på
 // github.io tolker blokkene og viser oversikten.
 //
 // Flere kan dele én leser: tapp RFID-kortet ditt (en vanlig MIFARE-brikke eller -kort) først,
 // så registreres spolene de neste minuttene på deg. Kortene ligger i
-// spools.json ("cards": { UID: { user, label, added } }). Et nytt kort registreres uten navn;
+// databasen (samlingen cards: { user, label, added }). Et nytt kort registreres uten navn;
 // navnet legges til under «RFID-kort» på siden. Valgfri OLED-skjerm (SSD1306) viser hvem
 // som bruker leseren og hva som skjer.
 //
@@ -37,11 +37,7 @@
 static const int SECTORS = 5;               // Bambu-dataene ligger i sektor 0–4 (blokk 0–19)
 static const int BLOCKS = SECTORS * 4;
 static const int MAX_TRIES = 3;             // nye forsøk ved 409 (noen andre lagret samtidig)
-static const int MAX_HISTORY = 10;          // antall hendelser per spole (holder spools.json liten)
-// Største svar fra GitHub som behandles. Base64-innholdet, den dekodede teksten og
-// JSON-dokumentet må få plass i minnet samtidig (ca. 280 kB ledig). Delte AMS- og
-// bibliotekdata ligger i shared.json, som leseren ikke henter, så spools.json holdes liten.
-static const int MAX_RESPONSE_BYTES = 120000;
+
 static const unsigned long IGNORE_REPEAT_MS = 6000;  // samme brikke igjen innen 6 s ignoreres
 #ifndef CHECKOUT_AFTER_MINUTES
 #define CHECKOUT_AFTER_MINUTES 10

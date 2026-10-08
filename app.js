@@ -1,25 +1,20 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008182548";
-import { toRecords } from "./worker/src/records.js?v=20261008182548";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008182548";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008191018";
+import { toRecords } from "./worker/src/records.js?v=20261008191018";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008191018";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
 //
 // - BambuFilament-auth (offentlig): users.json med navn, farger og krypterte
 //   innloggingsnøkler. Må kunne leses før innlogging.
-// - BambuFilament-data (privat): spools.json (spoler, også for RFID-leserne) og
-//   shared.json (delte AMS-data, bibliotek, venteliste). Leses bare med tokenen.
+// - BambuFilament-data (privat): contacts.json (e-post, mobil, ventende registreringer).
+//   Spoler, lån, kort, innstillinger, delte data og statistikk ligger i databasen bak
+//   Workeren (se DB_FILES og worker/src/records.js).
 const DATA_REPO = "saysphilippe/BambuFilament-data";
 const AUTH_REPO = "saysphilippe/BambuFilament-auth";
 const BRANCH = "main";
 const FILES = {
   users: { repo: AUTH_REPO, path: "users.json", public: true, empty: () => ({ version: 1, users: [] }) },
-  spools: { repo: DATA_REPO, path: "spools.json", empty: () => ({ version: 1, spools: [] }) },
-  shared: { repo: DATA_REPO, path: "shared.json", empty: () => ({ version: 1, ams: {}, library: {}, wishes: {} }) },
-  // Innlogginger og sist aktiv, for innloggingsstatistikken (bare admin ser den).
-  activity: { repo: DATA_REPO, path: "activity.json", empty: () => ({ version: 1, logins: [], seen: {} }) },
-  // Utlån: hvem som har lånt hvilken spole, og om det er levert tilbake eller gjort opp.
-  loans: { repo: DATA_REPO, path: "loans.json", empty: () => ({ version: 1, loans: [] }) },
   // E-postadresser og ventende registreringer (skrives også av Workeren, se worker/).
   contacts: { repo: DATA_REPO, path: "contacts.json", empty: () => ({ version: 1, emails: {}, pending: [] }) },
 };
@@ -361,7 +356,7 @@ function enrich(spool) {
   };
 }
 
-// Alt i spools.json kan skrives av alle med skrivetoken, og vises for alle besøkende.
+// Alt i databasen kan skrives av alle innloggede, og vises for alle besøkende.
 // Farger og tall brukes i HTML og stilattributter, så de kontrolleres her før visning.
 // Fritekst escapes med esc() der den vises.
 const HEX = /^#?[0-9a-f]{6}([0-9a-f]{2})?$/i;
@@ -458,7 +453,7 @@ function cleanLoans(d) {
   })).filter((l) => l.id && l.spool && (l.to || l.pending) && l.at);
 }
 
-// Innstillinger for RFID-leseren (spools.json: "settings"). Leseren leser dem ved hver skanning.
+// Innstillinger for RFID-leseren (databasen, samlingen settings). Leseren leser dem ved hver skanning.
 const SETTINGS = {
   cardMinutes: { def: 1, min: 0.25, max: 60, step: 0.25 },
   checkoutMinutes: { def: 10, min: 1, max: 1440, step: 1 },
@@ -1705,7 +1700,7 @@ async function removeUser(name, btn) {
 // ---------- RFID-kort ----------
 //
 // Flere kan dele én leser: hver bruker tapper kortet sitt før spolene. Leseren slår opp kortet
-// i spools.json ("cards") og viser navnet på skjermen. Et nytt kort registreres uten navn,
+// i databasen (samlingen cards) og viser navnet på skjermen. Et nytt kort registreres uten navn,
 // og navnet settes her. Kortet ditt kan du endre selv; administrator kan endre alle.
 
 const canEditCard = (c) => !!token() && (isAdmin() || !c.user || c.user === userName());
