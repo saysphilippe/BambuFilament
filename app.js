@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008123612";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008123612";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008123821";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008123821";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -922,13 +922,15 @@ function renderLoans() {
   const pendingRow = (l) => {
     const s = spoolOf(l);
     const ownStock = l.by === l.owner;
-    const opts = users().filter((u) => u.known).map((u) =>
-      `<option value="${esc(u.name)}"${ownStock && u.name === l.owner ? " selected" : ""}>${esc(u.name)}${u.name === l.owner ? " (eier)" : ""}</option>`).join("");
+    // Den som tappet kortet er valgt på forhånd (også om vedkommende ikke er bruker ennå).
+    const names = [...new Set([...users().filter((u) => u.known).map((u) => u.name), l.by].filter(Boolean))];
+    const opts = names.map((n) =>
+      `<option value="${esc(n)}"${n === l.by ? " selected" : ""}>${esc(n)}${n === l.owner ? " (eier)" : ""}</option>`).join("");
     return `<li>
       <span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
       <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span>
-      <span class="muted">Sjekket ut med RFID-leseren${l.by ? ` av ${esc(l.by)}` : " (ukjent person – ingen brikke skannet)"} · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut} g` : ""}</span>
-      <span class="loan-actions">${canApprove(l) ? `<select data-pending-to="${esc(l.id)}" aria-label="Sjekket ut til">${ownStock ? "" : `<option value="">Sjekket ut til …</option>`}${opts}</select>
+      <span class="muted">Sjekket ut med RFID-leseren${l.by ? ` av ${esc(l.by)}` : " (ukjent – ingen kort tappet)"} · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut} g` : ""}</span>
+      <span class="loan-actions">${canApprove(l) ? `<select data-pending-to="${esc(l.id)}" aria-label="Sjekket ut til">${l.by ? "" : `<option value="">Sjekket ut til …</option>`}${opts}</select>
         <button class="btn btn-primary btn-small" data-approve-out="${esc(l.id)}">${ownStock ? "OK" : "Godkjenn"}</button>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
     </li>`;
   };
