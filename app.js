@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008172139";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008172139";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008172317";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008172317";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1150,6 +1150,8 @@ function spoolPrice(typeName) {
   // Spoletillegg: forskjellen mellom med spole og refill (ca. 3 €), ellers fra Innstillinger.
   const spool = p?.withSpool && p?.refill && p.withSpool > p.refill
     ? { kr: Math.round(kr(p.withSpool - p.refill) / 5) * 5, src: `${String(p.withSpool).replace(".", ",")} € med spole − ${String(p.refill).replace(".", ",")} € refill` }
+    // Uten begge priser: TPU-spoler koster 4 € ekstra hos Bambu, de andre 3 € (standard i Innstillinger).
+    : /^TPU/i.test(typeName || "") ? { kr: Math.round(kr(4) / 5) * 5, src: "TPU-spole, 4 € hos Bambu" }
     : { kr: st.emptySpoolPrice, src: "spoletillegg fra Innstillinger" };
   const fmt = (x) => String(x).replace(".", ",");
   // Filamentet prises uten spole: refill-prisen når den finnes. Selges typen bare med spole,
