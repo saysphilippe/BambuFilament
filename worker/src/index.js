@@ -172,6 +172,8 @@ async function login({ account, password, code }, env) {
   if (typeof account !== "string" || !account || (!password && !code)) throw fail("Mangler e-post og passord eller kode");
   const body = code ? { account, code: String(code) } : { account, password: String(password), apiError: "" };
   const { status, data } = await bambu("/v1/user-service/user/login", { method: "POST", body });
+  // Uten e-post, passord, kode eller nøkler i loggen.
+  console.log("login", code ? "kode" : "passord", status, data.accessToken ? "token" : data.loginType || "-", String(data.error || data.message || "").slice(0, 160));
   if (data.accessToken) return { token: data.accessToken, refreshToken: data.refreshToken || "", expiresIn: data.expiresIn || null };
   if (data.loginType === "verifyCode") return { step: "code", ticket: await makeTicket(account, env) };
   if (data.loginType === "tfa") return { step: "tfa", tfaKey: data.tfaKey };
@@ -201,6 +203,11 @@ async function sendCode({ email, ticket }, env, tok) {
     method: "POST",
     body: { email, type: "codeLogin" },
   });
+  // Uten e-postadressen i loggen. Bambu kan svare 200 med en feil i svaret (code/error).
+  console.log("send-code", status, JSON.stringify(data).slice(0, 300));
+  if (status < 400 && (data?.error || (data?.code !== undefined && data.code !== 0 && data.code !== null))) {
+    throw fail(`Bambu sendte ikke koden: ${data.error || data.message || `kode ${data.code}`}`, 502);
+  }
   if (status >= 400) {
     const message = String(data.error || data.message || "");
     if (status === 418 || /robot|captcha|human/i.test(message)) throw fail("Bambu ber om robotsjekk også for kode på e-post. Prøv igjen om en stund, eller logg inn i Bambu Handy-appen først.", 429);

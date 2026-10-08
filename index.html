@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008125243">
+  <link rel="stylesheet" href="style.css?v=20261008130506">
 </head>
 <body>
   <header>
@@ -210,7 +210,18 @@
         <p class="hint">Logg inn med Bambu Lab-kontoen din (samme som i Bambu Handy). Innloggingen går via BambuFilament-proxyen til Bambu. Bare tilgangsnøkkelen lagres, og bare i denne nettleseren. Passordet lagres ikke.</p>
         <label>E-post<input id="b-email" type="email" autocomplete="username"></label>
         <label>Passord<input id="b-password" type="password" autocomplete="current-password"></label>
-        <p class="hint"><button value="code" class="link-btn" formnovalidate>Logg inn med kode på e-post i stedet</button> – uten passord, og uten robotsjekk.</p>
+        <p class="hint"><button value="code" class="link-btn" formnovalidate>Logg inn med kode på e-post i stedet</button> – uten passord.</p>
+        <p class="hint">Stopper Bambu deg med robotsjekk? <button value="token" class="link-btn" formnovalidate>Lim inn tilgangsnøkkel fra bambulab.com</button></p>
+      </div>
+      <div id="b-step-token" hidden>
+        <p class="hint">Bambu godtar av og til ikke innlogging via BambuFilament og vil sjekke at du ikke er en robot. Da kan du logge inn hos Bambu selv og hente tilgangsnøkkelen derfra (på PC):</p>
+        <ol class="hint token-steps">
+          <li>Åpne <a href="https://bambulab.com/en/sign-in" target="_blank" rel="noopener">bambulab.com</a> og logg inn (løs robotsjekken der).</li>
+          <li>Trykk <b>F12</b>, velg fanen <b>Application</b> (Programmer), så <b>Cookies</b> → <b>https://bambulab.com</b>.</li>
+          <li>Finn raden <b>token</b>, dobbeltklikk verdien, kopier den (Ctrl+C) og lim den inn her.</li>
+        </ol>
+        <label>Tilgangsnøkkel<textarea id="b-token" rows="3" autocomplete="off" spellcheck="false"></textarea></label>
+        <p class="hint">Nøkkelen lagres bare i denne nettleseren, som ved vanlig tilkobling. Når den utløper, ber siden deg koble til på nytt.</p>
       </div>
       <div id="b-step-code" hidden>
         <p id="b-code-hint" class="hint"></p>
@@ -348,6 +359,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=20261008125243"></script>
+  <script type="module" src="app.js?v=20261008130506"></script>
 </body>
 </html>

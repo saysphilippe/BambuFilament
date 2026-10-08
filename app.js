@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008125243";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008125243";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008130506";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008130506";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -2356,7 +2356,8 @@ function openBambu() {
 function showBambuStep(note = "") {
   const s = bambuLogin.step;
   $("#b-step-password").hidden = s !== "password";
-  $("#b-step-code").hidden = s === "password";
+  $("#b-step-code").hidden = s !== "code" && s !== "tfa";
+  $("#b-step-token").hidden = s !== "token";
   $("#b-code-hint").textContent = s === "tfa"
     ? "Skriv inn koden fra autentiseringsappen din."
     : `${note}Bambu har sendt en kode til ${bambuLogin.email}. Skriv den inn her (sjekk også søppelpost).`;
@@ -2380,6 +2381,22 @@ async function bambuSubmit(e) {
   try {
     let res;
     if (e.submitter?.value === "code") return await bambuCodeLogin();
+    if (e.submitter?.value === "token") {
+      bambuLogin.email = $("#b-email").value.trim();
+      bambuLogin.step = "token";
+      return showBambuStep();
+    }
+    if (bambuLogin.step === "token") {
+      // Nøkkel limt inn fra bambulab.com: sjekk at Bambu godtar den før den lagres.
+      const tok = $("#b-token").value.trim().replace(/^token=/, "").replace(/^"|"$/g, "");
+      if (tok.length < 20) throw new Error("Lim inn hele verdien fra raden «token».");
+      await proxy("/library", {}, tok);
+      saveBambuAuth({ token: tok, refreshToken: "" }, bambuLogin.email);
+      $("#b-token").value = "";
+      $("#bambu").close();
+      refreshAms();
+      return;
+    }
     if (bambuLogin.step === "password") {
       bambuLogin.email = $("#b-email").value.trim();
       res = await proxy("/login", { account: bambuLogin.email, password: $("#b-password").value });
@@ -2396,7 +2413,16 @@ async function bambuSubmit(e) {
       refreshAms();
       return;
     }
-    if (res.step === "robot") return await bambuCodeLogin("Bambu ville sjekke at du ikke er en robot, så vi bruker kode på e-post i stedet. ");
+    if (res.step === "robot") {
+      // Robotsjekk også for koden: en ny kode ville bare gjort den forrige ugyldig.
+      if (bambuLogin.step === "code") {
+        bambuLogin.step = "token";
+        showBambuStep();
+        $("#b-error").textContent = "Bambu godtar ikke innlogging via BambuFilament akkurat nå (robotsjekk). Hent tilgangsnøkkelen fra bambulab.com som beskrevet over.";
+        return;
+      }
+      return await bambuCodeLogin("Bambu ville sjekke at du ikke er en robot, så vi bruker kode på e-post i stedet. ");
+    }
     bambuLogin.step = res.step;
     bambuLogin.tfaKey = res.tfaKey || "";
     showBambuStep();
