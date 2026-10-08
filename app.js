@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008141626";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008141626";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008141819";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008141819";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -74,7 +74,7 @@ const state = {
   newsSub: store("bf.newsSub") || "new",
   store: null,
   shop: { q: "", cat: "", status: store("bf.shopStatus") || "", sort: store("bf.shopSort") || "name", limit: 60 },
-  filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type", ams: false },
+  filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type", ams: false, kind: "" },
   selected: null,
 };
 
@@ -618,6 +618,7 @@ function filtered({ ignoreType = false } = {}) {
     (!fam || s.family === fam) &&
     (!status || s.status === status) &&
     (!state.filters.ams || s.kind === "ams" || !!s.location || usage(s)?.kind === "ams") &&
+    (!state.filters.kind || s.kind === state.filters.kind) &&
     (!needle || [title(s), s.typeName, s.colorName, s.tag?.colors.join(" "), s.owner, s.note, s.location, SOURCE[s.kind], usage(s)?.user].join(" ").toLowerCase().includes(needle))
   );
   const by = {
@@ -651,7 +652,10 @@ function render() {
   const statBtn = (key, active, value, label, extra = "") =>
     `<button type="button" class="stat stat-filter${active ? " active" : ""}${extra}" data-stat="${esc(key)}" aria-pressed="${active}"><b>${value}</b><span>${label}</span></button>`;
   $("#stats").innerHTML =
-    statBtn("all", fl.status === "in" && !fl.owner && !fl.ams, inStock.length, "spoler på lager") +
+    statBtn("all", fl.status === "in" && !fl.owner && !fl.ams && !fl.kind, inStock.length, "spoler på lager") +
+    // Lager: bare registrert med leseren, ikke vært i bruk. Bibliotek: har stått i en AMS og er tatt ut igjen.
+    statBtn("kind:rfid", fl.kind === "rfid", inStock.filter((s) => s.kind === "rfid").length, "lager (ubrukt)") +
+    statBtn("kind:library", fl.kind === "library", inStock.filter((s) => s.kind === "library").length, "bibliotek (brukt)") +
     `<div class="stat"><b>${kg.toLocaleString("nb-NO", { maximumFractionDigits: 1 })} kg</b><span>filament igjen (ca.)</span></div>` +
     statBtn("ams", fl.ams, inAms, "i AMS nå") +
     statBtn("out", fl.status === "out", items.filter((s) => s.status === "out").length, "tatt ut") +
@@ -689,7 +693,8 @@ function render() {
 // Klikk på en boks i venstremargen.
 function statFilter(key) {
   const f = state.filters;
-  if (key === "all") Object.assign(f, { status: "in", owner: "", ams: false });
+  if (key === "all") Object.assign(f, { status: "in", owner: "", ams: false, kind: "" });
+  else if (key.startsWith("kind:")) f.kind = f.kind === key.slice(5) ? "" : key.slice(5);
   else if (key === "ams") f.ams = !f.ams;
   else if (key === "out") f.status = f.status === "out" ? "in" : "out";
   else if (key.startsWith("owner:")) f.owner = f.owner === key.slice(6) ? "" : key.slice(6);
