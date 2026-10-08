@@ -346,6 +346,9 @@ dialog label input, dialog label select, dialog label textarea { margin-top: 4px
 .d-fields .wide { grid-column: 1 / -1; }
 
 .d-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+/* Brukere-vinduet kan bli langt (statistikk): Lukk-knappen står fast nederst mens man ruller. */
+#users { overflow-y: auto; }
+#users > form.d-buttons { position: sticky; bottom: -20px; margin: 12px -20px -20px; padding: 12px 20px; background: var(--surface); border-top: 1px solid var(--border); z-index: 1; }
 .spacer { flex: 1; }
 
 .btn {
