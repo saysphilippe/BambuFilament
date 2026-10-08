@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008174615";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008174615";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008174937";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008174937";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -870,7 +870,7 @@ function usageLine(s) {
 // skylder (brukt opp) → gjort opp.
 
 const MAX_LOANS = 300;
-const LOAN_STATE = { out: "Utlånt", owes: "Skylder", returned: "Levert tilbake", settled: "Gjort opp" };
+const LOAN_STATE = { out: "Har rullen", owes: "Brukt opp", returned: "Levert tilbake", settled: "Gjort opp" };
 
 function loanState(l) {
   if (l.own) return "own";
@@ -1013,15 +1013,15 @@ function renderLoans() {
   const mine = new Set(myTodos().map((l) => l.id));
   const todos = waiting.filter((l) => mine.has(l.id));
   const others = waiting.filter((l) => !mine.has(l.id));
-  const out = loans.filter((l) => l.state === "out");
-  const owes = loans.filter((l) => l.state === "owes");
+  // Utestående: både de som fortsatt har rullen og de som har brukt den opp skylder den.
+  const open = loans.filter((l) => l.state === "out" || l.state === "owes");
   const done = loans.filter((l) => l.state === "returned" || l.state === "settled")
     .sort((a, b) => (b.settledAt || b.returnedAt || b.at).localeCompare(a.settledAt || a.returnedAt || a.at)).slice(0, 25);
 
   // Hvem skylder hvem: én linje per låntaker → eier, med beløp. «Du»/«deg» når det gjelder meg.
   const me = userName();
   const debts = {};
-  for (const l of owes) {
+  for (const l of open) {
     const k = `${l.to}\u0000${l.owner}`;
     const d = (debts[k] ||= { n: 0, kr: 0 });
     d.n++;
@@ -1039,8 +1039,7 @@ function renderLoans() {
   const name = (n) => (n === me ? "deg" : esc(n || "ukjent eier"));
   const subj = (n) => (n === me ? "Du" : esc(n));
   const dot = (n) => `<span class="owner-dot" style="--owner:${userColor(n)}"></span>`;
-  const loanWho = (l) => l.state === "owes" ? `${dot(l.to)}<b>${subj(l.to)}</b>&nbsp;skylder ${name(l.owner)}&nbsp;<b>ca. ${loanAmount(l).kr} kr</b>`
-    : l.state === "out" ? `${dot(l.to)}<b>${subj(l.to)}</b>&nbsp;har lånt fra ${name(l.owner)}`
+  const loanWho = (l) => l.state === "owes" || l.state === "out" ? `${dot(l.to)}<b>${subj(l.to)}</b>&nbsp;skylder ${name(l.owner)}&nbsp;<b>ca. ${loanAmount(l).kr} kr</b>`
     : `${dot(l.to)}${subj(l.to)} lånte fra ${name(l.owner)}`;
   const row = (l) => {
     const s = spoolOf(l);
@@ -1053,12 +1052,12 @@ function renderLoans() {
       `${l.gramsOut}g ved utlån${l.gramsSrc === "new" ? " (ubrukt rull)" : ""}`,
       l.gramsIn !== null && l.gramsIn <= l.gramsOut ? `brukt ${l.gramsOut - l.gramsIn}g` : l.state === "owes" ? `brukt ca. ${l.gramsOut}g` : "",
     ].filter(Boolean).join(" · ");
-    const actions = !token() ? ""
-      : l.state === "out" ? `<button class="btn btn-small" data-loan="returned" data-spool="${esc(l.spool)}">Levert tilbake</button>
-          <button class="btn btn-small" data-loan="used" data-spool="${esc(l.spool)}">Brukt opp</button>`
-      : l.state === "owes" ? `${l.to === me ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Betal med Vipps</button>`
-          : l.owner === me ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Be om penger med Vipps</button>` : ""}
-          <button class="btn btn-primary btn-small" data-loan="settled" data-spool="${esc(l.spool)}">Gjort opp</button>` : "";
+    const vipps = l.to === me ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Betal med Vipps</button>`
+      : l.owner === me ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Be om penger med Vipps</button>` : "";
+    const actions = !token() || (l.state !== "out" && l.state !== "owes") ? ""
+      : `${l.state === "out" ? `<button class="btn btn-small" data-loan="returned" data-spool="${esc(l.spool)}">Levert tilbake</button>
+          <button class="btn btn-small" data-loan="used" data-spool="${esc(l.spool)}">Brukt opp</button>` : ""}
+          ${vipps}<button class="btn btn-primary btn-small" data-loan="settled" data-spool="${esc(l.spool)}">Gjort opp</button>`;
     return `<li>
       <span class="dot" style="background:${color}"></span>
       <span class="loan-what"><b>${esc(s ? title(s) : l.title || "Slettet spole")}</b><span class="muted">${esc(s?.typeName || l.type)}${use?.kind === "ams" ? ` · i AMS hos ${esc(use.user)}` : ""}</span></span>
@@ -1105,10 +1104,9 @@ function renderLoans() {
       <ul class="loan-list">${todos.map(pendingRow).join("")}</ul></div>` : ""}
     ${others.length ? `<h2>Venter på godkjenning hos andre (${others.length})</h2><ul class="loan-list">${others.map(pendingRow).join("")}</ul>` : ""}
     <div class="loan-sum">${debtChips || `<span class="loan-debt clear">Ingen skylder filament akkurat nå</span>`}</div>
-    <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Sjekk ut til» når du sjekker ut. Utsjekk med RFID-leseren må godkjennes her først. Lånet avsluttes når spolen sjekkes inn igjen. Brukes den opp, står låntakeren som skyldig til noen trykker «Gjort opp».</p>
+    <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Sjekk ut til» når du sjekker ut. Utsjekk med RFID-leseren må godkjennes her først. Den som har fått en rull, skylder den til den leveres tilbake (sjekkes inn) eller er gjort opp, for eksempel med Vipps.</p>
     <p id="loan-error" class="error"></p>
-    ${section("Utlånt nå", out, "Ingen spoler er utlånt.")}
-    ${section("Skylder", owes, "Ingen skylder filament.")}
+    ${section("Utestående", open, "Ingen skylder filament.")}
     ${coming.length ? `<h2>Tomme spoler på vei tilbake (${coming.length})</h2><ul class="loan-list">${coming.map(spoolRow).join("")}</ul>` : ""}
     ${section("Avsluttet", done, "Ingen avsluttede lån ennå.")}
   </section>
@@ -1218,7 +1216,8 @@ function loanAmount(l) {
   const total = s?.tag?.weight || 1000;
   const used = l.gramsOut === null ? null : Math.max(0, l.gramsOut - (l.gramsIn ?? 0));
   const filamentKr = used === null ? price.kr : Math.max(5, Math.round((price.kr * used) / total / 5) * 5);
-  const spoolKr = loanState(l) === "owes" ? price.spool.kr : 0;
+  // Har låntakeren fortsatt rullen eller har brukt den opp, har hen også spolen.
+  const spoolKr = ["owes", "out"].includes(loanState(l)) ? price.spool.kr : 0;
   const kr = filamentKr + spoolKr;
   const how = (used === null ? `${price.kr} kr for en full rull; mengden er ukjent`
     : `${used}g av ${total}g × ${price.kr} kr = ${filamentKr} kr`) + (spoolKr ? ` + spole ${spoolKr} kr (${price.spool.src}) = ${kr} kr` : "");
