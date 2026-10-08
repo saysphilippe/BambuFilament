@@ -64,8 +64,13 @@ PBKDF2-SHA256, 600 000 runder). Riktig passord låser opp tokenen i nettleseren.
 - Første bruker i oppsettet (Philippe) er **administrator**. Bare administrator kan legge til og fjerne brukere og lage nye midlertidige passord. Alle kan bytte sitt eget passord.
 - Admin-rollen håndheves i nettsiden. Alle innloggede deler samme skrivetoken, så den er en regel for vanlig bruk, ikke en sikkerhetsgrense.
 - Bruk sterke passord. De krypterte dataene ligger i et offentlig repo.
+- **Nøkkelpar per bruker:** når en bruker velger passord, lages et ECDH-nøkkelpar (P-256). Den private
+  nøkkelen krypteres med passordet (PBKDF2 som over), og tokenen krypteres til den offentlige nøkkelen
+  (`users[].kp = { pub, priv, box }`). Eldre innlogginger (`cred`) gjøres om ved neste innlogging.
 - **Utløpt eller ny GitHub-token:** logg inn som administrator. Siden oppdager at tokenen ikke virker
-  og ber om den nye. Din innlogging fornyes med passordet ditt, og de andre får nye midlertidige passord.
+  og ber om den nye. Den krypteres til alle brukernes offentlige nøkler, så **ingen må bytte passord**.
+  Bare brukere som ennå ikke har valgt eget passord får nytt midlertidig passord (på e-post hvis de har
+  adresse). Fjernede brukere får ikke den nye tokenen.
 
 ### E-post og registrering
 

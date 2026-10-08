@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610080930";
-import { encryptToken, decryptToken, randomPassword, passwordProblem } from "./auth.js?v=202610080930";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=202610080950";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=202610080950";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -760,7 +760,7 @@ function renderUsers() {
   $("#u-list").innerHTML = users().map((u) => {
     const count = state.spools.filter((s) => s.owner === u.name).length;
     const why = u.name === me ? "Du kan ikke fjerne deg selv" : count ? "Flytt eller slett spolene til brukeren først" : "Fjern bruker";
-    const note = [u.admin && "admin", !u.known && "ikke i brukerlisten", u.known && !u.cred && !u.reset && "ingen innlogging", u.mustChange && "må bytte passord"].filter(Boolean).join(", ");
+    const note = [u.admin && "admin", !u.known && "ikke i brukerlisten", u.known && !hasLogin(u) && "ingen innlogging", u.mustChange && "må bytte passord"].filter(Boolean).join(", ");
     const email = state.contacts.emails[u.name] || "";
     return `<li style="--owner:${u.color}">
       <span class="owner-dot"></span>
@@ -846,7 +846,7 @@ async function addUser(e) {
 }
 
 async function resetPassword(name, btn) {
-  const hasPassword = !!state.doc.users.find((u) => u.name === name)?.cred;
+  const hasPassword = hasLogin(state.doc.users.find((u) => u.name === name));
   if (hasPassword && !confirmed(btn, "Det gamle slutter å virke – trykk igjen")) return;
   $("#u-error").textContent = `Lager passord for ${name}…`;
   if (btn) btn.disabled = true;
@@ -859,6 +859,8 @@ async function resetPassword(name, btn) {
       if (!u) return `${name} finnes ikke lenger.`;
       u.cred = cred;
       u.mustChange = true;
+      delete u.kp;
+      delete u.reset;
     }, `Nytt passord for ${name} (${userName()})`, "users");
     freshPasswords = freshPasswords.filter(([n]) => n !== name).concat([[name, temp]]);
     $("#u-error").textContent = "";
@@ -1193,7 +1195,7 @@ function openAccount() {
 }
 
 function openLogin() {
-  const withLogin = state.doc.users.filter((u) => u.cred || u.reset);
+  const withLogin = state.doc.users.filter(hasLogin);
   if (!withLogin.length) return openSetup();
   const last = store("bf.lastUser");
   $("#l-user").innerHTML = withLogin.map((u) => `<option${u.name === last ? " selected" : ""}>${esc(u.name)}</option>`).join("");
@@ -1209,8 +1211,14 @@ async function login(e) {
   const user = state.doc.users.find((u) => u.name === name);
   $("#l-error").textContent = "Sjekker…";
   const pw = $("#l-password").value;
-  let tok = user?.cred && (await decryptToken(user.cred, pw));
-  // Midlertidig passord fra e-post (gjelder i én time).
+  // Nøkkelpar (vanlig), eldre innlogging (tokenen kryptert direkte med passordet) eller
+  // midlertidig passord fra e-post (gjelder i én time).
+  let tok = user?.kp && (await openKeys(user.kp, pw));
+  let legacy = false;
+  if (!tok && user?.cred) {
+    tok = await decryptToken(user.cred, pw);
+    legacy = !!tok;
+  }
   let viaReset = false;
   if (!tok && user?.reset && new Date(user.reset.exp).getTime() > Date.now()) {
     tok = await decryptToken(user.reset, pw);
@@ -1236,13 +1244,32 @@ async function login(e) {
   $("#login").close();
   if (user.admin) shareToken();
   if (user.mustChange || viaReset) openChangePassword(true);
+  else if (legacy) upgradeLogin(name, tok, pw);
+}
+
+const hasLogin = (u) => !!(u && (u.kp || u.cred || u.reset));
+
+// Eldre innlogging gjøres om til nøkkelpar i bakgrunnen, med samme passord.
+async function upgradeLogin(name, tok, pw) {
+  try {
+    const kp = await makeKeys(tok, pw);
+    await saveDoc((doc) => {
+      const u = doc.users.find((x) => x.name === name);
+      if (!u) return "Brukeren finnes ikke.";
+      u.kp = kp;
+      delete u.cred;
+    }, `Ny innloggingsnøkkel (${name})`, "users");
+  } catch (err) {
+    console.warn("Kunne ikke oppgradere innloggingen:", err.message);
+  }
 }
 
 // ---------- Ny GitHub-token (når den gamle er utløpt eller generert på nytt) ----------
 //
-// Innloggingsnøklene inneholder tokenen kryptert per bruker, så en ny token må krypteres
-// på nytt. Administrator har nettopp skrevet passordet sitt og får sin nøkkel fornyet med det.
-// De andre får nye midlertidige passord, siden siden ikke kjenner passordene deres.
+// Brukere med nøkkelpar får den nye tokenen kryptert til sin offentlige nøkkel og beholder
+// passordet. Bare brukere som ennå ikke har valgt eget passord (midlertidig passord eller
+// eldre innlogging) trenger nytt midlertidig passord: på e-post hvis de har adresse,
+// ellers vises det her.
 let rekey = null;
 
 function openRekey(name, password, remember) {
@@ -1271,26 +1298,66 @@ async function saveRekey(e) {
       if (!res.ok) throw new Error(`Tokenen har ikke tilgang til ${repo.split("/")[1]}. Velg både BambuFilament-data og BambuFilament-auth under Repository access.`);
     }
     err.textContent = "Krypterer og lagrer…";
-    const mine = await encryptToken(tok, rekey.password);
-    const others = [];
+    const mine = await makeKeys(tok, rekey.password);
+    // E-postadressene kunne ikke leses med den gamle tokenen.
+    session = { user: rekey.name, token: tok };
+    state.contacts = cleanContacts(await loadFile("contacts").catch(() => FILES.contacts.empty()));
+    // Krypteringen er asynkron, så den gjøres før lagring (saveDoc kjører mutate synkront).
+    const plan = {};
     for (const u of state.doc.users) {
-      if (u.name === rekey.name || !u.cred) continue;
-      const temp = randomPassword();
-      others.push({ name: u.name, temp, cred: await encryptToken(tok, temp) });
+      if (u.name === rekey.name) continue;
+      if (u.kp && !u.mustChange) plan[u.name] = { kp: { ...u.kp, box: await sealToken(tok, u.kp.pub) } };
+      else if (!(u.kp || u.cred || u.reset)) continue;
+      else if (state.contacts.emails[u.name]) plan[u.name] = { mail: true };
+      else {
+        const temp = randomPassword();
+        plan[u.name] = { temp, cred: await encryptToken(tok, temp) };
+      }
     }
+    const kept = [], mailed = [], shown = [];
     session = { user: rekey.name, token: tok };
     await saveDoc((doc) => {
+      kept.length = mailed.length = shown.length = 0;
       for (const u of doc.users) {
-        if (u.name === rekey.name) Object.assign(u, { cred: mine, mustChange: false });
-        const o = others.find((x) => x.name === u.name);
-        if (o) Object.assign(u, { cred: o.cred, mustChange: true });
+        delete u.reset; // kryptert med den gamle tokenen
+        const p = plan[u.name];
+        if (u.name === rekey.name) {
+          Object.assign(u, { kp: mine, mustChange: false });
+          delete u.cred;
+        } else if (p?.kp && u.kp?.pub === p.kp.pub) {
+          u.kp = p.kp;
+          kept.push(u.name);
+        } else if (p?.mail) {
+          mailed.push(u.name);
+        } else if (p?.cred) {
+          u.cred = p.cred;
+          u.mustChange = true;
+          delete u.kp;
+          shown.push({ name: u.name, temp: p.temp });
+        }
       }
     }, `Ny GitHub-token (${rekey.name})`, "users");
     session = null;
     setSession({ user: rekey.name, token: tok }, rekey.remember);
     recordLogin(rekey.name, rekey.remember);
-    $("#rk-list").innerHTML = others.map((o) => `<tr><td>${esc(o.name)}</td><td><code class="pw">${esc(o.temp)}</code></td></tr>`).join("")
-      || "<tr><td class='muted'>Ingen andre brukere har innlogging.</td></tr>";
+    // Workeren må ha den nye tokenen før den kan sende passord.
+    let mailError = "";
+    if (mailed.length) {
+      try {
+        await shareToken(true);
+        for (const name of mailed) await proxy("/reset", { who: name });
+      } catch (ex) {
+        mailError = ex.message;
+      }
+    }
+    $("#rk-summary").innerHTML = [
+      kept.length && `<p><b>Beholder passordet sitt:</b> ${kept.map(esc).join(", ")}. De merker ingenting, bortsett fra at de som er innlogget må logge inn på nytt.</p>`,
+      mailed.length && (mailError
+        ? `<p class="error">Kunne ikke sende e-post til ${mailed.map(esc).join(", ")}: ${esc(mailError)}. De kan bruke «Glemt passord?».</p>`
+        : `<p><b>Fikk nytt midlertidig passord på e-post:</b> ${mailed.map(esc).join(", ")} (hadde ikke valgt eget passord ennå).</p>`),
+      shown.length && `<p><b>Gi disse midlertidige passordene til brukerne.</b> De vises bare nå.</p>`,
+    ].filter(Boolean).join("") || "<p>Ingen andre brukere har innlogging.</p>";
+    $("#rk-list").innerHTML = shown.map((o) => `<tr><td>${esc(o.name)}</td><td><code class="pw">${esc(o.temp)}</code></td></tr>`).join("");
     $("#rk-form").hidden = true;
     $("#rk-done").hidden = false;
     rekey = null;
@@ -1330,7 +1397,8 @@ async function changePassword(e) {
   const pw = $("#p-new").value;
   if (!dlg.dataset.forced) {
     const me = state.doc.users.find((u) => u.name === userName());
-    const ok = me?.cred && (await decryptToken(me.cred, $("#p-current").value)) === token();
+    const cur = $("#p-current").value;
+    const ok = ((me?.kp && (await openKeys(me.kp, cur))) || (me?.cred && (await decryptToken(me.cred, cur)))) === token();
     if (!ok) return ($("#p-error").textContent = "Nåværende passord er feil.");
   }
   const weak = passwordProblem(pw, userName());
@@ -1338,12 +1406,13 @@ async function changePassword(e) {
   if (pw !== $("#p-repeat").value) return ($("#p-error").textContent = "Passordene er ikke like.");
   $("#p-error").textContent = "Lagrer…";
   try {
-    const cred = await encryptToken(token(), pw);
+    const kp = await makeKeys(token(), pw);
     await saveDoc((doc) => {
       const u = doc.users.find((x) => x.name === userName());
       if (!u) return "Brukeren din finnes ikke lenger.";
-      u.cred = cred;
+      u.kp = kp;
       u.mustChange = false;
+      delete u.cred;
       delete u.reset;
     }, `Byttet passord (${userName()})`, "users");
     freshPasswords = freshPasswords.filter(([n]) => n !== userName());
@@ -1386,7 +1455,7 @@ async function setup(e) {
     }
     session = { user: names[0], token: tok };
     await saveDoc((doc) => {
-      if (doc.users.some((u) => u.cred)) return "Oppsettet er allerede gjort. Last siden på nytt.";
+      if (doc.users.some(hasLogin)) return "Oppsettet er allerede gjort. Last siden på nytt.";
       for (const { name, color, cred, admin } of created) {
         const existing = doc.users.find((u) => u.name === name);
         if (existing) Object.assign(existing, { cred, admin, mustChange: true });

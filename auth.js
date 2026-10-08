@@ -78,3 +78,55 @@ export function randomPassword() {
   const s = Array.from(bytes, (b) => chars[b % chars.length]).join("");
   return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
 }
+
+// ---------- Nøkkelpar per bruker ----------
+//
+// Hver bruker har et ECDH-nøkkelpar (P-256). Den private nøkkelen er kryptert med
+// passordet (som over), og GitHub-tokenen er kryptert til den offentlige nøkkelen
+// ("box"). Når tokenen byttes, kan administrator kryptere den nye til alle brukernes
+// offentlige nøkler uten å kjenne passordene, så ingen må bytte passord.
+// Lagres som users[].kp = { pub, priv, box }.
+
+const ECDH = { name: "ECDH", namedCurve: "P-256" };
+
+async function boxKey(privateKey, publicKey, usage) {
+  const bits = await crypto.subtle.deriveBits({ name: "ECDH", public: publicKey }, privateKey, 256);
+  const base = await crypto.subtle.importKey("raw", bits, "HKDF", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: new TextEncoder().encode("BambuFilament box") },
+    base, { name: "AES-GCM", length: 256 }, false, [usage],
+  );
+}
+
+// Krypterer tokenen til en offentlig nøkkel (base64, rå P-256-punkt).
+export async function sealToken(token, pub) {
+  const recipient = await crypto.subtle.importKey("raw", unb64(pub), ECDH, false, []);
+  const eph = await crypto.subtle.generateKey(ECDH, true, ["deriveBits"]);
+  const key = await boxKey(eph.privateKey, recipient, "encrypt");
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(token));
+  return { epk: b64(await crypto.subtle.exportKey("raw", eph.publicKey)), iv: b64(iv), data: b64(data) };
+}
+
+// Nytt nøkkelpar for en bruker, med privat nøkkel kryptert med passordet.
+export async function makeKeys(token, password) {
+  const pair = await crypto.subtle.generateKey(ECDH, true, ["deriveBits"]);
+  const pub = b64(await crypto.subtle.exportKey("raw", pair.publicKey));
+  const priv = await encryptToken(b64(await crypto.subtle.exportKey("pkcs8", pair.privateKey)), password);
+  return { pub, priv, box: await sealToken(token, pub) };
+}
+
+// Returnerer tokenen, eller null ved feil passord.
+export async function openKeys(kp, password) {
+  try {
+    const pkcs8 = await decryptToken(kp.priv, password);
+    if (!pkcs8) return null;
+    const priv = await crypto.subtle.importKey("pkcs8", unb64(pkcs8), ECDH, false, ["deriveBits"]);
+    const epk = await crypto.subtle.importKey("raw", unb64(kp.box.epk), ECDH, false, []);
+    const key = await boxKey(priv, epk, "decrypt");
+    const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(kp.box.iv) }, key, unb64(kp.box.data));
+    return new TextDecoder().decode(data);
+  } catch {
+    return null;
+  }
+}
