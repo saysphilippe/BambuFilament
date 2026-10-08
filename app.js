@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008133222";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008133222";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008134243";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008134243";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -695,21 +695,26 @@ function groupedCards(list) {
   return MATERIALS.filter((m) => groups[m]).map((m) => {
     const types = Object.keys(groups[m]).sort((a, b) => a.localeCompare(b));
     const total = types.reduce((n, t) => n + groups[m][t].length, 0);
-    return `<section class="mat-group">
-      <h2 class="mat-head">${esc(m)} <span>${total}</span></h2>
-      ${types.map((t) => `<h3 class="type-head">${esc(t)} <span>${groups[m][t].length}</span></h3>
-        <div class="grid-inner">${groups[m][t].map(spoolCard).join("")}</div>`).join("")}
-    </section>`;
+    // Sammenleggbare grupper; lukkede huskes i nettleseren («mat:PLA», «type:PLA Basic»).
+    return `<details class="mat-group" data-fold="mat:${esc(m)}"${folded(`mat:${m}`) ? "" : " open"}>
+      <summary class="mat-head">${esc(m)} <span>${total}</span></summary>
+      ${types.map((t) => `<details class="type-group" data-fold="type:${esc(t)}"${folded(`type:${t}`) ? "" : " open"}>
+        <summary class="type-head">${esc(t)} <span>${groups[m][t].length}</span></summary>
+        <div class="grid-inner">${groups[m][t].map(spoolCard).join("")}</div>
+      </details>`).join("")}
+    </details>`;
   }).join("");
 }
 
 // Spolekort: fargen øverst og størst, så fargenavn og type, og til slutt detaljer i liten tekst.
 function spoolCard(s) {
   const tagName = s.kind === "rfid" ? "button" : "div";
+  const left = leftOnSpool(s);
+  const pct = left && left.total ? Math.max(0, Math.min(100, Math.round((left.g / left.total) * 100))) : null;
   const foot = [
     `<span class="foot-owner" style="--owner:${userColor(s.owner)}"><span class="owner-dot"></span>${esc(s.owner || "Ingen eier")}</span>`,
-    weightLabel(s),
-  ].filter(Boolean).join("");
+    left ? `<span>${left.g} g igjen${left.estimate ? " (ubrukt)" : ""}</span>` : `<span>mengde ukjent</span>`,
+  ].join("");
   return `
     <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""}>
       <div class="swatch" style="background:${swatch(s.tag)}">
@@ -717,6 +722,7 @@ function spoolCard(s) {
         <span class="source source-${s.kind}">${SOURCE[s.kind]}</span>
         <span class="tip">${productionTip(s)}</span>
       </div>
+      <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${left.g} av ${left.total} g` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
       <div class="card-body">
         <div class="card-title">${esc(title(s))}</div>
         <div class="card-type">${esc(s.typeName)}</div>
@@ -726,6 +732,22 @@ function spoolCard(s) {
         ${s.note ? `<div class="card-note">${esc(s.note)}</div>` : ""}
       </div>
     </${tagName}>`;
+}
+
+// Hvor mye som er igjen på en spole, for baren på kortet: { g, total, estimate }.
+// Bibliotek: vekt fra Bambu. AMS: prosent. RFID: fra biblioteket, ellers full rull hvis den
+// aldri er sjekket ut (estimate), 0 hvis brukt opp, ellers ukjent (null).
+function leftOnSpool(s) {
+  if (s.kind === "library") return s.total ? { g: s.net || 0, total: s.total } : null;
+  if (s.kind === "ams") {
+    const total = s.total || 1000;
+    return s.remain !== null && s.remain !== undefined ? { g: Math.round((total * s.remain) / 100), total } : null;
+  }
+  const total = s.tag?.weight || 1000;
+  if (s.status === "empty") return { g: 0, total };
+  const now = gramsLeftNow(s);
+  if (!now) return null;
+  return { g: now.g, total: now.src === "lib" ? libraryWeight(s.id)?.total || total : total, estimate: now.src === "new" };
 }
 
 // Siste bevegelser (vises nederst i «Lånt filament»).

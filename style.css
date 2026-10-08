@@ -175,8 +175,15 @@ input, select, textarea {
 .grid, .grid-inner { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .grid.grouped { display: block; }
 .mat-group { margin-bottom: 22px; }
-.mat-head { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px; font-size: 22px; letter-spacing: -.01em; }
-.type-head { display: flex; align-items: baseline; gap: 6px; margin: 12px 0 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.mat-head { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px; font-size: 22px; font-weight: 700; letter-spacing: -.01em; cursor: pointer; list-style: none; }
+.type-head { display: flex; align-items: baseline; gap: 6px; margin: 12px 0 8px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; cursor: pointer; list-style: none; }
+.mat-head::-webkit-details-marker, .type-head::-webkit-details-marker { display: none; }
+/* Pil som viser om gruppen er åpen eller lukket. */
+.mat-head::before, .type-head::before { content: "▸"; display: inline-block; width: 1em; color: var(--muted); transition: transform .12s ease; }
+.mat-group[open] > .mat-head::before, .type-group[open] > .type-head::before { transform: rotate(90deg); }
+.mat-head::before { font-size: 16px; }
+.type-head::before { font-size: 12px; }
+.type-group:not([open]) > .type-head { margin-bottom: 4px; }
 .mat-head span, .type-head span { font-size: 13px; font-weight: 500; color: var(--muted); }
 
 .card {
@@ -220,6 +227,11 @@ input, select, textarea {
   color: #fff;
   background: var(--owner);
 }
+/* Hvor mye som er igjen: stripe over hele kortets bredde (0–full rull). */
+.left-bar { height: 9px; background: var(--muted-bg); }
+.left-bar span { display: block; height: 100%; background: var(--accent); }
+.left-bar.low span { background: var(--out); }
+.left-bar.unknown { background: repeating-linear-gradient(90deg, var(--muted-bg) 0 6px, transparent 6px 10px); }
 .card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
 .card-title { font-weight: 700; font-size: 16px; line-height: 1.25; }
 .card-type { font-size: 13px; color: var(--muted); }
