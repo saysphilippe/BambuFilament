@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008173806";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008173806";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008174315";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008174315";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -1062,8 +1062,8 @@ function renderLoans() {
       <span class="dot" style="background:${color}"></span>
       <span class="loan-what"><b>${esc(s ? title(s) : l.title || "Slettet spole")}</b><span class="muted">${esc(s?.typeName || l.type)}${use?.kind === "ams" ? ` · i AMS hos ${esc(use.user)}` : ""}</span></span>
       <span class="loan-who">${loanWho(l)}</span>
-      <span class="loan-state ${l.state}">${LOAN_STATE[l.state]}</span>
       <span class="muted">${when}${grams ? ` · ${grams}` : ""}</span>
+      <span class="loan-state ${l.state}">${LOAN_STATE[l.state]}</span>
       <span class="loan-actions">${actions}</span>
     </li>`;
   };
