@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008135540";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008135540";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008135812";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008135812";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -678,7 +678,7 @@ function render() {
   grid.classList.toggle("grouped", grouped);
   grid.innerHTML = !list.length
     ? `<p class="empty-msg">${items.length ? "Ingen spoler passer filteret." : `Ingen spoler ennå. Skann en spole med leseren, eller del Bambu-biblioteket ditt under «AMS og bibliotek»${DEMO ? "" : `, eller <a href="?demo">se demo med eksempeldata</a>`}.`}</p>`
-    : grouped ? groupedCards(list) : list.map(spoolCard).join("");
+    : grouped ? groupedCards(list) : list.map((s) => spoolCard(s)).join("");
 }
 
 // Materialfamilie ut fra typenavnet, i fast rekkefølge.
@@ -700,14 +700,15 @@ function groupedCards(list) {
       <summary class="mat-head">${esc(m)} <span>${total}</span></summary>
       ${types.map((t) => `<details class="type-group" data-fold="type:${esc(t)}"${folded(`type:${t}`) ? "" : " open"}>
         <summary class="type-head">${esc(t)} <span>${groups[m][t].length}</span></summary>
-        <div class="grid-inner">${groups[m][t].map(spoolCard).join("")}</div>
+        <div class="grid-inner">${groups[m][t].map((s) => spoolCard(s, false)).join("")}</div>
       </details>`).join("")}
     </details>`;
   }).join("");
 }
 
 // Spolekort: fargen øverst og størst, så fargenavn og type, og til slutt detaljer i liten tekst.
-function spoolCard(s) {
+// showType: false når kortet står under en typeoverskrift (typen står da allerede der).
+function spoolCard(s, showType = true) {
   const tagName = s.kind === "rfid" ? "button" : "div";
   const left = leftOnSpool(s);
   const pct = left && left.total ? Math.max(0, Math.min(100, Math.round((left.g / left.total) * 100))) : null;
@@ -721,7 +722,7 @@ function spoolCard(s) {
       <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${left.g} av ${left.total} g igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
       <div class="card-body">
         <div class="card-title">${esc(title(s))}</div>
-        <div class="card-type">${esc(s.typeName)}</div>
+        ${showType ? `<div class="card-type">${esc(s.typeName)}</div>` : ""}
         ${s.location ? `<div class="card-loc">${esc(s.location)}</div>` : ""}
         ${usageLine(s)}
         ${s.note ? `<div class="card-note">${esc(s.note)}</div>` : ""}
