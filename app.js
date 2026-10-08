@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008132953";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008132953";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008133222";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008133222";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -504,7 +504,10 @@ function swatch(tag) {
   return tag.colors.some((x) => alpha(x) < 0.99) ? `${top}, ${CHECKER}` : top;
 }
 
-const title = (s) => s.name || s.colorName || s.tag?.colors[0].slice(0, 7) || "Ukjent spole";
+// Fargekoder vises ikke: uten offisielt navn brukes fargefamilien («Blå»).
+const familyLabel = (key) => FAMILIES.find(([k]) => k === key)?.[1] || "";
+const familyOfHex = (hex) => (hex ? familyLabel(family({ colors: ["#" + String(hex).replace("#", "").slice(0, 8).padEnd(8, "F")] })) : "");
+const title = (s) => s.name || s.colorName || familyLabel(s.family) || "Ukjent farge";
 
 const SOURCE = { rfid: "RFID", library: "Bambu-bibliotek", ams: "I AMS" };
 
@@ -703,14 +706,13 @@ function groupedCards(list) {
 // Spolekort: fargen øverst og størst, så fargenavn og type, og til slutt detaljer i liten tekst.
 function spoolCard(s) {
   const tagName = s.kind === "rfid" ? "button" : "div";
-  const hex = s.tag?.colors.map((c) => c.slice(0, 7)).join(" / ") || "";
   const foot = [
     `<span class="foot-owner" style="--owner:${userColor(s.owner)}"><span class="owner-dot"></span>${esc(s.owner || "Ingen eier")}</span>`,
     weightLabel(s),
   ].filter(Boolean).join("");
   return `
     <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""}>
-      <div class="swatch" style="background:${swatch(s.tag)}" title="${esc(hex)}">
+      <div class="swatch" style="background:${swatch(s.tag)}">
         ${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}
         <span class="source source-${s.kind}">${SOURCE[s.kind]}</span>
         <span class="tip">${productionTip(s)}</span>
@@ -1072,7 +1074,7 @@ function openDetail(id) {
   owner.textContent = s.owner || "Ingen eier";
   owner.style.setProperty("--owner", userColor(s.owner));
   const rows = t ? [
-    ["Farge", `${s.colorName || "Ukjent navn"} (${t.colors.map((c) => c.slice(0, 7)).join(" / ")})`],
+    ["Farge", s.colorName || familyLabel(s.family) || "Ukjent"],
     ["Status", STATUS[s.status]],
     ["Vekt (ny)", `${t.weight} g`],
     ["Diameter", `${t.diameter} mm`],
@@ -2232,7 +2234,7 @@ function renderTray(t, label) {
     <span class="slot">${label}</span>
     <div class="tray-dot" style="background:${traySwatch(t)}"></div>
     <div class="tray-text">
-      <div class="tray-color">${esc(n.color || "#" + (t.color || "").slice(0, 6))}</div>
+      <div class="tray-color">${esc(n.color || familyOfHex(t.color) || "Ukjent farge")}</div>
       <div class="tray-type">${esc(n.type)}</div>
       ${remain !== null ? `<div class="remain"><span style="width:${remain}%"></span></div><div class="muted">${remain} %</div>` : ""}
     </div>

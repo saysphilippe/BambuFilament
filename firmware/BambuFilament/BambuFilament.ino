@@ -627,7 +627,7 @@ void loop() {
   ScanResult result = uploadScan(id, toHex(&blocks[0][0], BLOCKS * 16), summary);
   busy(false);
   String who = currentUser();
-  String what = String(type).substring(0, 14) + " #" + toHex(blocks[5], 3);
+  String what = String(type).substring(0, 21);
   if (result == SCAN_IN || result == SCAN_OUT) {
     Serial.printf("Lagret (%s).\n", summary.c_str());
     screen(result == SCAN_OUT ? "Sjekket ut" : "Sjekket inn", what, who.length() ? "av " + who : "av ukjent");
