@@ -228,6 +228,7 @@ input, select, textarea {
 .card-note { font-size: 13px; color: var(--muted); }
 .empty-msg { grid-column: 1 / -1; color: var(--muted); text-align: center; padding: 40px 0; }
 
+dialog:focus { outline: none; }
 dialog {
   width: min(560px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);

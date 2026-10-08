@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008120050";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008120050";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008120600";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008120600";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -420,6 +420,14 @@ function setSync(text, error = false) {
 
 // ---------- Visning ----------
 
+// Vinduer der man ikke skal skrive med en gang: fokus på selve vinduet, ikke på første
+// felt eller knapp (ellers blinker markøren i et felt). Tab går fortsatt til feltene.
+function openQuiet(sel) {
+  const dlg = $(sel);
+  dlg.showModal();
+  dlg.focus();
+}
+
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 // Gjennomsiktige farger vises over et rutemønster.
@@ -690,7 +698,7 @@ function openDetail(id) {
   $("#d-hint").hidden = canEdit;
   $("#d-hint").textContent = DEMO ? "Demo-modus: endringer lagres ikke." : "Logg inn for å kunne endre.";
   $("#d-error").textContent = "";
-  $("#detail").showModal();
+  openQuiet("#detail");
 }
 
 async function saveDetail(e) {
@@ -806,7 +814,7 @@ function openUsers() {
   $("#u-error").textContent = "";
   renderUsers();
   showUsersTab(state.usersTab);
-  $("#users").showModal();
+  openQuiet("#users");
 }
 
 async function addUser(e) {
@@ -1191,7 +1199,7 @@ function setSession(value, remember = !!session?.exp) {
 function openAccount() {
   if (!session) return openLogin();
   $("#a-name").textContent = session.user;
-  $("#account-dialog").showModal();
+  openQuiet("#account-dialog");
 }
 
 function openLogin() {
@@ -2216,6 +2224,10 @@ function showTab(tab) {
   if (state.tab === "ams" && !state.amsLive && !state.amsBusy) refreshAms();
   if (state.tab === "news") renderNews();
   if (state.tab === "shop") renderShop();
+  // Faner med søkefelt: markøren rett i feltet (ikke på berøringsskjerm, der tastaturet ville sprette opp).
+  const search = { stock: "#q", shop: "#shop-q" }[state.tab];
+  if (search && !matchMedia("(pointer: coarse)").matches) $(search).focus({ preventScroll: true });
+  else if (document.activeElement?.matches("input, select, textarea")) document.activeElement.blur();
 }
 
 // ---------- Demo ----------
