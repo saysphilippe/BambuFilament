@@ -50,6 +50,14 @@ const rows = await mapLimit(products, CONCURRENCY, async (p) => {
   const withSpool = d?.isFilament ? priceWhere((v) => /with spool/i.test(v)) : null;
   const soldOut = skus.filter((s) => s.isSoldOut).length;
   const name = d?.name || p.title || p.handle;
+  // Mengderabatt («filament-bulk-sale»): antall ruller på tvers av alle produkter i samme
+  // kampanje gir prosent avslag. thresholdInfo type 2 = antall, discountInfo type 2 = prosent.
+  const bundle = d?.promotion?.bundleFullDiscount;
+  const tiers = (bundle?.thresholdList || [])
+    .filter((t) => t.thresholdInfo?.type === 2 && t.discountInfo?.type === 2)
+    .map((t) => [Number(t.thresholdInfo.value), Number(t.discountInfo.value)])
+    .filter(([n, pct]) => n > 0 && pct > 0 && pct < 100);
+  const bulk = tiers.length ? { id: String(bundle.activityInfo?.activityId || bundle.activityInfo?.seoCode || "bulk"), tiers } : null;
   return {
     handle: p.handle,
     name,
@@ -58,6 +66,7 @@ const rows = await mapLimit(products, CONCURRENCY, async (p) => {
     price: prices.length ? Math.min(...prices) : null,
     ...(refill ? { refill } : {}),
     ...(withSpool ? { withSpool } : {}),
+    ...(bulk ? { bulk } : {}),
     // [navn, utsolgt, pris i euro]
     variants: skus.map((s) => [
       (s.productSkuPropertyList || []).map((x) => x.propertyValue).join(" / ") || name,
