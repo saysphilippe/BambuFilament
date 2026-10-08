@@ -606,6 +606,9 @@ void loop() {
   memcpy(type, blocks[4], 16);
   Serial.printf("%s, farge #%s – lagrer...\n", type, toHex(blocks[5], 3).c_str());
 
+  // Hver spole som tappes mens et kort er aktivt, starter kortets 60 sekunder på nytt.
+  if (cardUser.length() && millis() < cardUntil) cardUntil = millis() + CARD_SESSION_SECONDS * 1000UL;
+
   String summary;
   ScanResult result = uploadScan(id, toHex(&blocks[0][0], BLOCKS * 16), summary);
   busy(false);
@@ -614,7 +617,6 @@ void loop() {
   if (result == SCAN_IN || result == SCAN_OUT) {
     Serial.printf("Lagret (%s).\n", summary.c_str());
     screen(result == SCAN_OUT ? "Sjekket ut" : "Sjekket inn", what, who.length() ? "av " + who : "av ukjent");
-    if (cardUser.length() && millis() < cardUntil) cardUntil = millis() + CARD_SESSION_SECONDS * 1000UL;
     signalOk(result == SCAN_OUT);
   } else if (result == SCAN_NOOP) {
     Serial.printf("Allerede sjekket inn – utsjekk mulig om %ld min.\n", waitMinutes);

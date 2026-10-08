@@ -206,7 +206,7 @@ manuelt under *Actions* → *Oppdater Bambu-katalog* → *Run workflow*.
 
 Bruk:
 0. Deler flere leseren: tapp **RFID-kortet** ditt først. Skjermen viser «Hei Niklas!», og spolene de
-   neste 60 sekundene registreres på deg. Et nytt kort registreres uten navn; velg navnet i fanen
+   neste 60 sekundene registreres på deg. Hver spole du tapper, starter de 60 sekundene på nytt. Et nytt kort registreres uten navn; velg navnet i fanen
    **RFID-kort** på siden, så viser leseren det neste gang. Uten kort brukes `OWNER` fra `config.h`
    (tom = ukjent, og eieren av spolen må godkjenne hvem som tok den).
 1. Hold spolen mot leseren. Leseren avgjør selv hva som skjer (ingen knapper):
