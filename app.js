@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008170737";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008170737";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008170945";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008170945";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -407,7 +407,7 @@ const SETTINGS = {
   cardMinutes: { def: 1, min: 0.25, max: 60, step: 0.25 },
   checkoutMinutes: { def: 10, min: 1, max: 1440, step: 1 },
   spoolPrice: { def: 250, min: 0, max: 2000, step: 10 },
-  emptySpoolPrice: { def: 160, min: 0, max: 1000, step: 10 },
+  emptySpoolPrice: { def: 35, min: 0, max: 1000, step: 5 },
   eurRate: { def: 11.5, min: 5, max: 20, step: 0.1 },
 };
 function cleanSettings(x) {
@@ -1146,16 +1146,15 @@ function spoolPrice(typeName) {
   const norm = (t) => String(t || "").toLowerCase().replace(/\s+filament$/, "").replace(/[^a-z0-9+]+/g, " ").trim();
   const want = norm(typeName);
   const p = (state.store?.products || []).find((x) => x.category === "filament" && norm(x.name) === want);
-  if (p && p.price) return { kr: Math.round((p.price * st.eurRate) / 10) * 10, src: `Bambu-butikken: ${p.price} € × ${String(st.eurRate).replace(".", ",")}` };
-  return { kr: st.spoolPrice, src: "standardpris" };
-}
-
-// Tom spole (Bambu Reusable Spool) i kroner, ellers prisen fra Innstillinger.
-function emptySpoolPrice() {
-  const st = state.doc.settings || cleanSettings({});
-  const p = (state.store?.products || []).find((x) => x.handle === "bambu-reusable-spool");
-  if (p && p.price) return Math.round((p.price * st.eurRate) / 10) * 10;
-  return st.emptySpoolPrice;
+  const kr = (eur) => Math.round(eur * st.eurRate);
+  // Spoletillegg: forskjellen mellom med spole og refill (ca. 3 €), ellers fra Innstillinger.
+  const spool = p?.withSpool && p?.refill && p.withSpool > p.refill
+    ? { kr: Math.round(kr(p.withSpool - p.refill) / 5) * 5, src: `${String(p.withSpool).replace(".", ",")} € med spole − ${String(p.refill).replace(".", ",")} € refill` }
+    : { kr: st.emptySpoolPrice, src: "spoletillegg fra Innstillinger" };
+  // Filamentet prises som refill (uten spole) når det finnes, ellers laveste pris.
+  const eur = p?.refill || p?.price;
+  if (eur) return { kr: Math.round(kr(eur) / 10) * 10, spool, src: `Bambu-butikken: ${String(eur).replace(".", ",")} € × ${String(st.eurRate).replace(".", ",")}${p?.refill ? " (refill)" : ""}` };
+  return { kr: st.spoolPrice, spool, src: "standardpris" };
 }
 
 let vippsLoan = null;
@@ -1171,10 +1170,10 @@ function openVipps(loanId) {
   const used = l.gramsOut === null ? null : Math.max(0, l.gramsOut - (l.gramsIn ?? 0));
   const filamentKr = used === null ? price.kr : Math.max(5, Math.round((price.kr * used) / total / 5) * 5);
   // Brukt opp og ikke levert tilbake: låntakeren har også beholdt (eller kastet) spolen.
-  const spoolKr = loanState(l) === "owes" ? emptySpoolPrice() : 0;
+  const spoolKr = loanState(l) === "owes" ? price.spool.kr : 0;
   const kr = filamentKr + spoolKr;
   const how = (used === null ? `${price.kr} kr for en full rull; mengden er ukjent`
-    : `${used}g av ${total}g × ${price.kr} kr = ${filamentKr} kr`) + (spoolKr ? ` + tom spole ${spoolKr} kr = ${kr} kr` : "");
+    : `${used}g av ${total}g × ${price.kr} kr = ${filamentKr} kr`) + (spoolKr ? ` + spole ${spoolKr} kr (${price.spool.src}) = ${kr} kr` : "");
   const phone = state.contacts.phones?.[l.owner] || "";
   $("#v-what").textContent = `${l.to} gjør opp for ${what}, lånt av ${l.owner || "ukjent eier"}.`;
   $("#v-to").textContent = l.owner || "Ukjent eier";
@@ -1600,7 +1599,7 @@ function renderSettings() {
     ${field("checkoutMinutes", "Utsjekk etter", "En spole som er inne, sjekkes ut når den skannes på nytt etter så lang tid. Skannes den før det, skjer ingenting.")}
     <h3>Gjøre opp lån</h3>
     ${field("spoolPrice", "Standardpris per spole", "Brukes når prisen ikke finnes i Bambu-butikken.", "kr")}
-    ${field("emptySpoolPrice", "Pris for tom spole", "Legges til når hele rullen er brukt opp og spolen ikke er levert tilbake. Hentes fra «Bambu Reusable Spool» i butikken når den finnes der.", "kr")}
+    ${field("emptySpoolPrice", "Spoletillegg", "Legges til når hele rullen er brukt opp og spolen ikke er levert tilbake. Hentes fra butikken som forskjellen mellom «med spole» og «refill» når begge finnes.", "kr")}
     ${field("eurRate", "Eurokurs", "Bambu-butikken oppgir priser i euro. Prisen regnes om til kroner med denne kursen og rundes av til nærmeste 10 kr.", "kr per euro")}
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;

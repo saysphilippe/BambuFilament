@@ -37,6 +37,15 @@ const rows = await mapLimit(products, CONCURRENCY, async (p) => {
   if (!d) failed++;
   const skus = d?.productSkuList || [];
   const prices = skus.map((s) => Number(s.discountPrice ?? s.price)).filter((x) => Number.isFinite(x) && x > 0);
+  // Filament: laveste pris for «Refill» og for «Filament with spool», så siden kan regne ut
+  // hva spolen koster (forskjellen) når noen gjør opp et lån.
+  const priceWhere = (test) => {
+    const list = skus.filter((s) => (s.productSkuPropertyList || []).some((x) => test(String(x.propertyValue))))
+      .map((s) => Number(s.discountPrice ?? s.price)).filter((x) => Number.isFinite(x) && x > 0);
+    return list.length ? Math.min(...list) : null;
+  };
+  const refill = d?.isFilament ? priceWhere((v) => /refill/i.test(v)) : null;
+  const withSpool = d?.isFilament ? priceWhere((v) => /with spool/i.test(v)) : null;
   const soldOut = skus.filter((s) => s.isSoldOut).length;
   const name = d?.name || p.title || p.handle;
   return {
@@ -45,6 +54,8 @@ const rows = await mapLimit(products, CONCURRENCY, async (p) => {
     image: (d?.mediaFileUrls || [])[0] || p.image || "",
     category: category(name, d?.isFilament),
     price: prices.length ? Math.min(...prices) : null,
+    ...(refill ? { refill } : {}),
+    ...(withSpool ? { withSpool } : {}),
     variants: skus.map((s) => [
       (s.productSkuPropertyList || []).map((x) => x.propertyValue).join(" / ") || name,
       s.isSoldOut ? 1 : 0,
