@@ -6,7 +6,7 @@
 // github.io tolker blokkene og viser oversikten.
 //
 // Flere kan dele én leser: tapp RFID-kortet ditt (en vanlig MIFARE-brikke eller -kort) først,
-// så registreres spolene de neste CARD_SESSION_SECONDS sekundene på deg. Kortene ligger i
+// så registreres spolene de neste minuttene på deg. Kortene ligger i
 // spools.json ("cards": { UID: { user, label, added } }). Et nytt kort registreres uten navn;
 // navnet legges til under «RFID-kort» på siden. Valgfri OLED-skjerm (SSD1306) viser hvem
 // som bruker leseren og hva som skjer.
@@ -14,7 +14,7 @@
 // Biblioteker i tillegg: Adafruit SSD1306 og Adafruit GFX (bare hvis skjermen brukes).
 //
 // Ingen knapper: leseren avgjør selv. Ny spole eller spole som er ute -> innsjekk.
-// Spole som er inne -> utsjekk hvis det er minst CHECKOUT_AFTER_MINUTES siden den ble
+// Spole som er inne -> utsjekk hvis det er minst checkoutMinutes siden den ble
 // sjekket inn; ellers skjer ingenting. Samme brikke igjen innen IGNORE_REPEAT_MS ignoreres.
 //
 // Biblioteker: MFRC522 (GithubCommunity), ArduinoJson 7. Kort: ESP32 Dev Module.
@@ -76,6 +76,18 @@ long waitMinutes = 0;                       // ved SCAN_NOOP: minutter til utsje
 
 String cardUser;                            // bruker fra personlig brikke, gjelder til cardUntil
 unsigned long cardUntil = 0;
+// Tidsvinduer, i minutter. Settes på siden under Innstillinger (spools.json: "settings"),
+// og leses hver gang et kort eller en spole skannes. Verdiene i config.h er standard.
+float cardMinutes = CARD_SESSION_SECONDS / 60.0;
+long checkoutMinutes = CHECKOUT_AFTER_MINUTES;
+unsigned long cardMs() { return (unsigned long)(cardMinutes * 60000.0); }
+
+void readSettings(JsonDocument &doc) {
+  float c = doc["settings"]["cardMinutes"] | cardMinutes;
+  long o = doc["settings"]["checkoutMinutes"] | checkoutMinutes;
+  if (c >= 0.25 && c <= 60) cardMinutes = c;
+  if (o >= 1 && o <= 1440) checkoutMinutes = o;
+}
 
 // Hvem som skanner nå: brukeren fra brikken, ellers OWNER fra config.h (kan være tom = ukjent).
 String currentUser() {
@@ -426,7 +438,8 @@ ScanResult uploadScan(const String &id, const String &blocksHex, String &summary
       spool["added"] = now;
       spool["scans"] = 0;
     }
-    // Avgjør handlingen: ny eller ute -> inn; inne i minst CHECKOUT_AFTER_MINUTES -> ut.
+    readSettings(doc);
+    // Avgjør handlingen: ny eller ute -> inn; inne i minst checkoutMinutes -> ut.
     bool checkOut = false;
     if (!isNew && String(spool["status"] | "in") == "in") {
       const char *since = spool["lastScan"] | spool["added"] | "";
@@ -435,8 +448,8 @@ ScanResult uploadScan(const String &id, const String &blocksHex, String &summary
         if (String(h[i]["action"] | "") == "in") { since = h[i]["at"] | since; break; }
       }
       long minutes = (long)((time(nullptr) - parseIso(since)) / 60);
-      if (parseIso(since) && minutes < CHECKOUT_AFTER_MINUTES) {
-        waitMinutes = CHECKOUT_AFTER_MINUTES - minutes;
+      if (parseIso(since) && minutes < checkoutMinutes) {
+        waitMinutes = checkoutMinutes - minutes;
         summary = "allerede sjekket inn";
         return SCAN_NOOP;
       }
@@ -480,14 +493,15 @@ int handleCard(const String &uid) {
     String sha;
     int code = fetchSpools(client, doc, sha);
     if (code != 200) return -1;
+    readSettings(doc);
     JsonVariant card = doc["cards"][uid];
     if (!card.isNull()) {
       // Eldre format: "UID": "navn". Nytt: "UID": { "user": "navn", ... }.
       String user = card.is<const char *>() ? card.as<String>() : String(card["user"] | "");
       if (!user.length()) return 0;
       cardUser = user;
-      cardUntil = millis() + CARD_SESSION_SECONDS * 1000UL;
-      Serial.printf("Kort %s: %s (i %d sekunder)\n", uid.c_str(), user.c_str(), CARD_SESSION_SECONDS);
+      cardUntil = millis() + cardMs();
+      Serial.printf("Kort %s: %s (i %.1f minutter)\n", uid.c_str(), user.c_str(), cardMinutes);
       return 1;
     }
     JsonObject cards = doc["cards"].is<JsonObject>() ? doc["cards"].as<JsonObject>() : doc["cards"].to<JsonObject>();
@@ -572,7 +586,7 @@ void loop() {
     int known = handleCard(uid);
     busy(false);
     if (known == 1) {
-      screen("Hei " + cardUser + "!", "Skann spoler i " + String(CARD_SESSION_SECONDS) + " s");
+      screen("Hei " + cardUser + "!", "Skann spoler nå", "Gjelder " + String(cardMs() / 1000) + " s etter hver");
       signalCard();
     } else if (known == 2) {
       screen("Nytt kort", uid, "Gi det navn på siden");
@@ -607,7 +621,7 @@ void loop() {
   Serial.printf("%s, farge #%s – lagrer...\n", type, toHex(blocks[5], 3).c_str());
 
   // Hver spole som tappes mens et kort er aktivt, starter kortets 60 sekunder på nytt.
-  if (cardUser.length() && millis() < cardUntil) cardUntil = millis() + CARD_SESSION_SECONDS * 1000UL;
+  if (cardUser.length() && millis() < cardUntil) cardUntil = millis() + cardMs();
 
   String summary;
   ScanResult result = uploadScan(id, toHex(&blocks[0][0], BLOCKS * 16), summary);

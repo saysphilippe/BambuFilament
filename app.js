@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008123821";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008123821";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008124756";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008124756";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -176,7 +176,7 @@ async function loadDoc() {
   state.loans = cleanLoans(loans);
   state.contacts = cleanContacts(contacts);
   return {
-    users: auth.users || [], spools: main.spools || [], cards: main.cards || {},
+    users: auth.users || [], spools: main.spools || [], cards: main.cards || {}, settings: main.settings || {},
     ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {},
   };
 }
@@ -240,7 +240,7 @@ async function saveDoc(mutate, message, file = "spools") {
         return state.doc;
       }
       const merged = file === "users" ? { ...state.doc, users: doc.users }
-        : file === "spools" ? { ...state.doc, spools: doc.spools, cards: doc.cards || {} }
+        : file === "spools" ? { ...state.doc, spools: doc.spools, cards: doc.cards || {}, settings: doc.settings || {} }
         : { ...state.doc, ams: doc.ams, library: doc.library, wishes: doc.wishes };
       setDoc(merged);
       return state.doc;
@@ -394,6 +394,18 @@ function cleanLoans(d) {
   })).filter((l) => l.id && l.spool && (l.to || l.pending) && l.at);
 }
 
+// Innstillinger for RFID-leseren (spools.json: "settings"). Leseren leser dem ved hver skanning.
+const SETTINGS = {
+  cardMinutes: { def: 1, min: 0.25, max: 60, step: 0.25 },
+  checkoutMinutes: { def: 10, min: 1, max: 1440, step: 1 },
+};
+function cleanSettings(x) {
+  return Object.fromEntries(Object.entries(SETTINGS).map(([k, r]) => {
+    const v = num(x?.[k]);
+    return [k, v !== null && v >= r.min && v <= r.max ? v : r.def];
+  }));
+}
+
 const cleanMap = (obj, fn) => Object.fromEntries(Object.entries(obj || {}).map(([k, v]) => [k, fn(v)]).filter(([, v]) => v));
 
 function setDoc(doc) {
@@ -401,6 +413,7 @@ function setDoc(doc) {
     ...doc,
     users: (doc.users || []).map((u) => ({ ...u, name: str(u.name), color: safeColor(u.color) })),
     spools: doc.spools || [],
+    settings: cleanSettings(doc.settings),
     // RFID-kort for felles lesere: { UID: { user, label, added, reader } }. Nye kort har tom user.
     cards: Object.fromEntries(Object.entries(doc.cards || {}).map(([k, v]) => {
       const c = typeof v === "string" ? { user: v } : v || {};
@@ -622,6 +635,7 @@ function render() {
   if (state.tab === "news") renderNews();
   if (state.tab === "loans") renderLoans();
   if (state.tab === "cards") renderCards();
+  if (state.tab === "settings") renderSettings();
   renderPendingCount();
   const all = users();
   const items = stockItems();
@@ -1304,7 +1318,7 @@ function renderCards() {
   };
   box.innerHTML = `<section class="panel cards-panel">
     <h2>RFID-kort</h2>
-    <p class="hint">Deler flere én leser, tapper hver sitt kort før spolene. Da registreres spolene på den som eier kortet i 60 sekunder, og navnet vises på leserens skjerm. Et nytt kort registreres uten navn første gang det tappes. Velg navnet her, så viser leseren det neste gang. Du kan endre ditt eget kort, og kort uten navn. Administrator kan endre alle.</p>
+    <p class="hint">Deler flere én leser, tapper hver sitt kort før spolene. Da registreres spolene på den som eier kortet (${fmtMinutes(state.doc.settings?.cardMinutes ?? 1)} etter siste tapp, se Innstillinger), og navnet vises på leserens skjerm. Et nytt kort registreres uten navn første gang det tappes. Velg navnet her, så viser leseren det neste gang. Du kan endre ditt eget kort, og kort uten navn. Administrator kan endre alle.</p>
     ${unnamedCards() ? `<p class="notice">${unnamedCards()} ${unnamedCards() === 1 ? "kort mangler" : "kort mangler"} navn.</p>` : ""}
     <p id="card-error" class="error"></p>
     ${entries.length ? `<div class="table-wrap"><table class="stat-table cards-table">
@@ -1337,6 +1351,53 @@ async function cardAction(kind, uid, value, el) {
     $("#card-error").textContent = err.message;
   }
   render();
+}
+
+// ---------- Innstillinger ----------
+
+const fmtMinutes = (m) => (m < 1 ? `${Math.round(m * 60)} sekunder` : m === 1 ? "1 minutt" : `${String(m).replace(".", ",")} minutter`);
+
+function renderSettings() {
+  const box = $("#tab-settings");
+  const st = state.doc.settings || cleanSettings({});
+  const edit = !!token() && isAdmin() && !DEMO;
+  const field = (key, label, help) => {
+    const r = SETTINGS[key];
+    return `<label class="setting">
+      <span class="setting-label">${label}</span>
+      <span class="setting-input"><input type="number" data-setting="${key}" value="${st[key]}" min="${r.min}" max="${r.max}" step="${r.step}" ${edit ? "" : "disabled"}> minutter</span>
+      <span class="hint">${help} Nå: ${fmtMinutes(st[key])}. Standard: ${fmtMinutes(r.def)}.</span>
+    </label>`;
+  };
+  box.innerHTML = `<section class="panel settings-panel">
+    <h2>Innstillinger</h2>
+    <h3>RFID-leser</h3>
+    <p class="hint">Leseren henter innstillingene hver gang et kort eller en spole skannes, så endringer gjelder med en gang. ${edit ? "" : "Bare administrator kan endre dem."}</p>
+    ${field("cardMinutes", "RFID-kort gjelder i", "Hvor lenge spoler registreres på den som tappet kortet sitt. Hver spole som tappes, starter tiden på nytt.")}
+    ${field("checkoutMinutes", "Utsjekk etter", "En spole som er inne, sjekkes ut når den skannes på nytt etter så lang tid. Skannes den før det, skjer ingenting.")}
+    <p id="settings-msg" class="hint" role="status"></p>
+  </section>`;
+}
+
+async function saveSetting(key, input) {
+  const r = SETTINGS[key];
+  const v = num(input.value);
+  const msg = $("#settings-msg");
+  if (v === null || v < r.min || v > r.max) {
+    msg.textContent = `Velg mellom ${r.min} og ${r.max} minutter.`;
+    return;
+  }
+  input.disabled = true;
+  try {
+    await saveDoc((doc) => {
+      if (!adminIn(state.doc)) return "Bare administrator kan endre innstillingene.";
+      doc.settings = { ...(doc.settings || {}), [key]: v };
+    }, `Innstilling ${key} = ${v} (${userName()})`);
+    msg.textContent = "Lagret. Leseren bruker den nye verdien ved neste skanning.";
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+  renderSettings();
 }
 
 // ---------- E-post og registrering ----------
@@ -2710,7 +2771,7 @@ function renderShop() {
 
 // ---------- Faner ----------
 
-const TABS = ["stock", "loans", "ams", "news", "shop", "cards"];
+const TABS = ["stock", "loans", "ams", "news", "shop", "cards", "settings"];
 
 function showTab(tab) {
   state.tab = TABS.includes(tab) ? tab : "stock";
@@ -2722,6 +2783,7 @@ function showTab(tab) {
   if (state.tab === "shop") renderShop();
   if (state.tab === "loans") renderLoans();
   if (state.tab === "cards") renderCards();
+  if (state.tab === "settings") renderSettings();
   // Faner med søkefelt: markøren rett i feltet (ikke på berøringsskjerm, der tastaturet ville sprette opp).
   const search = { stock: "#q", shop: "#shop-q" }[state.tab];
   if (search && !matchMedia("(pointer: coarse)").matches) $(search).focus({ preventScroll: true });
@@ -2892,6 +2954,7 @@ $("#login form").addEventListener("submit", login);
 $("#forgot form").addEventListener("submit", forgot);
 $("#register form").addEventListener("submit", registerUser);
 $("#u-list").addEventListener("change", (e) => e.target.matches(".u-email") && saveEmail(e.target.dataset.email, e.target));
+$("#tab-settings").addEventListener("change", (e) => e.target.dataset.setting && saveSetting(e.target.dataset.setting, e.target));
 $("#tab-cards").addEventListener("change", (e) => {
   const t = e.target;
   if (t.dataset.cardUser !== undefined) cardAction("user", t.dataset.cardUser, t.value, t);

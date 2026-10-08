@@ -206,7 +206,7 @@ manuelt under *Actions* → *Oppdater Bambu-katalog* → *Run workflow*.
 
 Bruk:
 0. Deler flere leseren: tapp **RFID-kortet** ditt først. Skjermen viser «Hei Niklas!», og spolene de
-   neste 60 sekundene registreres på deg. Hver spole du tapper, starter de 60 sekundene på nytt. Et nytt kort registreres uten navn; velg navnet i fanen
+   neste minuttet registreres på deg (endres under Innstillinger). Hver spole du tapper, starter tiden på nytt. Et nytt kort registreres uten navn; velg navnet i fanen
    **RFID-kort** på siden, så viser leseren det neste gang. Uten kort brukes `OWNER` fra `config.h`
    (tom = ukjent, og eieren av spolen må godkjenne hvem som tok den).
 1. Hold spolen mot leseren. Leseren avgjør selv hva som skjer (ingen knapper):
@@ -218,6 +218,10 @@ Bruk:
 3. Tre rolige blink: grønn = sjekket inn, rød = sjekket ut. Ett kort grønt blink = allerede inne.
    Begge LED-ene blinker raskt ved feil (ingen WiFi, GitHub-feil, ukjent kort). Se seriellmonitoren
    (115200) for detaljer.
+
+Tidsvinduene settes under **Innstillinger** på siden (lagres som `settings` i spools.json, og leseren
+leser dem ved hver skanning): *RFID-kort gjelder i* (standard 1 minutt) og *Utsjekk etter* (standard
+10 minutter). Verdiene i `config.h` brukes bare til leseren har lest innstillingene.
 
 Skjermen (valgfri) viser hvem som bruker leseren (med nedtelling), og hva som ble lagret.
 Ø vises som ö, siden skjermens skrift ikke har ø. Krever bibliotekene Adafruit SSD1306 og Adafruit GFX.
