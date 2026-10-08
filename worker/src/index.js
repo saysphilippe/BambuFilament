@@ -621,6 +621,8 @@ async function register({ name, email }, env) {
   if (added) {
     const link = await approveLink(name, email, env);
     const h = escapeHtml;
+    const whatsapp = sendWhatsApp(env, `BambuFilament: ${name} (${email}) ber om tilgang.\n\nGodkjenn eller avvis: ${link}`)
+      .catch((err) => console.warn("WhatsApp-varsel feilet:", err.message));
     await sendMail(env, adminEmail(env), `Ny bruker venter: ${name}`, [
       `${name} (${email}) har bedt om tilgang til BambuFilament.`,
       "",
@@ -632,8 +634,25 @@ async function register({ name, email }, env) {
       <p style="margin:22px 0"><a href="${h(link)}" style="background:#00ae42;color:#fff;padding:11px 20px;border-radius:9px;text-decoration:none;font-weight:600">Godkjenn eller avvis</a></p>
       <p style="color:#666;font-size:13px">Lenken gjelder i 7 dager. Du kan også gjøre det under Brukere på <a href="${SITE_URL}">${SITE_URL}</a>.</p>
     </div>`).catch((err) => console.warn("Varsel feilet:", err.message));
+    await whatsapp;
   }
   return { ok: true };
+}
+
+// WhatsApp til administrator via CallMeBot (secrets CALLMEBOT_PHONE og CALLMEBOT_APIKEY).
+// Uten dem sendes bare e-post.
+async function sendWhatsApp(env, text) {
+  if (!env.CALLMEBOT_PHONE || !env.CALLMEBOT_APIKEY) return;
+  const url = new URL("https://api.callmebot.com/whatsapp.php");
+  url.searchParams.set("phone", String(env.CALLMEBOT_PHONE).replace(/[^\d+]/g, ""));
+  url.searchParams.set("text", text);
+  url.searchParams.set("apikey", String(env.CALLMEBOT_APIKEY).trim());
+  const res = await fetch(url, { headers: { "User-Agent": "BambuFilament-proxy" } });
+  const body = await res.text();
+  // CallMeBot svarer 200 også ved enkelte feil, med forklaringen i teksten.
+  if (!res.ok || /error|invalid|not\s+(allowed|activated)/i.test(body)) {
+    throw new Error(`CallMeBot svarte ${res.status}: ${body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160)}`);
+  }
 }
 
 // ---------- Godkjenning fra e-post ----------

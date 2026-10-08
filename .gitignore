@@ -4,3 +4,4 @@ node_modules/
 .wrangler/
 .local-data/
 worker/sett-gmail-passord.cmd
+worker/sett-callmebot-nokkel.cmd
