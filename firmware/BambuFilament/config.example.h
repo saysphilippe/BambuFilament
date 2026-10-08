@@ -13,8 +13,12 @@
 #define GITHUB_BRANCH "main"
 #define GITHUB_PATH   "spools.json"
 
-// Hvem spolene som skannes med denne leseren tilhører.
+// Hvem som skanner når ingen personlig brikke er skannet, og eier av nye spoler da.
+// Deler flere leseren, kan den stå tom (""): da må eieren av spolen godkjenne hvem som tok den.
 #define OWNER         "Philippe"
+
+// Hvor lenge en personlig brikke gjelder etter skanning (sekunder).
+#define CARD_SESSION_SECONDS 60
 
 // RC522 (SPI) mot ESP32 DevKit: SCK=18, MISO=19, MOSI=23, i tillegg:
 #define PIN_RC522_SS  5
@@ -32,3 +36,9 @@
 // Trykk velger modus for de neste skanningene. Starter i innsjekk. -1 = ingen knapp.
 #define PIN_BUTTON_IN  32
 #define PIN_BUTTON_OUT 33
+
+// OLED-skjerm SSD1306 128x64 (I2C): VCC 3V3, GND, SDA og SCL til pinnene under.
+// (GPIO 22 brukes av RC522, så SCL ligger på GPIO 4.) -1 = ingen skjerm.
+#define PIN_OLED_SDA  21
+#define PIN_OLED_SCL  4
+#define OLED_ADDRESS  0x3C

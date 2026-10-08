@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008122722";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008122722";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008123612";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008123612";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -175,7 +175,10 @@ async function loadDoc() {
   state.activity = cleanActivity(activity);
   state.loans = cleanLoans(loans);
   state.contacts = cleanContacts(contacts);
-  return { users: auth.users || [], spools: main.spools || [], ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {} };
+  return {
+    users: auth.users || [], spools: main.spools || [], cards: main.cards || {},
+    ams: shared.ams || {}, library: shared.library || {}, wishes: shared.wishes || {},
+  };
 }
 
 // Henter siste versjon av filen, lar mutate endre den, og lagrer. Prøver på nytt ved konflikt.
@@ -237,7 +240,7 @@ async function saveDoc(mutate, message, file = "spools") {
         return state.doc;
       }
       const merged = file === "users" ? { ...state.doc, users: doc.users }
-        : file === "spools" ? { ...state.doc, spools: doc.spools }
+        : file === "spools" ? { ...state.doc, spools: doc.spools, cards: doc.cards || {} }
         : { ...state.doc, ams: doc.ams, library: doc.library, wishes: doc.wishes };
       setDoc(merged);
       return state.doc;
@@ -398,6 +401,11 @@ function setDoc(doc) {
     ...doc,
     users: (doc.users || []).map((u) => ({ ...u, name: str(u.name), color: safeColor(u.color) })),
     spools: doc.spools || [],
+    // RFID-kort for felles lesere: { UID: { user, label, added, reader } }. Nye kort har tom user.
+    cards: Object.fromEntries(Object.entries(doc.cards || {}).map(([k, v]) => {
+      const c = typeof v === "string" ? { user: v } : v || {};
+      return [str(k).toUpperCase(), { user: clip(c.user, MAX.user), label: clip(c.label, MAX.name), added: str(c.added), reader: clip(c.reader, MAX.user) }];
+    }).filter(([k]) => /^[0-9A-F]{8,20}$/.test(k))),
     ams: cleanMap(doc.ams, cleanAms),
     library: cleanMap(doc.library, cleanLibrary),
     wishes: doc.wishes || {},
@@ -613,6 +621,7 @@ function render() {
   renderAms();
   if (state.tab === "news") renderNews();
   if (state.tab === "loans") renderLoans();
+  if (state.tab === "cards") renderCards();
   renderPendingCount();
   const all = users();
   const items = stockItems();
@@ -654,8 +663,8 @@ function render() {
     <li data-id="${esc(e.spool.id)}">
       <span class="dot" style="background:${swatch(e.spool.tag)}"></span>
       <span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span>
-      <span class="what">${esc(title(e.spool))} <span class="muted">${esc(e.spool.typeName)}</span>${eventDetails(e) ? `<span class="act-detail">${esc(eventDetails(e))}</span>` : ""}</span>
-      <span class="who">${esc(e.by || "")} · ${fmtTime(e.at)}</span>
+      <span class="what">${esc(title(e.spool))} <span class="muted">${esc(e.spool.typeName)}</span>${actDetail(e)}</span>
+      <span class="who">${fmtTime(e.at)}</span>
     </li>`).join("");
 
   // Spoler
@@ -789,6 +798,8 @@ async function closeLoan(spoolId, field, note = "", lib = null) {
 // ellers må man velge hvem spolen gikk til (blir et lån). Leseren setter lastScan til samme
 // tidspunkt som hendelsen, så slik kjennes leser-utsjekk igjen. Bare nye utsjekk tas med.
 const PENDING_SINCE = "2026-10-08T12:20:00.000Z";
+// Leseren merker hendelsene med dev: "reader" (eldre programvare: lastScan = hendelsens tidspunkt).
+const fromReader = (s, e) => e.dev === "reader" || e.at === s.lastScan;
 
 async function syncReaderCheckouts() {
   if (DEMO || !token()) return;
@@ -796,9 +807,9 @@ async function syncReaderCheckouts() {
   for (const s of state.spools) {
     if (s.status !== "out") continue;
     const out = (s.history || []).at(-1);
-    if (out?.action !== "out" || out.at !== s.lastScan || out.at < PENDING_SINCE) continue;
+    if (out?.action !== "out" || !fromReader(s, out) || out.at < PENDING_SINCE) continue;
     if (state.loans.some((l) => l.spool === s.id && l.at >= out.at)) continue;
-    fresh.push({ ...loanFor(s, "", out.at, out.by || s.owner), pending: true });
+    fresh.push({ ...loanFor(s, "", out.at, out.by || ""), pending: true });
   }
   if (!fresh.length) return;
   try {
@@ -916,7 +927,7 @@ function renderLoans() {
     return `<li>
       <span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
       <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span>
-      <span class="muted">Sjekket ut med RFID-leseren (registrert på ${esc(l.by)}) · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut} g` : ""}</span>
+      <span class="muted">Sjekket ut med RFID-leseren${l.by ? ` av ${esc(l.by)}` : " (ukjent person – ingen brikke skannet)"} · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut} g` : ""}</span>
       <span class="loan-actions">${canApprove(l) ? `<select data-pending-to="${esc(l.id)}" aria-label="Sjekket ut til">${ownStock ? "" : `<option value="">Sjekket ut til …</option>`}${opts}</select>
         <button class="btn btn-primary btn-small" data-approve-out="${esc(l.id)}">${ownStock ? "OK" : "Godkjenn"}</button>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
     </li>`;
@@ -936,13 +947,20 @@ function renderLoans() {
   </section>`;
 }
 
+// Første del (hvem som gjorde det) i fet skrift, resten som vanlig tekst.
+function actDetail(e) {
+  const [who, ...rest] = eventDetails(e).split(" · ");
+  return `<span class="act-detail"><b>${esc(who)}</b>${rest.length ? ` · ${esc(rest.join(" · "))}` : ""}</span>`;
+}
+
 // Detaljer for en hendelse i «Siste bevegelser»: til hvem, lån eller eget lager, gram og om
 // den kom fra RFID-leseren og venter på godkjenning.
 function eventDetails(e) {
   const s = e.spool;
   const loan = state.loans.find((l) => l.spool === s.id && l.at === e.at);
   const st = loan && loanState(loan);
-  const parts = [];
+  const verb = { out: "Sjekket ut", in: "Sjekket inn", empty: "Merket brukt opp" }[e.action] || "Endret";
+  const parts = [`${verb} av ${e.by || (fromReader(s, e) ? "ukjent (ingen kort tappet)" : "ukjent")}`];
   if (e.action === "out") {
     const to = loan?.to || e.to || "";
     if (st === "pending") parts.push("venter på godkjenning");
@@ -961,7 +979,7 @@ function eventDetails(e) {
     const lent = [...state.loans].reverse().find((l) => l.spool === s.id && l.at < e.at && l.to && !l.own && !l.pending);
     if (lent) parts.push(`lånt av ${lent.to}${loanState(lent) === "settled" ? " (gjort opp)" : loanState(lent) === "owes" ? " (skylder)" : ""}`);
   }
-  if (e.at === s.lastScan) parts.push("RFID-leser");
+  if (fromReader(s, e)) parts.push("RFID-leser");
   return parts.join(" · ");
 }
 
@@ -974,6 +992,8 @@ function renderPendingCount() {
   const n = myTodos().length;
   const tab = document.querySelector('.tab[data-tab="loans"]');
   tab.innerHTML = `Lånt filament${n ? `<span class="tab-count">${n}</span>` : ""}`;
+  const unnamed = token() ? unnamedCards() : 0;
+  document.querySelector('.tab[data-tab="cards"]').innerHTML = `RFID-kort${unnamed ? `<span class="tab-count">${unnamed}</span>` : ""}`;
   $("#stock-pending").hidden = !n;
   $("#stock-pending").textContent = n ? `Gjøremål: ${n} ${n === 1 ? "utsjekk" : "utsjekk"} av spolene dine fra RFID-leseren må godkjennes – trykk for å se` : "";
 }
@@ -1250,6 +1270,71 @@ async function removeUser(name, btn) {
   } catch (err) {
     $("#u-error").textContent = err.message;
   }
+}
+
+// ---------- RFID-kort ----------
+//
+// Flere kan dele én leser: hver bruker tapper kortet sitt før spolene. Leseren slår opp kortet
+// i spools.json ("cards") og viser navnet på skjermen. Et nytt kort registreres uten navn,
+// og navnet settes her. Kortet ditt kan du endre selv; administrator kan endre alle.
+
+const canEditCard = (c) => !!token() && (isAdmin() || !c.user || c.user === userName());
+const unnamedCards = () => Object.values(state.doc.cards || {}).filter((c) => !c.user).length;
+
+function renderCards() {
+  const box = $("#tab-cards");
+  const entries = Object.entries(state.doc.cards || {})
+    .sort(([, a], [, b]) => (!!a.user - !!b.user) || a.user.localeCompare(b.user) || (b.added || "").localeCompare(a.added || ""));
+  const names = users().filter((u) => u.known).map((u) => u.name);
+  const row = ([uid, c]) => {
+    const edit = canEditCard(c);
+    const choices = isAdmin() ? names : [...new Set([c.user, userName()].filter(Boolean))];
+    return `<tr style="--owner:${userColor(c.user)}">
+      <td><code>${esc(uid)}</code></td>
+      <td>${edit ? `<select data-card-user="${esc(uid)}" aria-label="Bruker for ${esc(uid)}">
+          <option value=""${c.user ? "" : " selected"}>Uten navn</option>
+          ${choices.map((n) => `<option${n === c.user ? " selected" : ""}>${esc(n)}</option>`).join("")}
+        </select>` : c.user ? `<span class="owner-dot"></span> ${esc(c.user)}` : `<span class="muted">Uten navn</span>`}</td>
+      <td>${edit ? `<input data-card-label="${esc(uid)}" value="${esc(c.label)}" placeholder="F.eks. blå nøkkelring" maxlength="${MAX.name}">` : esc(c.label)}</td>
+      <td class="muted">${c.added ? fmtTime(c.added) : "–"}${c.reader ? ` · leser ${esc(c.reader)}` : ""}</td>
+      <td>${edit ? `<button type="button" class="btn btn-danger btn-small" data-card-remove="${esc(uid)}">Fjern</button>` : ""}</td>
+    </tr>`;
+  };
+  box.innerHTML = `<section class="panel cards-panel">
+    <h2>RFID-kort</h2>
+    <p class="hint">Deler flere én leser, tapper hver sitt kort før spolene. Da registreres spolene på den som eier kortet i 60 sekunder, og navnet vises på leserens skjerm. Et nytt kort registreres uten navn første gang det tappes. Velg navnet her, så viser leseren det neste gang. Du kan endre ditt eget kort, og kort uten navn. Administrator kan endre alle.</p>
+    ${unnamedCards() ? `<p class="notice">${unnamedCards()} ${unnamedCards() === 1 ? "kort mangler" : "kort mangler"} navn.</p>` : ""}
+    <p id="card-error" class="error"></p>
+    ${entries.length ? `<div class="table-wrap"><table class="stat-table cards-table">
+      <thead><tr><th>Kort</th><th>Brukes av</th><th>Etikett</th><th>Registrert</th><th></th></tr></thead>
+      <tbody>${entries.map(row).join("")}</tbody></table></div>`
+      : `<p class="muted">Ingen kort registrert ennå. Tapp et kort på leseren, så dukker det opp her.</p>`}
+  </section>`;
+}
+
+async function cardAction(kind, uid, value, el) {
+  if (kind === "remove" && !confirmed(el, "Fjerne? Trykk igjen")) return;
+  el.disabled = true;
+  try {
+    await saveDoc((doc) => {
+      doc.cards = doc.cards && typeof doc.cards === "object" ? doc.cards : {};
+      const raw = doc.cards[uid];
+      const c = typeof raw === "string" ? { user: raw } : raw ? { ...raw } : null;
+      if (!c) return "Kortet finnes ikke lenger.";
+      if (!(isAdmin() || !c.user || c.user === userName())) return "Du kan bare endre ditt eget kort.";
+      if (kind === "user") {
+        if (value && value !== userName() && !isAdmin()) return "Du kan bare koble kort til deg selv.";
+        c.user = value;
+      }
+      if (kind === "label") c.label = clip(value, MAX.name);
+      if (kind === "remove") delete doc.cards[uid];
+      else doc.cards[uid] = c;
+    }, `${{ user: value ? `RFID-kort ${uid} til ${value}` : `RFID-kort ${uid} uten navn`, label: `Etikett på RFID-kort ${uid}`, remove: `Fjernet RFID-kort ${uid}` }[kind]} (${userName()})`);
+    $("#card-error").textContent = "";
+  } catch (err) {
+    $("#card-error").textContent = err.message;
+  }
+  render();
 }
 
 // ---------- E-post og registrering ----------
@@ -2623,7 +2708,7 @@ function renderShop() {
 
 // ---------- Faner ----------
 
-const TABS = ["stock", "loans", "ams", "news", "shop"];
+const TABS = ["stock", "loans", "ams", "news", "shop", "cards"];
 
 function showTab(tab) {
   state.tab = TABS.includes(tab) ? tab : "stock";
@@ -2634,6 +2719,7 @@ function showTab(tab) {
   if (state.tab === "news") renderNews();
   if (state.tab === "shop") renderShop();
   if (state.tab === "loans") renderLoans();
+  if (state.tab === "cards") renderCards();
   // Faner med søkefelt: markøren rett i feltet (ikke på berøringsskjerm, der tastaturet ville sprette opp).
   const search = { stock: "#q", shop: "#shop-q" }[state.tab];
   if (search && !matchMedia("(pointer: coarse)").matches) $(search).focus({ preventScroll: true });
@@ -2763,6 +2849,8 @@ document.addEventListener("click", (e) => {
   if (ok) return approve(ok.dataset.approve, ok);
   const no = e.target.closest("[data-reject]");
   if (no) return reject(no.dataset.reject, no);
+  const cardRm = e.target.closest("[data-card-remove]");
+  if (cardRm) return cardAction("remove", cardRm.dataset.cardRemove, "", cardRm);
   const goto = e.target.closest("[data-goto]");
   if (goto) return showTab(goto.dataset.goto);
   const approveBtn = e.target.closest("[data-approve-out]");
@@ -2802,6 +2890,11 @@ $("#login form").addEventListener("submit", login);
 $("#forgot form").addEventListener("submit", forgot);
 $("#register form").addEventListener("submit", registerUser);
 $("#u-list").addEventListener("change", (e) => e.target.matches(".u-email") && saveEmail(e.target.dataset.email, e.target));
+$("#tab-cards").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.cardUser !== undefined) cardAction("user", t.dataset.cardUser, t.value, t);
+  if (t.dataset.cardLabel !== undefined) cardAction("label", t.dataset.cardLabel, t.value, t);
+});
 $("#account-dialog form").addEventListener("submit", accountAction);
 $("#password form").addEventListener("submit", changePassword);
 $("#password").addEventListener("cancel", (e) => $("#password").dataset.forced && e.preventDefault());

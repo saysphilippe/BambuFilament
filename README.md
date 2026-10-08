@@ -203,12 +203,21 @@ manuelt under *Actions* → *Oppdater Bambu-katalog* → *Run workflow*.
 | Knapp **Utsjekk** | GPIO 33 ↔ GND |
 | Grønn LED (Innsjekk) | GPIO 25 → 220–330 Ω → LED → GND |
 | Rød/gul LED (Utsjekk) | GPIO 26 → 220–330 Ω → LED → GND |
+| OLED SSD1306 128×64 (I2C) SDA / SCL | GPIO 21 / GPIO 4 (valgfri; GPIO 22 brukes av RC522) |
+| OLED VCC / GND | 3V3 / GND |
 
 Bruk:
+0. Deler flere leseren: tapp **RFID-kortet** ditt først. Skjermen viser «Hei Niklas!», og spolene de
+   neste 60 sekundene registreres på deg. Et nytt kort registreres uten navn; velg navnet i fanen
+   **RFID-kort** på siden, så viser leseren det neste gang. Uten kort brukes `OWNER` fra `config.h`
+   (tom = ukjent, og eieren av spolen må godkjenne hvem som tok den).
 1. Trykk **Innsjekk** eller **Utsjekk**. LED-en for valgt modus lyser fast (starter i innsjekk).
 2. Hold spolen mot leseren. Den innebygde LED-en lyser mens den leser og lagrer.
 3. Tre rolige blink på modus-LED-en betyr lagret. Begge LED-ene blinker raskt ved feil
    (ikke en Bambu-brikke, ingen WiFi eller GitHub-feil). Se seriellmonitoren (115200) for detaljer.
+
+Skjermen (valgfri) viser modus, hvem som bruker leseren (med nedtelling), og hva som ble lagret.
+Ø vises som ö, siden skjermens skrift ikke har ø. Krever bibliotekene Adafruit SSD1306 og Adafruit GFX.
 
 ### Flashe firmware
 

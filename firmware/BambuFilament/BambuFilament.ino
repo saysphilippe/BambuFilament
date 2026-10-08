@@ -5,6 +5,14 @@
 // og legger rådataene inn i spools.json i GitHub-repoet BambuFilament-data. Web-appen på
 // github.io tolker blokkene og viser oversikten.
 //
+// Flere kan dele én leser: tapp RFID-kortet ditt (en vanlig MIFARE-brikke eller -kort) først,
+// så registreres spolene de neste CARD_SESSION_SECONDS sekundene på deg. Kortene ligger i
+// spools.json ("cards": { UID: { user, label, added } }). Et nytt kort registreres uten navn;
+// navnet legges til under «RFID-kort» på siden. Valgfri OLED-skjerm (SSD1306) viser hvem
+// som bruker leseren og hva som skjer.
+//
+// Biblioteker i tillegg: Adafruit SSD1306 og Adafruit GFX (bare hvis skjermen brukes).
+//
 // Biblioteker: MFRC522 (GithubCommunity), ArduinoJson 7. Kort: ESP32 Dev Module.
 
 #include <WiFi.h>
@@ -16,6 +24,9 @@
 #include <time.h>
 #include "mbedtls/md.h"
 #include "mbedtls/base64.h"
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "config.h"
 #include "github_roots.h"
 
@@ -27,6 +38,17 @@ static const int MAX_HISTORY = 10;          // antall hendelser per spole (holde
 // JSON-dokumentet må få plass i minnet samtidig (ca. 280 kB ledig). Delte AMS- og
 // bibliotekdata ligger i shared.json, som leseren ikke henter, så spools.json holdes liten.
 static const int MAX_RESPONSE_BYTES = 120000;
+#ifndef CARD_SESSION_SECONDS
+#define CARD_SESSION_SECONDS 60
+#endif
+// OLED-skjerm (SSD1306 128x64, I2C). PIN_OLED_SDA -1 = ingen skjerm.
+#ifndef PIN_OLED_SDA
+#define PIN_OLED_SDA -1
+#define PIN_OLED_SCL -1
+#endif
+#ifndef OLED_ADDRESS
+#define OLED_ADDRESS 0x3C
+#endif
 
 static const uint8_t MASTER_SALT[16] = {
   0x9a, 0x75, 0x9c, 0xf2, 0xc4, 0xf7, 0xca, 0xff,
@@ -35,10 +57,78 @@ static const uint8_t MASTER_SALT[16] = {
 static const uint8_t KDF_INFO[7] = { 'R', 'F', 'I', 'D', '-', 'A', 0 };
 
 MFRC522 rfid(PIN_RC522_SS, PIN_RC522_RST);
+Adafruit_SSD1306 oled(128, 64, &Wire, -1);
+bool hasOled = false;
 
 String lastUid;
 unsigned long lastUidAt = 0;
 bool checkOutMode = false;                  // false = innsjekk, true = utsjekk (velges med knappene)
+String cardUser;                            // bruker fra personlig brikke, gjelder til cardUntil
+unsigned long cardUntil = 0;
+
+// Hvem som skanner nå: brukeren fra brikken, ellers OWNER fra config.h (kan være tom = ukjent).
+String currentUser() {
+  if (cardUser.length() && millis() < cardUntil) return cardUser;
+  return String(OWNER);
+}
+
+// ---------- OLED ----------
+
+// Skjermens innebygde skrift er CP437: æ, å og Æ, Å finnes; ø/Ø vises som ö/Ö.
+String forOled(const String &utf8) {
+  String out;
+  for (size_t i = 0; i < utf8.length(); i++) {
+    uint8_t c = utf8[i];
+    if (c < 0x80) { out += (char)c; continue; }
+    if (c == 0xC3 && i + 1 < utf8.length()) {
+      uint8_t d = utf8[++i];
+      switch (d) {
+        case 0xA6: out += (char)0x91; break;  // æ
+        case 0x86: out += (char)0x92; break;  // Æ
+        case 0xB8: out += (char)0x94; break;  // ø -> ö
+        case 0x98: out += (char)0x99; break;  // Ø -> Ö
+        case 0xA5: out += (char)0x86; break;  // å
+        case 0x85: out += (char)0x8F; break;  // Å
+        case 0xA9: out += (char)0x82; break;  // é
+        default: out += '?';
+      }
+      continue;
+    }
+    while (i + 1 < utf8.length() && (utf8[i + 1] & 0xC0) == 0x80) i++;
+    out += '?';
+  }
+  return out;
+}
+
+// Tre linjer: overskrift (stor skrift) og to linjer under.
+void screen(const String &title, const String &line2 = "", const String &line3 = "") {
+  if (!hasOled) return;
+  oled.clearDisplay();
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setTextSize(forOled(title).length() <= 10 ? 2 : 1);
+  oled.setCursor(0, 0);
+  oled.println(forOled(title));
+  oled.setTextSize(1);
+  oled.setCursor(0, 28);
+  oled.println(forOled(line2));
+  oled.setCursor(0, 44);
+  oled.println(forOled(line3));
+  oled.display();
+}
+
+// Hvileskjerm: modus og hvem som bruker leseren (med nedtelling for kortet).
+String lastIdle;
+void showIdle(bool force = false) {
+  if (!hasOled) return;
+  String mode = checkOutMode ? "UTSJEKK" : "INNSJEKK";
+  String who;
+  if (cardUser.length() && millis() < cardUntil) who = cardUser + " (" + String((cardUntil - millis()) / 1000 + 1) + " s)";
+  else who = strlen(OWNER) ? String(OWNER) + " (standard)" : "Tapp kortet ditt";
+  String key = mode + who;
+  if (!force && key == lastIdle) return;
+  lastIdle = key;
+  screen(mode, who, "Skann en spole");
+}
 
 // ---------- LED ----------
 
@@ -75,10 +165,20 @@ void signalError() {
   showMode();
 }
 
+// Personlig brikke gjenkjent: LED-ene blinker vekselvis to ganger.
+void signalCard() {
+  for (int i = 0; i < 2; i++) {
+    setLed(PIN_LED_IN, true); setLed(PIN_LED_OUT, false); delay(200);
+    setLed(PIN_LED_IN, false); setLed(PIN_LED_OUT, true); delay(200);
+  }
+  showMode();
+}
+
 void setMode(bool checkOut) {
   checkOutMode = checkOut;
   Serial.println(checkOut ? "Modus: UTSJEKK" : "Modus: INNSJEKK");
   showMode();
+  showIdle(true);
 }
 
 // Knappene er koblet mellom pinnen og GND (INPUT_PULLUP), så trykket = LOW.
@@ -163,10 +263,14 @@ void connectWifi() {
 
 // ---------- RFID ----------
 
-// Leser blokk 0–19. Returnerer false hvis brikken ikke er en Bambu-brikke.
-bool readTag(uint8_t blocks[BLOCKS][16]) {
+// Leser blokk 0–19. Returnerer false hvis brikken ikke kunne leses. notBambu settes når
+// brikken ikke er en Bambu-brikke i det hele tatt (feil i første sektor eller annen type),
+// og da behandles den som en personlig brikke.
+bool readTag(uint8_t blocks[BLOCKS][16], bool &notBambu) {
+  notBambu = false;
   if (rfid.uid.size != 4) {
     Serial.println("Ikke en 4-byte MIFARE Classic-brikke.");
+    notBambu = true;
     return false;
   }
   uint8_t keys[16][6];
@@ -179,6 +283,7 @@ bool readTag(uint8_t blocks[BLOCKS][16]) {
     byte trailer = s * 4 + 3;
     if (rfid.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailer, &key, &rfid.uid) != MFRC522::STATUS_OK) {
       Serial.printf("Autentisering feilet i sektor %d (ikke en Bambu-brikke?)\n", s);
+      notBambu = s == 0;
       return false;
     }
     for (int b = 0; b < 3; b++) {
@@ -305,7 +410,7 @@ bool uploadScan(const String &id, const String &blocksHex, bool checkOut, String
     if (isNew) {
       spool = spools.add<JsonObject>();
       spool["id"] = id;
-      spool["owner"] = OWNER;
+      spool["owner"] = currentUser();
       spool["note"] = "";
       spool["added"] = now;
       spool["scans"] = 0;
@@ -320,17 +425,58 @@ bool uploadScan(const String &id, const String &blocksHex, bool checkOut, String
     JsonObject event = history.add<JsonObject>();
     event["at"] = now;
     event["action"] = action;
-    event["by"] = OWNER;
+    String by = currentUser();
+    if (by.length()) event["by"] = by;
+    event["dev"] = "reader";
     while (history.size() > MAX_HISTORY) history.remove(0);
 
     summary = String(checkOut ? "sjekket ut" : "sjekket inn") + (isNew ? ", ny spole" : "");
-    code = putSpools(client, doc, sha, String(checkOut ? "Utsjekk " : "Innsjekk ") + id.substring(0, 8) + " (" + OWNER + ")");
+    code = putSpools(client, doc, sha, String(checkOut ? "Utsjekk " : "Innsjekk ") + id.substring(0, 8) + " (" + (by.length() ? by : "ukjent") + ")");
     if (code == 200 || code == 201) return true;
     Serial.printf("Lagring feilet: %d (forsøk %d)\n", code, attempt);
     if (code != 409) return false;
     delay(500);
   }
   return false;
+}
+
+// RFID-kort: slår opp brukeren i spools.json ("cards"). Et nytt kort registreres uten navn,
+// så navnet kan legges til under «RFID-kort» på siden.
+// Returnerer 1 = kort med navn (brukeren settes), 0 = kort uten navn, 2 = nytt kort, -1 = feil.
+int handleCard(const String &uid) {
+  connectWifi();
+  if (WiFi.status() != WL_CONNECTED || !waitForTime()) return -1;
+  WiFiClientSecure client;
+  client.setCACert(GITHUB_ROOT_CAS);
+  for (int attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    JsonDocument doc;
+    String sha;
+    int code = fetchSpools(client, doc, sha);
+    if (code != 200) return -1;
+    JsonVariant card = doc["cards"][uid];
+    if (!card.isNull()) {
+      // Eldre format: "UID": "navn". Nytt: "UID": { "user": "navn", ... }.
+      String user = card.is<const char *>() ? card.as<String>() : String(card["user"] | "");
+      if (!user.length()) return 0;
+      cardUser = user;
+      cardUntil = millis() + CARD_SESSION_SECONDS * 1000UL;
+      Serial.printf("Kort %s: %s (i %d sekunder)\n", uid.c_str(), user.c_str(), CARD_SESSION_SECONDS);
+      return 1;
+    }
+    JsonObject cards = doc["cards"].is<JsonObject>() ? doc["cards"].as<JsonObject>() : doc["cards"].to<JsonObject>();
+    JsonObject added = cards[uid].to<JsonObject>();
+    added["user"] = "";
+    added["added"] = isoNow();
+    if (strlen(OWNER)) added["reader"] = OWNER;
+    code = putSpools(client, doc, sha, String("Nytt RFID-kort ") + uid);
+    if (code == 200 || code == 201) {
+      Serial.printf("Nytt kort %s registrert – legg til navn under RFID-kort på siden.\n", uid.c_str());
+      return 2;
+    }
+    if (code != 409) return -1;
+    delay(500);
+  }
+  return -1;
 }
 
 // ---------- Arduino ----------
@@ -342,6 +488,16 @@ void setup() {
   }
   if (PIN_BUTTON_IN >= 0) pinMode(PIN_BUTTON_IN, INPUT_PULLUP);
   if (PIN_BUTTON_OUT >= 0) pinMode(PIN_BUTTON_OUT, INPUT_PULLUP);
+  if (PIN_OLED_SDA >= 0) {
+    Wire.begin(PIN_OLED_SDA, PIN_OLED_SCL);
+    hasOled = oled.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
+    if (hasOled) {
+      oled.cp437(true);
+      screen("Starter", "Kobler til WiFi ...");
+    } else {
+      Serial.println("Fant ikke OLED-skjermen.");
+    }
+  }
   SPI.begin();
   rfid.PCD_Init();
   Serial.print("RC522 versjon: 0x");
@@ -351,13 +507,20 @@ void setup() {
   connectWifi();
   configTime(0, 0, "pool.ntp.org", "time.google.com");
   busy(false);
-  if (WiFi.status() == WL_CONNECTED) showMode(); else signalError();
-  Serial.println("Klar – hold en Bambu-spole mot leseren. Modus: INNSJEKK.");
+  if (WiFi.status() == WL_CONNECTED) {
+    showMode();
+    showIdle(true);
+  } else {
+    screen("Ingen WiFi", WIFI_SSID, "Sjekk config.h");
+    signalError();
+  }
+  Serial.println("Klar – skann brikken din og så en Bambu-spole. Modus: INNSJEKK.");
 }
 
 void loop() {
   checkButtons();
   if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) {
+    showIdle();
     delay(50);
     return;
   }
@@ -371,15 +534,42 @@ void loop() {
   lastUidAt = millis();
   Serial.printf("Brikke %s funnet\n", uid.c_str());
   busy(true);
+  screen("Leser ...", uid);
 
   uint8_t blocks[BLOCKS][16];
-  bool ok = readTag(blocks);
+  bool notBambu = false;
+  bool ok = readTag(blocks, notBambu);
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
 
+  if (!ok && notBambu) {
+    // RFID-kort: hvem som skanner de neste sekundene.
+    screen("Kort", uid, "Slår opp ...");
+    int known = handleCard(uid);
+    busy(false);
+    if (known == 1) {
+      screen("Hei " + cardUser + "!", checkOutMode ? "Modus: UTSJEKK" : "Modus: INNSJEKK", "Skann spoler i " + String(CARD_SESSION_SECONDS) + " s");
+      signalCard();
+    } else if (known == 2) {
+      screen("Nytt kort", uid, "Gi det navn på siden");
+      signalError();
+    } else if (known == 0) {
+      screen("Uten navn", uid, "Gi det navn på siden");
+      signalError();
+    } else {
+      screen("Feil", "Kunne ikke slå opp", "kortet. Prøv igjen.");
+      signalError();
+    }
+    delay(1500);
+    showIdle(true);
+    return;
+  }
   if (!ok) {
     busy(false);
+    screen("Feil", "Kunne ikke lese", "spolen. Prøv igjen.");
     signalError();
+    delay(1500);
+    showIdle(true);
     return;
   }
 
@@ -395,10 +585,17 @@ void loop() {
   String summary;
   bool saved = uploadScan(id, toHex(&blocks[0][0], BLOCKS * 16), checkOutMode, summary);
   busy(false);
+  String who = currentUser();
   if (saved) {
     Serial.printf("Lagret (%s).\n", summary.c_str());
+    screen(checkOutMode ? "Sjekket ut" : "Sjekket inn", String(type).substring(0, 21) + " #" + toHex(blocks[5], 3),
+           who.length() ? "av " + who : "av ukjent");
+    if (cardUser.length() && millis() < cardUntil) cardUntil = millis() + CARD_SESSION_SECONDS * 1000UL;
     signalOk();
   } else {
+    screen("Ikke lagret", "Sjekk WiFi og", "prøv igjen.");
     signalError();
   }
+  delay(1500);
+  showIdle(true);
 }
