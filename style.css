@@ -101,7 +101,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 @media (min-width: 1480px) {
   #tab-stock { position: relative; }
   .stats-rail { position: absolute; top: 0; bottom: 0; right: calc(100% + 16px); width: 112px; }
-  .stats-side { grid-template-columns: 1fr; margin-bottom: 0; position: sticky; top: 12px; }
+  .stats-side { grid-template-columns: 1fr; margin-bottom: 0; position: sticky; top: 76px; } /* under topplinjen (ca. 61 px) */
 }
 
 .panel {
