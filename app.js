@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008131511";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008131511";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008132953";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008132953";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -611,7 +611,7 @@ function filtered({ ignoreType = false } = {}) {
   const needle = q.trim().toLowerCase();
   const list = stockItems().filter((s) =>
     (!owner || s.owner === owner) &&
-    (!type || s.typeName === type) &&
+    (!type || materialOf(s.typeName) === type) &&
     (!fam || s.family === fam) &&
     (!status || s.status === status) &&
     (!needle || [title(s), s.typeName, s.colorName, s.tag?.colors.join(" "), s.owner, s.note, s.location, SOURCE[s.kind], usage(s)?.user].join(" ").toLowerCase().includes(needle))
@@ -656,60 +656,93 @@ function render() {
   const presentFamilies = new Set(items.map((s) => s.family));
   $("#family-chips").innerHTML = chip("family", "", "Alle farger", !f.family) +
     FAMILIES.filter(([k]) => presentFamilies.has(k)).map(([k, label, c]) => chip("family", k, label, f.family === k, c)).join("");
-  // Én fane per filamenttype som finnes i lageret. Antallet følger de andre filtrene.
-  const typeCounts = {};
-  for (const s of filtered({ ignoreType: true })) typeCounts[s.typeName] = (typeCounts[s.typeName] || 0) + 1;
-  const types = [...new Set(items.map((s) => s.typeName))].sort();
-  if (f.type && !types.includes(f.type)) f.type = "";
-  const total = Object.values(typeCounts).reduce((a, b) => a + b, 0);
-  $("#type-tabs").innerHTML =
-    `<button class="type-tab${!f.type ? " active" : ""}" data-type="">Alle <span>${total}</span></button>` +
-    types.filter((t) => typeCounts[t] || f.type === t)
-      .map((t) => `<button class="type-tab${f.type === t ? " active" : ""}" data-type="${esc(t)}">${esc(t)} <span>${typeCounts[t] || 0}</span></button>`).join("");
-
-  // Siste bevegelser
-  const events = state.spools
-    .flatMap((s) => (s.history || []).map((e) => ({ ...e, spool: s })))
-    .sort((a, b) => (b.at || "").localeCompare(a.at || ""))
-    .slice(0, 6);
-  $("#activity").hidden = !events.length;
-  $("#activity-list").innerHTML = events.map((e) => `
-    <li data-id="${esc(e.spool.id)}">
-      <span class="dot" style="background:${swatch(e.spool.tag)}"></span>
-      <span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span>
-      <span class="what">${esc(title(e.spool))} <span class="muted">${esc(e.spool.typeName)}</span>${actDetail(e)}</span>
-      <span class="who">${fmtTime(e.at)}</span>
-    </li>`).join("");
+  // Materiale (PLA, PETG, …) som filter; antallet følger de andre filtrene.
+  const matCounts = {};
+  for (const s of filtered({ ignoreType: true })) matCounts[materialOf(s.typeName)] = (matCounts[materialOf(s.typeName)] || 0) + 1;
+  const mats = MATERIALS.filter((m) => items.some((s) => materialOf(s.typeName) === m));
+  if (f.type && !mats.includes(f.type)) f.type = "";
+  $("#type-chips").innerHTML = chip("type", "", "Alle", !f.type) +
+    mats.map((m) => chip("type", m, `${m} ${matCounts[m] || 0}`, f.type === m)).join("");
 
   // Spoler
   const list = filtered();
   $("#count").textContent = `${list.length} ${list.length === 1 ? "spole" : "spoler"}`;
   // RFID-spoler kan åpnes og redigeres. Bibliotek- og AMS-oppføringer kommer fra Bambu og vises som de er.
-  $("#grid").innerHTML = list.length
-    ? list.map((s) => {
-      const tagName = s.kind === "rfid" ? "button" : "div";
-      return `
-      <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""} style="--owner:${userColor(s.owner)}">
-        <div class="swatch" style="background:${swatch(s.tag)}">
-          ${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}
-          <span class="source source-${s.kind}">${SOURCE[s.kind]}</span>
-          <span class="tip">${productionTip(s)}</span>
-        </div>
-        <div class="owner-bar"><span class="owner-dot"></span>${esc(s.owner || "Ingen eier")}</div>
-        <div class="card-body">
-          <div class="card-title">${esc(title(s))}</div>
-          <div class="card-type">${esc(s.typeName)}</div>
-          <div class="card-meta">
-            <span class="hex">${esc(s.tag?.colors.map((c) => c.slice(0, 7)).join(" / ") || "")}</span>
-            ${weightLabel(s)}
-          </div>
-          ${s.location ? `<div class="card-loc">${esc(s.location)}</div>` : ""}
-          ${usageLine(s)}
-          ${s.note ? `<div class="card-note">${esc(s.note)}</div>` : ""}
-        </div>
-      </${tagName}>`;
-    }).join("")
-    : `<p class="empty-msg">${items.length ? "Ingen spoler passer filteret." : `Ingen spoler ennå. Skann en spole med leseren, eller del Bambu-biblioteket ditt under «AMS og bibliotek»${DEMO ? "" : `, eller <a href="?demo">se demo med eksempeldata</a>`}.`}</p>`;
+  // Fargene er det viktigste: med sortering etter type grupperes spolene etter materiale
+  // (PLA, PETG, …) og type, så man ikke blander materialer som ikke passer sammen.
+  const grid = $("#grid");
+  const grouped = state.filters.sort === "type" && list.length > 0;
+  grid.classList.toggle("grouped", grouped);
+  grid.innerHTML = !list.length
+    ? `<p class="empty-msg">${items.length ? "Ingen spoler passer filteret." : `Ingen spoler ennå. Skann en spole med leseren, eller del Bambu-biblioteket ditt under «AMS og bibliotek»${DEMO ? "" : `, eller <a href="?demo">se demo med eksempeldata</a>`}.`}</p>`
+    : grouped ? groupedCards(list) : list.map(spoolCard).join("");
+}
+
+// Materialfamilie ut fra typenavnet, i fast rekkefølge.
+const MATERIALS = ["PLA", "PETG", "ABS", "ASA", "PC", "PA", "TPU", "PVA", "Annet"];
+function materialOf(typeName) {
+  const m = String(typeName || "").toUpperCase().match(/^(PLA|PETG|PET|ABS|ASA|PC|PA|PAHT|PPA|TPU|PVA|HIPS)/);
+  if (!m) return "Annet";
+  return { PET: "PETG", PAHT: "PA", PPA: "PA", HIPS: "Annet" }[m[1]] || m[1];
+}
+
+function groupedCards(list) {
+  const groups = {};
+  for (const s of list) ((groups[materialOf(s.typeName)] ||= {})[s.typeName] ||= []).push(s);
+  return MATERIALS.filter((m) => groups[m]).map((m) => {
+    const types = Object.keys(groups[m]).sort((a, b) => a.localeCompare(b));
+    const total = types.reduce((n, t) => n + groups[m][t].length, 0);
+    return `<section class="mat-group">
+      <h2 class="mat-head">${esc(m)} <span>${total}</span></h2>
+      ${types.map((t) => `<h3 class="type-head">${esc(t)} <span>${groups[m][t].length}</span></h3>
+        <div class="grid-inner">${groups[m][t].map(spoolCard).join("")}</div>`).join("")}
+    </section>`;
+  }).join("");
+}
+
+// Spolekort: fargen øverst og størst, så fargenavn og type, og til slutt detaljer i liten tekst.
+function spoolCard(s) {
+  const tagName = s.kind === "rfid" ? "button" : "div";
+  const hex = s.tag?.colors.map((c) => c.slice(0, 7)).join(" / ") || "";
+  const foot = [
+    `<span class="foot-owner" style="--owner:${userColor(s.owner)}"><span class="owner-dot"></span>${esc(s.owner || "Ingen eier")}</span>`,
+    weightLabel(s),
+  ].filter(Boolean).join("");
+  return `
+    <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""}>
+      <div class="swatch" style="background:${swatch(s.tag)}" title="${esc(hex)}">
+        ${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}
+        <span class="source source-${s.kind}">${SOURCE[s.kind]}</span>
+        <span class="tip">${productionTip(s)}</span>
+      </div>
+      <div class="card-body">
+        <div class="card-title">${esc(title(s))}</div>
+        <div class="card-type">${esc(s.typeName)}</div>
+        <div class="card-foot">${foot}</div>
+        ${s.location ? `<div class="card-loc">${esc(s.location)}</div>` : ""}
+        ${usageLine(s)}
+        ${s.note ? `<div class="card-note">${esc(s.note)}</div>` : ""}
+      </div>
+    </${tagName}>`;
+}
+
+// Siste bevegelser (vises nederst i «Lånt filament»).
+function activityHtml(limit = 15) {
+  const events = state.spools
+    .flatMap((s) => (s.history || []).map((e) => ({ ...e, spool: s })))
+    .sort((a, b) => (b.at || "").localeCompare(a.at || ""))
+    .slice(0, limit);
+  if (!events.length) return "";
+  return `<section class="panel activity">
+    <h2>Siste bevegelser</h2>
+    <ul id="activity-list">${events.map((e) => `
+    <li data-id="${esc(e.spool.id)}">
+      <span class="dot" style="background:${swatch(e.spool.tag)}"></span>
+      <span class="act act-${esc(e.action)}">${ACTION[e.action] || esc(e.action)}</span>
+      <span class="what">${esc(title(e.spool))} <span class="muted">${esc(e.spool.typeName)}</span>${actDetail(e)}</span>
+      <span class="who">${fmtTime(e.at)}</span>
+    </li>`).join("")}</ul>
+  </section>`;
 }
 
 // Hvem som bruker en lagerspole: «I AMS hos X» (fra X sin egen AMS) eller «Tatt ut av X».
@@ -960,7 +993,8 @@ function renderLoans() {
     ${section("Utlånt nå", out, "Ingen spoler er utlånt.")}
     ${section("Skylder", owes, "Ingen skylder filament.")}
     ${section("Avsluttet", done, "Ingen avsluttede lån ennå.")}
-  </section>`;
+  </section>
+  ${activityHtml()}`;
 }
 
 // Første del (hvem som gjorde det) i fet skrift, resten som vanlig tekst.
@@ -2951,11 +2985,6 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#shop-more")) {
     state.shop.limit += 120;
     return renderShop();
-  }
-  const typeTab = e.target.closest(".type-tab");
-  if (typeTab) {
-    state.filters.type = typeTab.dataset.type;
-    return render();
   }
   const ams = e.target.closest("button[data-ams]");
   if (ams) return amsAction(ams.dataset.ams, ams);

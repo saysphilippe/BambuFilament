@@ -142,7 +142,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .filter-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .filter-row input { flex: 1 1 220px; }
 .chip-row { display: flex; align-items: flex-start; gap: 10px; }
-.chip-label { flex: none; width: 44px; padding-top: 5px; font-size: 13px; color: var(--muted); }
+.chip-label { flex: none; width: 66px; padding-top: 5px; font-size: 13px; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   display: inline-flex;
@@ -172,7 +172,12 @@ input, select, textarea {
 }
 .filter-row select { width: auto; flex: 0 1 auto; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.grid, .grid-inner { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.grid.grouped { display: block; }
+.mat-group { margin-bottom: 22px; }
+.mat-head { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 4px; font-size: 22px; letter-spacing: -.01em; }
+.type-head { display: flex; align-items: baseline; gap: 6px; margin: 12px 0 8px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.mat-head span, .type-head span { font-size: 13px; font-weight: 500; color: var(--muted); }
 
 .card {
   display: flex;
@@ -184,7 +189,6 @@ input, select, textarea {
   color: inherit;
   font: inherit;
   border: 1px solid var(--border);
-  border-top: 4px solid var(--owner);
   border-radius: 14px;
   box-shadow: var(--shadow);
   cursor: pointer;
@@ -192,7 +196,7 @@ input, select, textarea {
 }
 .card:hover { transform: translateY(-2px); }
 .card.status-empty { opacity: .55; }
-.swatch { position: relative; height: 72px; border-bottom: 1px solid var(--border); }
+.swatch { position: relative; height: 96px; border-bottom: 1px solid var(--border); }
 .swatch .badge { position: absolute; top: 8px; right: 8px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--surface); }
 .owner-bar {
   display: flex;
@@ -216,9 +220,14 @@ input, select, textarea {
   color: #fff;
   background: var(--owner);
 }
-.card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; }
-.card-title { font-weight: 650; font-size: 16px; }
-.card-type { font-size: 14px; }
+.card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
+.card-title { font-weight: 700; font-size: 16px; line-height: 1.25; }
+.card-type { font-size: 13px; color: var(--muted); }
+/* Detaljer i liten, dempet tekst: eier og vekt. */
+.card-foot { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.card-foot .lib-weight { font-weight: 400; }
+.foot-owner { display: inline-flex; align-items: center; gap: 5px; }
+.foot-owner .owner-dot { width: 8px; height: 8px; }
 .hex { font-family: ui-monospace, Consolas, monospace; }
 .card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 12px; }
 .card-meta span { padding: 1px 8px; border-radius: 99px; background: var(--muted-bg); }
@@ -381,6 +390,10 @@ body.demo .demo-banner { display: block; }
 .gate-links { font-size: 14px; margin: 12px 0 0; }
 
 .tabs { display: flex; gap: 4px; max-width: 1200px; margin: 0 auto; padding: 12px 16px 0; }
+/* Mange faner: én rad som kan rulles sideveis på smale skjermer. */
+.tabs { overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none; white-space: nowrap; }
 .tab {
   padding: 8px 18px;
   border: 1px solid var(--border);
@@ -555,8 +568,8 @@ details.all-type > .news-colors { margin-top: 10px; }
 .source-ams { color: #047857; }
 .card.kind-library, .card.kind-ams { cursor: default; }
 .card.kind-library:hover, .card.kind-ams:hover { transform: none; }
-.card-loc { font-size: 12px; font-weight: 600; color: var(--accent); }
-.card-use { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; font-weight: 600; }
+.card-loc { font-size: 12px; color: var(--accent); }
+.card-use { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; }
 .card-use .owner-dot { flex: none; }
 
 body.locked .tabs, body.locked main, body.locked #open-users, body.locked #refresh, body.locked #sync { display: none !important; }

@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008131511">
+  <link rel="stylesheet" href="style.css?v=20261008132953">
 </head>
 <body>
   <header>
@@ -62,10 +62,6 @@
 
     <button id="stock-pending" class="notice stock-pending" type="button" data-goto="loans" hidden></button>
 
-    <section id="activity" class="panel activity" hidden>
-      <h2>Siste bevegelser</h2>
-      <ul id="activity-list"></ul>
-    </section>
 
     <section class="panel filters">
       <div class="filter-row">
@@ -83,11 +79,11 @@
           <option value="recent">Sorter: sist skannet</option>
         </select>
       </div>
+      <div class="chip-row"><span class="chip-label">Materiale</span><div id="type-chips" class="chips"></div></div>
       <div class="chip-row"><span class="chip-label">Eier</span><div id="owner-chips" class="chips"></div></div>
       <div class="chip-row"><span class="chip-label">Farge</span><div id="family-chips" class="chips"></div></div>
     </section>
 
-    <div id="type-tabs" class="type-tabs" role="tablist" aria-label="Filamenttype"></div>
     <div id="count" class="count"></div>
     <section id="grid" class="grid"></section>
    </div>
@@ -359,6 +355,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=20261008131511"></script>
+  <script type="module" src="app.js?v=20261008132953"></script>
 </body>
 </html>
