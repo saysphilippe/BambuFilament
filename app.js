@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008195150";
-import { toRecords } from "./worker/src/records.js?v=20261008195150";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008195150";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008200252";
+import { toRecords } from "./worker/src/records.js?v=20261008200252";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008200252";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -3307,7 +3307,7 @@ function renderShop() {
           <ul>${p.variants.map(([name, out, price]) => `<li class="${out ? "v-out" : ""}"><span>${esc(name)}</span><span class="v-price">${price ? fmtPrice(price) : ""}</span><span>${out ? "Utsolgt" : "På lager"}</span>${price ? cartButton(p.handle, name, "+") : ""}</li>`).join("")}</ul>
         </details>` : ""}
         ${p.variants.length <= 1 && p.price !== null ? `<div>${cartButton(p.handle, p.variants[0]?.[0] || p.name, "Legg i kurven")}</div>` : ""}
-        ${p.bulk ? `<span class="hint">Mengderabatt: ${p.bulk.tiers.map(([n, pct]) => `${n}+ ruller ${pct} %`).join(", ")}</span>` : ""}
+        ${p.bulk ? `<span class="hint">Mengderabatt: ${p.bulk.tiers.map(([n, pct]) => `${n}+ ${p.category === "filament" ? "ruller" : "stk."} ${pct} %`).join(", ")}</span>` : ""}
         ${st.changed?.[p.handle] ? `<details class="price-chart" data-history="${esc(p.handle)}"><summary>Prisutvikling</summary><div class="chart-box muted">Henter …</div></details>` : ""}
         ${p.status === "out" || p.status === "partial" || wishersOf(key).length ? wishButton(key) : ""}
       </div>
@@ -3364,13 +3364,17 @@ function cartTotals() {
   });
   // Mengderabatt: tell ruller per kampanje og bruk høyeste trinn som er nådd.
   const groups = {};
-  for (const l of lines) if (l.p?.bulk && !l.missing) (groups[l.p.bulk.id] ||= { tiers: l.p.bulk.tiers, count: 0, lines: [] }).count += l.q, groups[l.p.bulk.id].lines.push(l);
+  for (const l of lines) if (l.p?.bulk && !l.missing) {
+    const g = (groups[l.p.bulk.id] ||= { tiers: l.p.bulk.tiers, count: 0, lines: [], rolls: l.p.category === "filament" });
+    g.count += l.q;
+    g.lines.push(l);
+  }
   const bulk = Object.values(groups).map((g) => {
     const tiers = [...g.tiers].sort((a, b) => a[0] - b[0]);
     const reached = tiers.filter(([n]) => g.count >= n).at(-1);
     const next = tiers.find(([n]) => g.count < n);
     for (const l of g.lines) l.pct = reached?.[1] || 0;
-    return { count: g.count, pct: reached?.[1] || 0, next };
+    return { count: g.count, pct: reached?.[1] || 0, next, unit: g.rolls ? ["rull", "ruller"] : ["vare", "varer"] };
   });
   for (const l of lines) l.total = l.missing ? 0 : l.unit * l.q * (1 - l.pct / 100);
   const list = lines.reduce((a, l) => a + (l.missing ? 0 : l.unit * l.q), 0);
@@ -3402,7 +3406,7 @@ function renderCart() {
       <div class="cart-qty"><button type="button" class="btn btn-small" data-cart-qty="${l.i}" data-delta="-1" aria-label="Færre">−</button><b>${l.q}</b><button type="button" class="btn btn-small" data-cart-qty="${l.i}" data-delta="1" aria-label="Flere">+</button></div>
       <div class="cart-price">${l.missing ? "" : `${l.pct ? `<s class="muted">${fmtEur(l.unit * l.q)}</s> ` : ""}${fmtEur(l.total)}<span class="muted">${kr(l.total * c.rate)}</span>`}</div>
     </div>`).join("") : `<p class="empty-msg">Kurven er tom. Trykk «+» ved en variant eller «Legg i kurven» i butikken.</p>`;
-  const tips = c.bulk.map((b) => b.next ? `${b.count} ${b.count === 1 ? "rull" : "ruller"} med mengderabatt${b.pct ? ` gir ${b.pct} %` : ""}. Legg til ${b.next[0] - b.count} til for ${b.next[1]} %.` : `${b.count} ruller gir høyeste mengderabatt, ${b.pct} %.`);
+  const tips = c.bulk.map((b) => b.next ? `${b.count} ${b.unit[b.count === 1 ? 0 : 1]} med mengderabatt${b.pct ? ` gir ${b.pct} %` : ""}. Legg til ${b.next[0] - b.count} til for ${b.next[1]} %.` : `${b.count} ${b.unit[1]} gir høyeste mengderabatt, ${b.pct} %.`);
   if (c.goods && c.ship) tips.push(`Handle for ${fmtEur(c.st.freeShipEur - c.goods)} til for gratis frakt.`);
   $("#cart-tips").innerHTML = tips.map((t) => `<li>${esc(t)}</li>`).join("");
   $("#cart-tips").hidden = !tips.length;
