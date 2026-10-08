@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008122624";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008122624";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008122722";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008122722";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -861,6 +861,9 @@ function renderLoans() {
   const box = $("#tab-loans");
   const loans = state.loans.map((l) => ({ ...l, state: loanState(l) }));
   const waiting = loans.filter((l) => l.state === "pending");
+  const mine = new Set(myTodos().map((l) => l.id));
+  const todos = waiting.filter((l) => mine.has(l.id));
+  const others = waiting.filter((l) => !mine.has(l.id));
   const out = loans.filter((l) => l.state === "out");
   const owes = loans.filter((l) => l.state === "owes");
   const done = loans.filter((l) => l.state === "returned" || l.state === "settled")
@@ -913,16 +916,17 @@ function renderLoans() {
     return `<li>
       <span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
       <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span>
-      <span class="muted">Sjekket ut med RFID-leseren til ${esc(l.by)} · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut} g` : ""}</span>
-      <span class="loan-actions">${token() ? `<select data-pending-to="${esc(l.id)}" aria-label="Sjekket ut til">${ownStock ? "" : `<option value="">Sjekket ut til …</option>`}${opts}</select>
-        <button class="btn btn-primary btn-small" data-approve-out="${esc(l.id)}">${ownStock ? "OK" : "Godkjenn"}</button>` : ""}</span>
+      <span class="muted">Sjekket ut med RFID-leseren (registrert på ${esc(l.by)}) · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut} g` : ""}</span>
+      <span class="loan-actions">${canApprove(l) ? `<select data-pending-to="${esc(l.id)}" aria-label="Sjekket ut til">${ownStock ? "" : `<option value="">Sjekket ut til …</option>`}${opts}</select>
+        <button class="btn btn-primary btn-small" data-approve-out="${esc(l.id)}">${ownStock ? "OK" : "Godkjenn"}</button>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
     </li>`;
   };
 
   box.innerHTML = `<section class="panel loans">
-    ${waiting.length ? `<div class="pending-box"><h2>Utsjekk til godkjenning (${waiting.length})</h2>
-      <p class="hint">Fra eget lager: trykk OK. Er spolen noen andres, velg hvem den gikk til og trykk Godkjenn, så blir det et lån.</p>
-      <ul class="loan-list">${waiting.map(pendingRow).join("")}</ul></div>` : ""}
+    ${todos.length ? `<div class="pending-box"><h2>Dine gjøremål: utsjekk å godkjenne (${todos.length})</h2>
+      <p class="hint">Spolene dine ble sjekket ut med RFID-leseren. Tok du den selv: trykk OK. Ellers velg hvem den gikk til og trykk Godkjenn, så blir det et lån.</p>
+      <ul class="loan-list">${todos.map(pendingRow).join("")}</ul></div>` : ""}
+    ${others.length ? `<h2>Venter på godkjenning hos andre (${others.length})</h2><ul class="loan-list">${others.map(pendingRow).join("")}</ul>` : ""}
     <div class="loan-sum">${debtChips || `<span class="loan-debt clear">Ingen skylder filament akkurat nå</span>`}</div>
     <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Sjekk ut til» når du sjekker ut. Utsjekk med RFID-leseren må godkjennes her først. Lånet avsluttes når spolen sjekkes inn igjen. Brukes den opp, står låntakeren som skyldig til noen trykker «Gjort opp».</p>
     <p id="loan-error" class="error"></p>
@@ -961,13 +965,17 @@ function eventDetails(e) {
   return parts.join(" · ");
 }
 
-// Antall utsjekk som venter på godkjenning: på fanen «Lånt filament» og øverst i lageret.
+// Utsjekk fra RFID-leseren godkjennes av eieren av spolen (administrator kan også).
+// Det blir eierens gjøremål: antallet vises på fanen «Lånt filament» og øverst i lageret.
+const canApprove = (l) => !!token() && (l.owner === userName() || isAdmin() || !l.owner);
+const myTodos = () => state.loans.filter((l) => loanState(l) === "pending" && (l.owner === userName() || (!l.owner && isAdmin())));
+
 function renderPendingCount() {
-  const n = state.loans.filter((l) => loanState(l) === "pending").length;
+  const n = myTodos().length;
   const tab = document.querySelector('.tab[data-tab="loans"]');
   tab.innerHTML = `Lånt filament${n ? `<span class="tab-count">${n}</span>` : ""}`;
   $("#stock-pending").hidden = !n;
-  $("#stock-pending").textContent = n ? `${n} ${n === 1 ? "utsjekk" : "utsjekk"} fra RFID-leseren venter på godkjenning – trykk for å se` : "";
+  $("#stock-pending").textContent = n ? `Gjøremål: ${n} ${n === 1 ? "utsjekk" : "utsjekk"} av spolene dine fra RFID-leseren må godkjennes – trykk for å se` : "";
 }
 
 // ---------- Detaljer og redigering ----------
