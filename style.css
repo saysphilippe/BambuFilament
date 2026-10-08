@@ -98,8 +98,6 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
 .stats-side .stat { padding: 8px 10px; border-radius: 9px; }
 .stats-side .stat b { font-size: 16px; }
 .stats-side .stat span { font-size: 11px; line-height: 1.3; display: block; }
-/* Antall spoler som vises (etter filter), over materialfilteret. */
-.rail-inner .rail-count { margin: 14px 0 0 2px; font-size: 20px; font-weight: 700; color: var(--text); }
 /* Materialfilter under tallboksene. */
 .rail-types { margin: 4px 0 14px; }
 .rail-label { display: block; margin: 0 0 6px 2px; font-size: 14px; color: var(--muted); }

@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008140149";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008140149";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008140420";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008140420";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -669,7 +669,6 @@ function render() {
 
   // Spoler
   const list = filtered();
-  $("#count").textContent = `${list.length} ${list.length === 1 ? "spole" : "spoler"}`;
   // RFID-spoler kan åpnes og redigeres. Bibliotek- og AMS-oppføringer kommer fra Bambu og vises som de er.
   // Fargene er det viktigste: med sortering etter type grupperes spolene etter materiale
   // (PLA, PETG, …) og type, så man ikke blander materialer som ikke passer sammen.
