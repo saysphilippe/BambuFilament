@@ -335,6 +335,9 @@ async function ams(token) {
     const uid = await userId(token);
     reports = await fetchReports(`u_${uid}`, token, online);
   }
+  // Uten serienumre i loggen: antall printere, hvor mange som er online og hvor mange som svarte.
+  console.log("ams", `printere=${devices.length}`, `online=${online.length}`, `svar=${Object.keys(reports).length}`,
+    devices.map((d) => `${d.dev_product_name || d.dev_model_name || "?"}:${d.online ? "on" : "off"}:${reports[d.dev_id] ? (reports[d.dev_id].ams?.ams?.length ?? 0) + "ams" : "-"}`).join(","));
 
   return {
     updated: new Date().toISOString(),

@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008130506";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008130506";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008130841";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008130841";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -2059,6 +2059,14 @@ async function refreshAms() {
     const [amsRes, libRes] = await Promise.allSettled([fetchAms(), fetchLibrary()]);
     if (amsRes.status === "rejected" && libRes.status === "rejected") throw amsRes.reason;
     if (amsRes.status === "fulfilled") state.amsLive = cleanAms(amsRes.value);
+    // En printer som er online, men ikke svarte innen fristen (f.eks. opptatt): prøv én gang til.
+    if (state.amsLive?.printers.some((p) => p.online && !p.reported)) {
+      const again = cleanAms(await fetchAms().catch(() => null));
+      if (again) {
+        const byId = Object.fromEntries(again.printers.map((p) => [p.id, p]));
+        state.amsLive = { ...state.amsLive, printers: state.amsLive.printers.map((p) => (!p.reported && byId[p.id]?.reported ? byId[p.id] : p)) };
+      }
+    }
     if (libRes.status === "fulfilled") state.libraryLive = cleanLibrary(libRes.value);
     const failed = amsRes.status === "rejected" ? amsRes.reason : libRes.status === "rejected" ? libRes.reason : null;
     if (failed) state.amsError = `${amsRes.status === "rejected" ? "AMS" : "Filamentbiblioteket"}: ${failed.message}`;
