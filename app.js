@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008142957";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008142957";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008162652";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008162652";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -58,7 +58,7 @@ const state = {
   colorNames: {},
   colorIndex: {},
   activity: { logins: [], seen: {} },
-  contacts: { emails: {}, pending: [] },
+  contacts: { emails: {}, pending: [], phones: {} },
   loans: [],
   usersTab: "list",
   tab: "stock",
@@ -378,8 +378,16 @@ function cleanContacts(c) {
   const pending = (Array.isArray(c?.pending) ? c.pending : []).map((p) => ({
     name: clip(p?.name, MAX.user), email: cleanEmail(p?.email), at: str(p?.at),
   })).filter((p) => p.name && p.email);
-  return { emails, pending };
+  const phones = Object.fromEntries(Object.entries(c?.phones || {}).map(([k, v]) => [str(k), cleanPhone(v)]).filter(([, v]) => v));
+  return { emails, pending, phones };
 }
+
+// Norsk mobilnummer for Vipps: 8 sifre (med eller uten +47 og mellomrom).
+function cleanPhone(v) {
+  const d = str(v).replace(/[\s.-]/g, "").replace(/^(\+47|0047)/, "");
+  return /^[49]\d{7}$/.test(d) ? d : "";
+}
+const fmtPhone = (d) => (d ? `${d.slice(0, 3)} ${d.slice(3, 5)} ${d.slice(5)}` : "");
 
 function cleanLoans(d) {
   const time = (x) => (x && !isNaN(new Date(x)) ? str(x) : "");
@@ -398,6 +406,8 @@ function cleanLoans(d) {
 const SETTINGS = {
   cardMinutes: { def: 1, min: 0.25, max: 60, step: 0.25 },
   checkoutMinutes: { def: 10, min: 1, max: 1440, step: 1 },
+  spoolPrice: { def: 250, min: 0, max: 2000, step: 10 },
+  eurRate: { def: 11.5, min: 5, max: 20, step: 0.1 },
 };
 function cleanSettings(x) {
   return Object.fromEntries(Object.entries(SETTINGS).map(([k, r]) => {
@@ -1018,7 +1028,7 @@ function renderLoans() {
     const s = spoolOf(l);
     const color = s?.tag ? swatch(s.tag) : l.color ? "#" + l.color : "var(--muted-bg)";
     const use = s && usage(s);
-    const when = l.state === "settled" ? `gjort opp ${fmtTime(l.settledAt)}${l.settledBy ? ` av ${esc(l.settledBy)}` : ""}`
+    const when = l.state === "settled" ? `gjort opp ${fmtTime(l.settledAt)}${l.settledBy ? ` av ${esc(l.settledBy)}` : ""}${l.note ? ` · ${esc(l.note)}` : ""}`
       : l.state === "returned" ? `levert ${fmtTime(l.returnedAt || (s?.history || []).filter((e) => e.at > l.at && e.action === "in").at(-1)?.at)}`
       : l.state === "owes" ? `brukt opp${l.usedAt ? " " + fmtTime(l.usedAt) : ""}` : `siden ${fmtTime(l.at)}`;
     const grams = l.gramsOut === null ? "" : [
@@ -1028,7 +1038,8 @@ function renderLoans() {
     const actions = !token() ? ""
       : l.state === "out" ? `<button class="btn btn-small" data-loan="returned" data-spool="${esc(l.spool)}">Levert tilbake</button>
           <button class="btn btn-small" data-loan="used" data-spool="${esc(l.spool)}">Brukt opp</button>`
-      : l.state === "owes" ? `<button class="btn btn-primary btn-small" data-loan="settled" data-spool="${esc(l.spool)}">Gjort opp</button>` : "";
+      : l.state === "owes" ? `<button class="btn btn-vipps btn-small" data-vipps="${esc(l.id)}">Betal med Vipps</button>
+          <button class="btn btn-primary btn-small" data-loan="settled" data-spool="${esc(l.spool)}">Gjort opp</button>` : "";
     return `<li>
       <span class="dot" style="background:${color}"></span>
       <span class="loan-what"><b>${esc(s ? title(s) : l.title || "Slettet spole")}</b><span class="muted">${esc(s?.typeName || l.type)}${use?.kind === "ams" ? ` · i AMS hos ${esc(use.user)}` : ""}</span></span>
@@ -1121,6 +1132,85 @@ function renderPendingCount() {
   document.querySelector('.tab[data-tab="cards"]').innerHTML = `RFID-kort${unnamed ? `<span class="tab-count">${unnamed}</span>` : ""}`;
   $("#stock-pending").hidden = !n;
   $("#stock-pending").textContent = n ? `Gjøremål: ${n} ${n === 1 ? "utsjekk" : "utsjekk"} av spolene dine fra RFID-leseren må godkjennes – trykk for å se` : "";
+}
+
+// ---------- Gjøre opp med Vipps ----------
+//
+// Vipps har ingen åpen løsning for betaling mellom privatpersoner, så siden viser mottaker,
+// beløp og melding til kopiering, åpner Vipps, og markerer lånet som gjort opp etterpå.
+
+// Pris for en spole av en type: fra Bambu-butikken (euro × kurs, nærmeste 10 kr), ellers standardpris.
+function spoolPrice(typeName) {
+  const st = state.doc.settings || cleanSettings({});
+  const norm = (t) => String(t || "").toLowerCase().replace(/\s+filament$/, "").replace(/[^a-z0-9+]+/g, " ").trim();
+  const want = norm(typeName);
+  const p = (state.store?.products || []).find((x) => x.category === "filament" && norm(x.name) === want);
+  if (p && p.price) return { kr: Math.round((p.price * st.eurRate) / 10) * 10, src: `Bambu-butikken: ${p.price} € × ${String(st.eurRate).replace(".", ",")}` };
+  return { kr: st.spoolPrice, src: "standardpris" };
+}
+
+let vippsLoan = null;
+function openVipps(loanId) {
+  const l = state.loans.find((x) => x.id === loanId);
+  if (!l) return;
+  vippsLoan = l;
+  const s = state.spools.find((x) => x.id === l.spool);
+  const what = s ? `${title(s)} ${s.typeName}` : l.title || "spole";
+  const price = spoolPrice(s?.typeName || l.type);
+  const phone = state.contacts.phones?.[l.owner] || "";
+  $("#v-what").textContent = `${l.to} gjør opp for ${what}, lånt av ${l.owner || "ukjent eier"}.`;
+  $("#v-to").textContent = l.owner || "Ukjent eier";
+  $("#v-phone").textContent = phone ? fmtPhone(phone) : `${l.owner || "Eieren"} har ikke lagt inn mobilnummer (kan gjøres under kontoen din).`;
+  $("#v-phone").dataset.value = phone;
+  $("#v-amount").value = price.kr;
+  $("#v-price").textContent = `(${price.src})`;
+  $("#v-msg").textContent = `Filament Universet: ${what}`;
+  $("#v-error").textContent = "";
+  $("#vipps").showModal();
+}
+
+async function vippsSubmit(e) {
+  e.preventDefault();
+  if (e.submitter?.value !== "paid") return $("#vipps").close();
+  const kr = Math.round(Number($("#v-amount").value));
+  if (!(kr > 0)) return ($("#v-error").textContent = "Skriv beløpet som ble betalt.");
+  try {
+    await closeLoan(vippsLoan.spool, "settledAt", `Betalt med Vipps: ${kr} kr`);
+    $("#vipps").close();
+    render();
+  } catch (err) {
+    $("#v-error").textContent = err.message;
+  }
+}
+
+async function copyValue(id, btn) {
+  const el = $(`#${id}`);
+  const text = el.dataset.value ?? el.value ?? el.textContent;
+  try {
+    await navigator.clipboard.writeText(String(text).trim());
+    btn.textContent = "Kopiert";
+    setTimeout(() => (btn.textContent = "Kopier"), 1500);
+  } catch {
+    btn.textContent = "Kunne ikke kopiere";
+  }
+}
+
+async function savePhone(input) {
+  const me = userName();
+  const v = input.value.trim();
+  const phone = cleanPhone(v);
+  if (v && !phone) return ($("#a-msg").textContent = "Skriv et norsk mobilnummer med 8 sifre.");
+  $("#a-msg").textContent = "Lagrer…";
+  try {
+    await saveDoc((doc) => {
+      doc.phones = doc.phones && typeof doc.phones === "object" ? doc.phones : {};
+      if (phone) doc.phones[me] = phone; else delete doc.phones[me];
+    }, `Mobilnummer (${me})`, "contacts");
+    input.value = fmtPhone(phone);
+    $("#a-msg").textContent = phone ? "Lagret. Andre ser nummeret når de skal betale deg med Vipps." : "Fjernet.";
+  } catch (err) {
+    $("#a-msg").textContent = err.message;
+  }
 }
 
 // ---------- Detaljer og redigering ----------
@@ -1470,12 +1560,12 @@ function renderSettings() {
   const box = $("#tab-settings");
   const st = state.doc.settings || cleanSettings({});
   const edit = !!token() && isAdmin() && !DEMO;
-  const field = (key, label, help) => {
+  const field = (key, label, help, unit = "minutter") => {
     const r = SETTINGS[key];
     return `<label class="setting">
       <span class="setting-label">${label}</span>
-      <span class="setting-input"><input type="number" data-setting="${key}" value="${st[key]}" min="${r.min}" max="${r.max}" step="${r.step}" ${edit ? "" : "disabled"}> minutter</span>
-      <span class="hint">${help} Nå: ${fmtMinutes(st[key])}. Standard: ${fmtMinutes(r.def)}.</span>
+      <span class="setting-input"><input type="number" data-setting="${key}" value="${st[key]}" min="${r.min}" max="${r.max}" step="${r.step}" ${edit ? "" : "disabled"}> ${unit}</span>
+      <span class="hint">${help} ${unit === "minutter" ? `Nå: ${fmtMinutes(st[key])}. Standard: ${fmtMinutes(r.def)}.` : `Standard: ${String(r.def).replace(".", ",")} ${unit}.`}</span>
     </label>`;
   };
   box.innerHTML = `<section class="panel settings-panel">
@@ -1484,6 +1574,9 @@ function renderSettings() {
     <p class="hint">Leseren henter innstillingene hver gang et kort eller en spole skannes, så endringer gjelder med en gang. ${edit ? "" : "Bare administrator kan endre dem."}</p>
     ${field("cardMinutes", "RFID-kort gjelder i", "Hvor lenge spoler registreres på den som tappet kortet sitt. Hver spole som tappes, starter tiden på nytt.")}
     ${field("checkoutMinutes", "Utsjekk etter", "En spole som er inne, sjekkes ut når den skannes på nytt etter så lang tid. Skannes den før det, skjer ingenting.")}
+    <h3>Gjøre opp lån</h3>
+    ${field("spoolPrice", "Standardpris per spole", "Brukes når prisen ikke finnes i Bambu-butikken.", "kr")}
+    ${field("eurRate", "Eurokurs", "Bambu-butikken oppgir priser i euro. Prisen regnes om til kroner med denne kursen og rundes av til nærmeste 10 kr.", "kr per euro")}
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;
 }
@@ -1493,7 +1586,7 @@ async function saveSetting(key, input) {
   const v = num(input.value);
   const msg = $("#settings-msg");
   if (v === null || v < r.min || v > r.max) {
-    msg.textContent = `Velg mellom ${r.min} og ${r.max} minutter.`;
+    msg.textContent = `Velg mellom ${r.min} og ${r.max}.`;
     return;
   }
   input.disabled = true;
@@ -1803,6 +1896,8 @@ function setSession(value, remember = !!session?.exp) {
 function openAccount() {
   if (!session) return openLogin();
   $("#a-name").textContent = session.user;
+  $("#a-phone").value = fmtPhone(state.contacts.phones?.[session.user] || "");
+  $("#a-msg").textContent = "";
   openQuiet("#account-dialog");
 }
 
@@ -3066,6 +3161,10 @@ document.addEventListener("click", (e) => {
   }
   const ams = e.target.closest("button[data-ams]");
   if (ams) return amsAction(ams.dataset.ams, ams);
+  const vippsBtn = e.target.closest("[data-vipps]");
+  if (vippsBtn) return openVipps(vippsBtn.dataset.vipps);
+  const copyBtn = e.target.closest("[data-copy]");
+  if (copyBtn) return copyValue(copyBtn.dataset.copy, copyBtn);
   const actChip = e.target.closest("[data-act-key]");
   if (actChip) {
     actFilter[actChip.dataset.actKey] = actChip.dataset.actValue;
@@ -3130,6 +3229,8 @@ $("#rk-form").addEventListener("submit", saveRekey);
 $("#rk-close").addEventListener("click", () => $("#rekey").close());
 $("#login form").addEventListener("submit", login);
 $("#forgot form").addEventListener("submit", forgot);
+$("#vipps form").addEventListener("submit", vippsSubmit);
+$("#a-phone").addEventListener("change", (e) => savePhone(e.target));
 $("#register form").addEventListener("submit", registerUser);
 $("#u-list").addEventListener("change", (e) => e.target.matches(".u-email") && saveEmail(e.target.dataset.email, e.target));
 // Søk i siste bevegelser: bare listen tegnes på nytt, så feltet beholder markøren.
