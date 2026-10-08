@@ -90,6 +90,11 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; }
   box-shadow: var(--shadow);
 }
 .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+/* Bokser som filtrerer: klikkbare, aktiv = grønn kant. */
+.stat-filter { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
+.stat-filter:hover { border-color: var(--accent); }
+.stat-filter.active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.stat-filter.owner-stat.active { border-left-color: var(--owner); }
 .stat span { font-size: 13px; color: var(--muted); }
 
 /* Lager: tallboksene ca. 30 % mindre. På brede skjermer står de i margen til venstre

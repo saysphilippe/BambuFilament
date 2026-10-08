@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008140420";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008140420";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008140828";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008140828";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -74,7 +74,7 @@ const state = {
   newsSub: store("bf.newsSub") || "new",
   store: null,
   shop: { q: "", cat: "", status: store("bf.shopStatus") || "", sort: store("bf.shopSort") || "name", limit: 60 },
-  filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type" },
+  filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type", ams: false },
   selected: null,
 };
 
@@ -617,6 +617,7 @@ function filtered({ ignoreType = false } = {}) {
     (!type || materialOf(s.typeName) === type) &&
     (!fam || s.family === fam) &&
     (!status || s.status === status) &&
+    (!state.filters.ams || s.kind === "ams" || !!s.location || usage(s)?.kind === "ams") &&
     (!needle || [title(s), s.typeName, s.colorName, s.tag?.colors.join(" "), s.owner, s.note, s.location, SOURCE[s.kind], usage(s)?.user].join(" ").toLowerCase().includes(needle))
   );
   const by = {
@@ -645,16 +646,21 @@ function render() {
   const inStock = items.filter((s) => s.status === "in");
   const kg = inStock.reduce((sum, s) => sum + gramsLeft(s), 0) / 1000;
   const inAms = amsCount();
+  // Boksene er også filtre: eier, i AMS nå og tatt ut. «Spoler på lager» nullstiller.
+  const fl = state.filters;
+  const statBtn = (key, active, value, label, extra = "") =>
+    `<button type="button" class="stat stat-filter${active ? " active" : ""}${extra}" data-stat="${esc(key)}" aria-pressed="${active}"><b>${value}</b><span>${label}</span></button>`;
   $("#stats").innerHTML =
-    `<div class="stat"><b>${inStock.length}</b><span>spoler på lager</span></div>` +
+    statBtn("all", fl.status === "in" && !fl.owner && !fl.ams, inStock.length, "spoler på lager") +
     `<div class="stat"><b>${kg.toLocaleString("nb-NO", { maximumFractionDigits: 1 })} kg</b><span>filament igjen (ca.)</span></div>` +
-    `<div class="stat"><b>${inAms}</b><span>i AMS nå</span></div>` +
-    `<div class="stat"><b>${items.filter((s) => s.status === "out").length}</b><span>tatt ut</span></div>` +
-    all.map((u) => `<div class="stat owner-stat" style="--owner:${u.color}"><b>${inStock.filter((s) => s.owner === u.name).length}</b><span>${esc(u.name)}</span></div>`).join("");
+    statBtn("ams", fl.ams, inAms, "i AMS nå") +
+    statBtn("out", fl.status === "out", items.filter((s) => s.status === "out").length, "tatt ut") +
+    all.map((u) => statBtn(`owner:${u.name}`, fl.owner === u.name, inStock.filter((s) => s.owner === u.name).length, esc(u.name), " owner-stat")
+      .replace("<button ", `<button style="--owner:${u.color}" `)).join("");
 
   // Filtre
   const f = state.filters;
-  $("#owner-chips").innerHTML = chip("owner", "", "Alle", !f.owner) +
+  if ($("#owner-chips")) $("#owner-chips").innerHTML = chip("owner", "", "Alle", !f.owner) +
     all.map((u) => chip("owner", u.name, u.name, f.owner === u.name, u.color)).join("");
   const presentFamilies = new Set(items.map((s) => s.family));
   $("#family-chips").innerHTML = chip("family", "", "Alle farger", !f.family) +
@@ -678,6 +684,18 @@ function render() {
   grid.innerHTML = !list.length
     ? `<p class="empty-msg">${items.length ? "Ingen spoler passer filteret." : `Ingen spoler ennå. Skann en spole med leseren, eller del Bambu-biblioteket ditt under «AMS og bibliotek»${DEMO ? "" : `, eller <a href="?demo">se demo med eksempeldata</a>`}.`}</p>`
     : grouped ? groupedCards(list) : list.map((s) => spoolCard(s)).join("");
+}
+
+// Klikk på en boks i venstremargen.
+function statFilter(key) {
+  const f = state.filters;
+  if (key === "all") Object.assign(f, { status: "in", owner: "", ams: false });
+  else if (key === "ams") f.ams = !f.ams;
+  else if (key === "out") f.status = f.status === "out" ? "in" : "out";
+  else if (key.startsWith("owner:")) f.owner = f.owner === key.slice(6) ? "" : key.slice(6);
+  $("#status").value = f.status;
+  store("bf.status", f.status || "all");
+  render();
 }
 
 // Materialfamilie ut fra typenavnet, i fast rekkefølge.
@@ -3027,6 +3045,8 @@ document.addEventListener("click", (e) => {
   if (no) return reject(no.dataset.reject, no);
   const cardRm = e.target.closest("[data-card-remove]");
   if (cardRm) return cardAction("remove", cardRm.dataset.cardRemove, "", cardRm);
+  const stat = e.target.closest("[data-stat]");
+  if (stat) return statFilter(stat.dataset.stat);
   const goto = e.target.closest("[data-goto]");
   if (goto) return showTab(goto.dataset.goto);
   const approveBtn = e.target.closest("[data-approve-out]");
