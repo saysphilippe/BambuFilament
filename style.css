@@ -219,7 +219,7 @@ input, select, textarea {
 .card:hover { transform: translateY(-2px); }
 .card.status-empty { opacity: .55; }
 .swatch { position: relative; height: 96px; border-bottom: 1px solid var(--border); }
-.swatch .badge { position: absolute; top: 8px; right: 8px; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--surface); }
+.swatch .badge { position: absolute; top: 8px; right: 8px; padding: 2px 9px; border-radius: 99px; font-size: 14.5px; font-weight: 600; background: var(--surface); }
 .owner-bar {
   display: flex;
   align-items: center;
@@ -247,11 +247,12 @@ input, select, textarea {
 .left-bar span { display: block; height: 100%; background: var(--accent); }
 .left-bar.low span { background: var(--out); }
 .left-bar.unknown { background: repeating-linear-gradient(90deg, var(--muted-bg) 0 6px, transparent 6px 10px); }
-.card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
-.card-title { font-weight: 700; font-size: 16px; line-height: 1.25; }
-.card-type { font-size: 13px; color: var(--muted); }
+.card-body { flex: 1; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; }
+.card-title { font-weight: 700; font-size: 19px; line-height: 1.25; }
+.card-type { font-size: 15.5px; color: var(--muted); }
 /* Detaljer i liten, dempet tekst: eier og vekt. */
-.card-foot { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+/* Eier nederst på kortet (vanlig størrelse; resten av kortet er 20 % større). */
+.card-foot { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: auto; padding-top: 8px; font-size: 12px; color: var(--muted); }
 .card-foot .lib-weight { font-weight: 400; }
 .foot-owner { display: inline-flex; align-items: center; gap: 5px; }
 .foot-owner .owner-dot { width: 8px; height: 8px; }
@@ -261,7 +262,7 @@ input, select, textarea {
 .card-meta .owner { font-weight: 600; }
 .badge-out { color: var(--out); }
 .badge-empty { color: var(--muted); }
-.card-note { font-size: 13px; color: var(--muted); }
+.card-note { font-size: 15.5px; color: var(--muted); }
 .empty-msg { grid-column: 1 / -1; color: var(--muted); text-align: center; padding: 40px 0; }
 
 dialog:focus { outline: none; }
@@ -591,15 +592,15 @@ details.all-type > .news-colors { margin-top: 10px; }
 .shop-more { display: block; margin: 16px auto; }
 
 .swatch-tags { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
-.source, .owner-tag { padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, .88); color: #333; }
+.source, .owner-tag { padding: 1px 8px; border-radius: 99px; font-size: 13px; font-weight: 700; background: rgba(255, 255, 255, .88); color: #333; }
 .owner-tag { display: inline-flex; align-items: center; gap: 4px; }
 .owner-tag .owner-dot { width: 7px; height: 7px; }
 .source-library { color: #1d4ed8; }
 .source-ams { color: #047857; }
 .card.kind-library, .card.kind-ams { cursor: default; }
 .card.kind-library:hover, .card.kind-ams:hover { transform: none; }
-.card-loc { font-size: 12px; color: var(--accent); }
-.card-use { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; }
+.card-loc { font-size: 14.5px; color: var(--accent); }
+.card-use { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 14.5px; }
 .card-use .owner-dot { flex: none; }
 
 body.locked .tabs, body.locked main, body.locked #open-users, body.locked #refresh, body.locked #sync { display: none !important; }

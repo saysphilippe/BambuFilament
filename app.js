@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008135327";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008135327";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008135540";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008135540";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -715,7 +715,7 @@ function spoolCard(s) {
     <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""}>
       <div class="swatch" style="background:${swatch(s.tag)}">
         ${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}
-        <span class="swatch-tags"><span class="source source-${s.kind}">${SOURCE[s.kind]}</span><span class="owner-tag" style="--owner:${userColor(s.owner)}"><span class="owner-dot"></span>${esc(s.owner || "Ingen eier")}</span></span>
+        <span class="swatch-tags"><span class="source source-${s.kind}">${SOURCE[s.kind]}</span></span>
         <span class="tip">${productionTip(s)}</span>
       </div>
       <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${left.g} av ${left.total} g igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
@@ -725,6 +725,7 @@ function spoolCard(s) {
         ${s.location ? `<div class="card-loc">${esc(s.location)}</div>` : ""}
         ${usageLine(s)}
         ${s.note ? `<div class="card-note">${esc(s.note)}</div>` : ""}
+        <div class="card-foot"><span class="foot-owner" style="--owner:${userColor(s.owner)}"><span class="owner-dot"></span>${esc(s.owner || "Ingen eier")}</span></div>
       </div>
     </${tagName}>`;
 }
