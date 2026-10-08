@@ -634,7 +634,7 @@ const SMTP_TIMEOUT_MS = 15000;
 const encodeHeader = (text) => (/^[\x20-\x7e]*$/.test(text) ? text : `=?UTF-8?B?${toB64(utf8(text))}?=`);
 
 async function sendMail(env, to, subject, text) {
-  const from = env.GMAIL_USER;
+  const from = String(env.GMAIL_USER).trim();
   const socket = connect({ hostname: "smtp.gmail.com", port: 465 }, { secureTransport: "on" });
   const writer = socket.writable.getWriter();
   const reader = socket.readable.getReader();
@@ -677,7 +677,9 @@ async function sendMail(env, to, subject, text) {
   const talk = async () => {
     await step(null, "220");
     await step("EHLO bambufilament", "250");
-    await step(`AUTH PLAIN ${toB64(utf8(`\0${from}\0${env.GMAIL_APP_PASSWORD}`))}`, "235");
+    // Google viser app-passordet med mellomrom ("abcd efgh ..."), men de er ikke en del av det.
+    const pass = String(env.GMAIL_APP_PASSWORD).replace(/\s/g, "");
+    await step(`AUTH PLAIN ${toB64(utf8(`\0${from}\0${pass}`))}`, "235");
     await step(`MAIL FROM:<${from}>`, "250");
     await step(`RCPT TO:<${to}>`, "250");
     await step("DATA", "354");
