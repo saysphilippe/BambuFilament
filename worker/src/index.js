@@ -623,9 +623,12 @@ async function sendReset(who, env) {
 }
 
 // Ny bruker ber om tilgang. Administrator godkjenner i brukeroversikten på siden.
-async function register({ name, email }, env) {
+async function register({ name, email, phone }, env) {
   name = String(name || "").trim().replace(/\s+/g, " ");
   email = String(email || "").trim().toLowerCase();
+  // Mobilnummer er valgfritt (brukes til Vipps); norsk, 8 sifre.
+  phone = String(phone || "").replace(/[\s.-]/g, "").replace(/^(\+47|0047)/, "");
+  if (phone && !/^[49]\d{7}$/.test(phone)) throw fail("Mobilnummeret må være et norsk nummer med 8 sifre, eller stå tomt.");
   if (!NAME_RE.test(name)) throw fail("Brukernavnet må ha 2–40 tegn: bokstaver, tall, mellomrom, punktum, bindestrek eller understrek.");
   if (email.length > 100 || !EMAIL_RE.test(email)) throw fail("Skriv en gyldig e-postadresse.");
   const tok = await siteToken(env);
@@ -643,7 +646,7 @@ async function register({ name, email }, env) {
     if (doc.pending.some((p) => p.email === email)) return false;
     if (doc.pending.some((p) => p.name.toLowerCase() === lower)) { problem = "Brukernavnet er tatt. Velg et annet."; return false; }
     if (doc.pending.length >= MAX_PENDING) { problem = "Det er for mange ventende forespørsler. Prøv igjen senere."; return false; }
-    doc.pending.push({ name, email, at: new Date().toISOString() });
+    doc.pending.push({ name, email, ...(phone ? { phone } : {}), at: new Date().toISOString() });
   }, `Registrering: ${name}`);
   if (problem) throw fail(problem, 409);
 
@@ -792,6 +795,8 @@ async function approvePage(request, env) {
     await updateJson(DATA_REPO, "contacts.json", tok, emptyContacts, (doc) => {
       doc.emails ||= {};
       doc.emails[name] = email;
+      const req = (doc.pending || []).find((p) => p.email === email);
+      if (req?.phone) (doc.phones ||= {})[name] = req.phone;
       doc.pending = (doc.pending || []).filter((p) => p.email !== email);
     }, `E-post for ${name} (godkjent fra e-post)`);
     try {

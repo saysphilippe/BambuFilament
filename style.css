@@ -411,6 +411,8 @@ body.demo .demo-banner { display: block; }
 .pw { font-size: 15px; user-select: all; }
 .u-list li { flex-wrap: wrap; }
 .u-email { flex: 1 1 200px; min-width: 0; max-width: 260px; padding: 4px 8px; font-size: 13px; }
+.u-phone { flex: 0 1 130px; min-width: 0; padding: 4px 8px; font-size: 13px; }
+.u-color { flex: none; width: 28px; height: 28px; padding: 1px; border-radius: 50%; cursor: pointer; }
 .u-email-text { font-size: 13px; }
 .cards-panel h2, .settings-panel h2 { margin-top: 0; }
 .settings-panel h3 { font-size: 15px; margin: 14px 0 6px; }

@@ -10,7 +10,7 @@
   <title>Filament Universet</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008162652">
+  <link rel="stylesheet" href="style.css?v=20261008165738">
 </head>
 <body>
   <header>
@@ -191,6 +191,7 @@
     <form id="u-form" class="u-form">
       <input name="name" placeholder="Navn på ny bruker" required maxlength="40" aria-label="Navn">
       <input name="email" type="email" placeholder="E-post (valgfritt)" maxlength="100" aria-label="E-post">
+      <input name="phone" type="tel" inputmode="tel" placeholder="Mobil (valgfritt)" maxlength="20" aria-label="Mobilnummer">
       <label class="color-pick" title="Brukerens farge på spoler og i filteret">Farge <input name="color" type="color" aria-label="Farge"></label>
       <button class="btn btn-primary">Legg til</button>
     </form>
@@ -291,6 +292,7 @@
       <p class="hint">Velg brukernavn og skriv e-postadressen din. Administrator godkjenner forespørselen, og da får du et midlertidig passord på e-post.</p>
       <label>Brukernavn<input id="r-name" autocomplete="username" minlength="2" maxlength="40" required></label>
       <label>E-post<input id="r-email" type="email" autocomplete="email" maxlength="100" required></label>
+      <label>Mobilnummer (valgfritt, for Vipps)<input id="r-phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="F.eks. 912 34 567"></label>
       <p id="r-status" class="hint" role="status"></p>
       <p id="r-error" class="error"></p>
       <div class="d-buttons">
@@ -378,6 +380,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=20261008162652"></script>
+  <script type="module" src="app.js?v=20261008165738"></script>
 </body>
 </html>

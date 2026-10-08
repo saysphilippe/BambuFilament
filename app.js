@@ -1,5 +1,5 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008162652";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008162652";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008165738";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008165738";
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.
@@ -376,7 +376,7 @@ const cleanEmail = (e) => (EMAIL_RE.test(str(e).trim()) ? str(e).trim().slice(0,
 function cleanContacts(c) {
   const emails = Object.fromEntries(Object.entries(c?.emails || {}).map(([k, v]) => [str(k), cleanEmail(v)]).filter(([, v]) => v));
   const pending = (Array.isArray(c?.pending) ? c.pending : []).map((p) => ({
-    name: clip(p?.name, MAX.user), email: cleanEmail(p?.email), at: str(p?.at),
+    name: clip(p?.name, MAX.user), email: cleanEmail(p?.email), phone: cleanPhone(p?.phone), at: str(p?.at),
   })).filter((p) => p.name && p.email);
   const phones = Object.fromEntries(Object.entries(c?.phones || {}).map(([k, v]) => [str(k), cleanPhone(v)]).filter(([, v]) => v));
   return { emails, pending, phones };
@@ -1352,16 +1352,21 @@ let freshPasswords = [];
 function renderUsers() {
   const canEdit = !!token() && isAdmin();
   const me = userName();
+  // Hver bruker kan endre sin egen e-post, mobil og farge; administrator kan endre alle.
+  const canEditUser = (name) => !!token() && !DEMO && (isAdmin() || name === me);
   $("#u-list").innerHTML = users().map((u) => {
     const count = state.spools.filter((s) => s.owner === u.name).length;
     const why = u.name === me ? "Du kan ikke fjerne deg selv" : count ? "Flytt eller slett spolene til brukeren først" : "Fjern bruker";
     const note = [u.admin && "admin", !u.known && "ikke i brukerlisten", u.known && !hasLogin(u) && "ingen innlogging", u.mustChange && "må bytte passord"].filter(Boolean).join(", ");
     const email = state.contacts.emails[u.name] || "";
+    const phone = state.contacts.phones?.[u.name] || "";
+    const own = u.known && canEditUser(u.name);
     return `<li style="--owner:${u.color}">
-      <span class="owner-dot"></span>
-      <span class="u-name">${esc(u.name)}${note ? ` <span class="muted">(${note})</span>` : ""}</span>
-      ${u.known && canEdit ? `<input type="email" class="u-email" data-email="${esc(u.name)}" value="${esc(email)}" placeholder="E-post" maxlength="100" aria-label="E-post for ${esc(u.name)}">`
-        : email && isAdmin() ? `<span class="u-email-text muted">${esc(email)}</span>` : ""}
+      ${own ? `<input type="color" class="u-color" data-color="${esc(u.name)}" value="${u.color}" title="Farge for ${esc(u.name)}" aria-label="Farge for ${esc(u.name)}">` : `<span class="owner-dot"></span>`}
+      <span class="u-name">${esc(u.name)}${u.name === me ? ` <span class="muted">(deg)</span>` : ""}${note ? ` <span class="muted">(${note})</span>` : ""}</span>
+      ${own ? `<input type="email" class="u-email" data-email="${esc(u.name)}" value="${esc(email)}" placeholder="E-post" maxlength="100" aria-label="E-post for ${esc(u.name)}">
+        <input type="tel" class="u-phone" data-phone="${esc(u.name)}" value="${esc(fmtPhone(phone))}" placeholder="Mobil" inputmode="tel" maxlength="20" aria-label="Mobilnummer for ${esc(u.name)}">`
+        : `${email && isAdmin() ? `<span class="u-email-text muted">${esc(email)}</span>` : ""}${phone ? `<span class="u-email-text muted">${esc(fmtPhone(phone))}</span>` : ""}`}
       <span class="muted">${count} ${count === 1 ? "spole" : "spoler"}</span>
       ${u.known ? `
         ${email
@@ -1376,7 +1381,7 @@ function renderUsers() {
       <ul class="u-list">${pending.map((p) => `
         <li>
           <span class="u-name">${esc(p.name)}</span>
-          <span class="u-email-text">${esc(p.email)}</span>
+          <span class="u-email-text">${esc(p.email)}${p.phone ? ` · ${esc(fmtPhone(p.phone))}` : ""}</span>
           <span class="muted">${p.at ? fmtTime(p.at) : ""}</span>
           <button type="button" class="btn btn-primary btn-small" data-approve="${esc(p.email)}">Godkjenn</button>
           <button type="button" class="btn btn-danger btn-small" data-reject="${esc(p.email)}">Avvis</button>
@@ -1415,9 +1420,10 @@ async function addUser(e) {
   if (email) {
     if (!cleanEmail(email)) return ($("#u-error").textContent = "E-postadressen ser ikke riktig ut.");
     try {
-      await createWithEmail(name, email, color);
+      await createWithEmail(name, email, color, false, cleanPhone(form.elements.phone.value));
       form.elements.name.value = "";
       form.elements.email.value = "";
+      form.elements.phone.value = "";
     } catch (err) {
       $("#u-error").textContent = err.message;
     }
@@ -1605,7 +1611,7 @@ async function saveSetting(key, input) {
 // ---------- E-post og registrering ----------
 
 // Ny bruker uten passord på skjermen: Workeren lager et midlertidig passord og sender det.
-async function createWithEmail(name, email, color, fromPending = false) {
+async function createWithEmail(name, email, color, fromPending = false, phone = "") {
   $("#u-error").textContent = `Legger til ${name}…`;
   await saveDoc((doc) => {
     if (!adminIn(doc)) return ADMIN_ONLY;
@@ -1614,6 +1620,7 @@ async function createWithEmail(name, email, color, fromPending = false) {
   }, `La til bruker ${name} (${userName()})`, "users");
   await saveDoc((doc) => {
     doc.emails[name] = email;
+    if (phone) (doc.phones ||= {})[name] = phone;
     if (fromPending) doc.pending = doc.pending.filter((p) => p.email !== email);
   }, `E-post for ${name} (${userName()})`, "contacts");
   render();
@@ -1644,10 +1651,48 @@ async function saveEmail(name, input) {
   $("#u-error").textContent = "Lagrer e-post…";
   try {
     await saveDoc((doc) => {
-      if (!adminIn(state.doc)) return ADMIN_ONLY;
+      if (!adminIn(state.doc) && name !== userName()) return "Du kan bare endre din egen bruker.";
       if (email) doc.emails[name] = email; else delete doc.emails[name];
     }, `E-post for ${name} (${userName()})`, "contacts");
     $("#u-error").textContent = email ? `Lagret e-post for ${name}.` : `Fjernet e-post for ${name}.`;
+    renderUsers();
+  } catch (err) {
+    $("#u-error").textContent = err.message;
+  }
+}
+
+async function savePhoneFor(name, input) {
+  const v = input.value.trim();
+  const phone = cleanPhone(v);
+  if (phone === (state.contacts.phones?.[name] || "")) return (input.value = fmtPhone(phone));
+  if (v && !phone) return ($("#u-error").textContent = "Skriv et norsk mobilnummer med 8 sifre, eller la feltet stå tomt.");
+  $("#u-error").textContent = "Lagrer mobilnummer…";
+  try {
+    await saveDoc((doc) => {
+      if (!adminIn(state.doc) && name !== userName()) return "Du kan bare endre din egen bruker.";
+      doc.phones = doc.phones && typeof doc.phones === "object" ? doc.phones : {};
+      if (phone) doc.phones[name] = phone; else delete doc.phones[name];
+    }, `Mobilnummer for ${name} (${userName()})`, "contacts");
+    $("#u-error").textContent = phone ? `Lagret mobilnummer for ${name}.` : `Fjernet mobilnummer for ${name}.`;
+    renderUsers();
+  } catch (err) {
+    $("#u-error").textContent = err.message;
+  }
+}
+
+async function saveColor(name, input) {
+  const color = safeColor(input.value, "");
+  if (!color) return;
+  $("#u-error").textContent = "Lagrer farge…";
+  try {
+    await saveDoc((doc) => {
+      if (!adminIn(doc) && name !== userName()) return "Du kan bare endre din egen bruker.";
+      const u = doc.users.find((x) => x.name === name);
+      if (!u) return `${name} finnes ikke lenger.`;
+      u.color = color;
+    }, `Farge for ${name} (${userName()})`, "users");
+    $("#u-error").textContent = `Lagret farge for ${name}.`;
+    render();
     renderUsers();
   } catch (err) {
     $("#u-error").textContent = err.message;
@@ -1661,7 +1706,7 @@ async function approve(email, btn) {
   const used = new Set(state.doc.users.map((u) => u.color));
   const color = USER_COLORS.find((c) => !used.has(c)) || USER_COLORS[state.doc.users.length % USER_COLORS.length];
   try {
-    await createWithEmail(p.name, p.email, color, true);
+    await createWithEmail(p.name, p.email, color, true, p.phone);
   } catch (err) {
     $("#u-error").textContent = err.message;
     btn.disabled = false;
@@ -1705,6 +1750,7 @@ function openPublic(id) {
   } else {
     $("#r-name").value = "";
     $("#r-email").value = "";
+    $("#r-phone").value = "";
     $("#r-status").textContent = "";
     $("#r-error").textContent = "";
     $("#r-send").disabled = false;
@@ -1741,7 +1787,7 @@ async function registerUser(e) {
   $("#r-status").textContent = "Sender…";
   $("#r-send").disabled = true;
   try {
-    await proxy("/register", { name, email });
+    await proxy("/register", { name, email, phone: $("#r-phone").value.trim() });
     $("#r-status").textContent = "Forespørselen er sendt. Når administrator har godkjent den, får du et midlertidig passord på e-post.";
   } catch (err) {
     $("#r-status").textContent = "";
@@ -3232,7 +3278,12 @@ $("#forgot form").addEventListener("submit", forgot);
 $("#vipps form").addEventListener("submit", vippsSubmit);
 $("#a-phone").addEventListener("change", (e) => savePhone(e.target));
 $("#register form").addEventListener("submit", registerUser);
-$("#u-list").addEventListener("change", (e) => e.target.matches(".u-email") && saveEmail(e.target.dataset.email, e.target));
+$("#u-list").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.matches(".u-email")) saveEmail(t.dataset.email, t);
+  if (t.matches(".u-phone")) savePhoneFor(t.dataset.phone, t);
+  if (t.matches(".u-color")) saveColor(t.dataset.color, t);
+});
 // Søk i siste bevegelser: bare listen tegnes på nytt, så feltet beholder markøren.
 $("#tab-loans").addEventListener("input", (e) => {
   if (e.target.id !== "act-q") return;
