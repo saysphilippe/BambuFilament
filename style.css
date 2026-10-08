@@ -185,7 +185,7 @@ input, select, textarea {
 .type-head::before { font-size: 12px; }
 .type-group:not([open]) > .type-head { margin-bottom: 4px; }
 /* Antallet i samme størrelse som overskriften, men dempet. */
-.mat-head span, .type-head span { font-size: inherit; font-weight: 500; color: var(--muted); }
+.mat-head span, .type-head span { font-size: inherit; font-weight: inherit; color: var(--muted); }
 
 .card {
   display: flex;
