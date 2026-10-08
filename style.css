@@ -590,7 +590,10 @@ details.all-type > .news-colors { margin-top: 10px; }
 .variants li.v-out span:last-child { color: var(--out); }
 .shop-more { display: block; margin: 16px auto; }
 
-.source { position: absolute; left: 8px; bottom: 8px; padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, .88); color: #333; }
+.swatch-tags { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+.source, .owner-tag { padding: 1px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, .88); color: #333; }
+.owner-tag { display: inline-flex; align-items: center; gap: 4px; }
+.owner-tag .owner-dot { width: 7px; height: 7px; }
 .source-library { color: #1d4ed8; }
 .source-ams { color: #047857; }
 .card.kind-library, .card.kind-ams { cursor: default; }
@@ -628,4 +631,4 @@ dialog.wide-dialog { width: min(820px, calc(100vw - 32px)); }
   opacity: 0; transform: translateY(4px); transition: opacity .12s ease, transform .12s ease; pointer-events: none;
 }
 .card:hover .swatch .tip, .card:focus-visible .swatch .tip { opacity: 1; transform: none; }
-.card:hover .swatch .source { opacity: 0; }
+.card:hover .swatch .swatch-tags { opacity: 0; }
