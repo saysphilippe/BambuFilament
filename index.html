@@ -10,7 +10,7 @@
   <title>BambuFilament</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261008114748">
+  <link rel="stylesheet" href="style.css?v=20261008120050">
 </head>
 <body>
   <header>
@@ -182,7 +182,7 @@
     <form id="u-form" class="u-form">
       <input name="name" placeholder="Navn på ny bruker" required maxlength="40" aria-label="Navn">
       <input name="email" type="email" placeholder="E-post (valgfritt)" maxlength="100" aria-label="E-post">
-      <input name="color" type="color" aria-label="Farge">
+      <label class="color-pick" title="Brukerens farge på spoler og i filteret">Farge <input name="color" type="color" aria-label="Farge"></label>
       <button class="btn btn-primary">Legg til</button>
     </form>
     <p id="u-hint" class="hint"></p>
@@ -335,6 +335,6 @@ Peter</textarea></label>
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=20261008114748"></script>
+  <script type="module" src="app.js?v=20261008120050"></script>
 </body>
 </html>

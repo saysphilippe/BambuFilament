@@ -294,7 +294,10 @@ dialog label input, dialog label select, dialog label textarea { margin-top: 4px
 .u-list li:first-child { border-top: 0; }
 .u-name { flex: 1; font-weight: 600; }
 .u-form { display: flex; gap: 8px; margin-bottom: 8px; }
-.u-form input[type=color] { flex: none; width: 44px; padding: 2px; height: auto; }
+.u-form input[type=color] { flex: none; width: 44px; padding: 2px; height: auto; margin: 0; align-self: stretch; }
+.u-form input:not([type=color]) { flex: 1 1 0; min-width: 0; }
+.u-form .btn { flex: none; white-space: nowrap; }
+.u-form .color-pick { flex: none; margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .btn-small { padding: 4px 10px; font-size: 13px; }
 code { font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--muted-bg); }
 
