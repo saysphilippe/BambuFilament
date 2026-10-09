@@ -947,3 +947,4 @@ dialog.part-dialog { width: min(1040px, calc(100vw - 32px)); }
 .fp-legend i.cu { background: #c99a2e; border: 1px solid #8a6a1c; }
 .fp-legend i.silk { border: 1.5px solid currentColor; background: transparent; }
 .fp-legend i.drill { width: 9px; border-radius: 50%; background: var(--surface); border: 1px solid #8a6a1c; box-shadow: 0 0 0 2px #c99a2e; }
+.linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }

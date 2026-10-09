@@ -672,6 +672,15 @@ const visibleParts = () => {
   return Object.values(hidden).some((h) => h.size) ? pstate.parts.filter((p) => !hidden[p.owner]?.has(p.category)) : pstate.parts;
 };
 
+const matchesQ = (p, q) => !q || [p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, p.pkg, CAT_NAME[p.category], p.owner].join(" ").toLowerCase().includes(q);
+
+// Søketreff som filtrene (kategori, eier, butikk, pakke, «Har igjen») skjuler.
+function hiddenMatches(shownCount) {
+  const q = pstate.q.trim().toLowerCase();
+  if (!q) return 0;
+  return visibleParts().filter((p) => matchesQ(p, q)).length - shownCount;
+}
+
 function filtered() {
   const q = pstate.q.trim().toLowerCase();
   const list = visibleParts().filter((p) =>
@@ -681,7 +690,7 @@ function filtered() {
     (!pstate.source || p.source === pstate.source) &&
     (!pstate.pkg || p.pkg === pstate.pkg) &&
     (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0)) &&
-    (!q || [p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, p.pkg, CAT_NAME[p.category], p.owner].join(" ").toLowerCase().includes(q)));
+    matchesQ(p, q));
   const by = {
     new: (a, b) => b.orderDate.localeCompare(a.orderDate) || a.title.localeCompare(b.title),
     old: (a, b) => a.orderDate.localeCompare(b.orderDate) || a.title.localeCompare(b.title),
@@ -814,7 +823,7 @@ function render() {
         </section>
         ${pstate.loading ? `<p class="count">Henter komponenter…</p>` : pstate.error ? `<p class="notice">${ctx.esc(pstate.error)}</p>` : ""}
         ${!pstate.loading && !all.length ? `<section class="panel empty-parts"><h2>Ingen komponenter ennå</h2><p class="hint">Importer det du har kjøpt hos AliExpress eller Mouser, så havner alt her, sortert i kategorier.</p><button class="btn btn-primary" type="button" data-pview="import">Importer</button></section>` : ""}
-        ${all.length ? `<p class="count">${list.length.toLocaleString("nb-NO")} varer${list.length > shown ? `, viser ${shown}` : ""}</p>` : ""}
+        ${all.length ? `<p class="count">${list.length.toLocaleString("nb-NO")} varer${list.length > shown ? `, viser ${shown}` : ""}${hiddenMatches(list.length) > 0 ? ` · <button class="linkbtn" type="button" data-pclear>${hiddenMatches(list.length).toLocaleString("nb-NO")} treff til skjules av filtrene, vis alle</button>` : ""}</p>` : ""}
         <section class="parts-grid">${list.slice(0, shown).map(partCard).join("")}</section>
         ${list.length > shown ? `<button class="btn parts-more" type="button" data-pmore>Vis flere (${(list.length - shown).toLocaleString("nb-NO")} til)</button>` : ""}
       </div>
@@ -995,7 +1004,7 @@ export function initParts(context) {
   listenForImport();
   const root = ctx.$("#parts-root");
   root.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
+    const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-pclear], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
     if (!t) return;
     if (t.dataset.cartstep) {
       try { await cartStep(t.dataset.pid, Number(t.dataset.cartstep)); } catch (err) { ctx.setSync(err.message, true); }
@@ -1006,6 +1015,10 @@ export function initParts(context) {
       const drafts = cartDrafts();
       for (const q of drafts) { q.status = "open"; q.at = new Date().toISOString(); }
       try { await saveReqs(drafts); ctx.setSync(`${drafts.length} ønsker sendt`); } catch (err) { ctx.setSync(err.message, true); }
+    } else if (t.dataset.pclear !== undefined) {
+      Object.assign(pstate, { cat: "", sub: "", owner: "", source: "", pkg: "", show: "all" });
+      shown = PAGE;
+      render();
     } else if (t.dataset.pf) {
       pstate[t.dataset.pf] = pstate[t.dataset.pf] === t.dataset.pv ? "" : t.dataset.pv;
       if (t.dataset.pf === "cat") pstate.sub = "";
