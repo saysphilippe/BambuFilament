@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009164102";
-import { toRecords } from "./worker/src/records.js?v=20261009164102";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009164102";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009164224";
+import { toRecords } from "./worker/src/records.js?v=20261009164224";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009164224";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -2681,7 +2681,7 @@ function renderTray(t, label) {
   const n = trayName(t);
   const remain = t.remain !== null && t.remain >= 0 ? t.remain : null;
   return `<div class="tray">
-    <span class="slot">${label}</span>
+    <span class="slot">${label}</span>${sourceIcon("ams")}
     <div class="tray-dot" style="background:${traySwatch(t)}"></div>
     <div class="tray-text">
       <div class="tray-color">${esc(n.color || familyOfHex(t.color) || "Ukjent farge")}</div>
@@ -2802,7 +2802,7 @@ function renderLibrary(lib, owner = "") {
     const pct = x.total > 0 ? Math.round((x.net / x.total) * 100) : null;
     const n = libName(x);
     const loc = x.rfid && where[x.rfid];
-    return `<div class="lib-item${x.net <= 0 ? " lib-empty" : ""}">
+    return `<div class="lib-item${x.net <= 0 ? " lib-empty" : ""}">${sourceIcon("library")}
       <span class="lib-swatch" style="background:${libSwatch(x)}"></span>
       <div class="lib-text">
         <b>${esc(n.color || x.name || x.type)}</b>

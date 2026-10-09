@@ -566,7 +566,10 @@ a.btn { text-decoration: none; display: inline-block; }
 
 .lib-card .lib-grid { margin-top: 0; }
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 8px; margin-top: 10px; }
-.lib-item { display: flex; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg); }
+.lib-item { position: relative; display: flex; gap: 10px; padding: 8px 34px 8px 10px; border-radius: 10px; background: var(--bg); }
+/* Samme kildeikon som på spolekortene, øverst til høyre */
+.tray > .source, .lib-item > .source { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border: 1px solid var(--border); }
+.tray > .source svg, .lib-item > .source svg { width: 13px; height: 13px; }
 .lib-empty { opacity: .5; }
 .lib-swatch { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); }
 .lib-text { display: flex; flex-direction: column; min-width: 0; font-size: 13px; flex: 1; }
