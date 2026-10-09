@@ -52,8 +52,11 @@ const pstate = {
 
 const clip = (s, n) => String(s ?? "").trim().slice(0, n);
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+// AliExpress sitt grå plassholderbilde (gamle ordre og varer som er fjernet har ikke bilde lenger).
+const ALI_PLACEHOLDER = /Sf5a31ce867174aa7bf499352d6875ddcs/;
 const safeImg = (u) => {
   u = String(u || "").trim();
+  if (ALI_PLACEHOLDER.test(u)) return "";
   if (u.startsWith("//")) u = "https:" + u;
   return IMG_HOSTS.test(u) ? u.split(/[?#]/)[0] : "";
 };
@@ -87,6 +90,8 @@ function cleanPart(p) {
     orderId: clip(p.orderId, 40), orderDate: /^\d{4}-\d{2}-\d{2}$/.test(p.orderDate || "") ? p.orderDate : "",
     status: clip(p.status, 60), store: clip(p.store, 100), itemId: clip(p.itemId, 30),
     url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: safeImg(p.image),
+    // Bildet er hentet fra en lignende vare (søk på tittelen), fordi originalen er fjernet hos AliExpress.
+    imgSearch: !!p.imgSearch && !!safeImg(p.image),
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
     // Kategorien regnes ut på nytt med de nyeste reglene, med mindre den er satt for hånd.
     category: p.catManual && CAT_NAME[p.category] ? p.category : classify(p.title), catManual: !!p.catManual,
@@ -318,6 +323,23 @@ function aliBookmarklet(SITE) {
         } catch { /* hopper over ordren, plassholderen blir stående */ }
         await sleep(400 + Math.random() * 400);
       }
+    }
+    // Gamle varer som er fjernet fra AliExpress har bare en plassholder som bilde. Da søkes det
+    // etter tittelen, og bildet fra det første treffet brukes (merket som lignende vare).
+    const PH = /Sf5a31ce867174aa7bf499352d6875ddcs/;
+    const noImg = rows.filter((r) => r.title && (!r.image || PH.test(r.image)));
+    const found = {};
+    for (const [i, r] of noImg.entries()) {
+      const q = r.title.replace(/[^\w\s-]/g, " ").trim().split(/\s+/).slice(0, 8).join("-");
+      if (!(q in found)) {
+        status(`Søker etter bilder til varer som er fjernet: ${i + 1} av ${noImg.length}…`);
+        try {
+          const html = await (await fetch(`/w/wholesale-${encodeURIComponent(q)}.html`, { credentials: "include" })).text();
+          found[q] = (html.match(/"imgUrl":"((?:https?:)?\/\/[^"]+\/kf\/[A-Za-z0-9_]+\.(?:jpg|jpeg|png|webp))/) || [])[1] || "";
+        } catch { found[q] = ""; }
+        await sleep(1500 + Math.random() * 1000);
+      }
+      if (found[q]) { r.image = found[q]; r.imgSearch = true; } else r.image = "";
     }
     status(`Sender ${rows.length} varer til Filament og elektronikk universet…`);
     win?.postMessage({ type: "bf-import", rows, replaceOrders }, new URL(SITE).origin);
@@ -551,6 +573,7 @@ function openPart(id) {
         ${row("Delenummer", ctx.esc(p.mpn))}
         ${row("Beskrivelse", ctx.esc(p.description))}
         ${row("Produktside", p.url ? `<a href="${ctx.esc(p.url)}" target="_blank" rel="noopener">Åpne hos ${ctx.esc(SOURCE_LABEL[p.source])} ↗</a>` : "")}
+        ${row("Bilde", p.imgSearch ? "Fra en lignende vare. Originalen er fjernet hos AliExpress." : "")}
       </table>
       <div class="part-edit">
         <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${CATEGORIES.map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
