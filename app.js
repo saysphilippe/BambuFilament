@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009165059";
-import { toRecords } from "./worker/src/records.js?v=20261009165059";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009165059";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009165407";
+import { toRecords } from "./worker/src/records.js?v=20261009165407";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009165407";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
