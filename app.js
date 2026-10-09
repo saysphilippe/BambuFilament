@@ -1,7 +1,7 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009175959";
-import { toRecords } from "./worker/src/records.js?v=20261009175959";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009175959";
-import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, loadParts } from "./parts.js?v=20261009175959";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009180307";
+import { toRecords } from "./worker/src/records.js?v=20261009180307";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009180307";
+import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, loadParts } from "./parts.js?v=20261009180307";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {

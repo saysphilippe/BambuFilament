@@ -794,3 +794,9 @@ dialog.wide-dialog { width: min(820px, calc(100vw - 32px)); }
 .cat-toggles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; margin: 6px 0 14px; }
 .cat-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 .cat-toggle input { width: 17px; height: 17px; accent-color: var(--accent); }
+/* Pakketype: liten illustrasjon på kortet, større i detaljvinduet */
+.part-pkg { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; padding: 1px 8px 1px 2px; border: 1px solid var(--border); border-radius: 99px; font: 600 11.5px ui-monospace, Consolas, monospace; color: var(--text); }
+.part-pkg .pkg-art { flex: none; }
+.pkg-row { display: flex; align-items: center; gap: 12px; }
+.pkg-row .pkg-art { flex: none; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--muted-bg); }
+.pkg-art { color: var(--text); }

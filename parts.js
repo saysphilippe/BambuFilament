@@ -5,7 +5,8 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml } from "./circuits.js?v=20261009175959";
+import { componentHtml, findPart } from "./circuits.js?v=20261009180307";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009180307";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -65,7 +66,7 @@ export function classify(title) {
 let ctx = null; // fra app.js: { $, esc, dbCall, token, userName, userColor, users, store, DEMO, setSync }
 const pstate = {
   parts: [], loaded: false, loading: false, error: "",
-  q: "", cat: "", owner: "", source: "", sort: "new", show: "have", view: "list",
+  q: "", cat: "", owner: "", source: "", pkg: "", sort: "new", show: "have", view: "list",
   importLog: [], importBusy: false,
 };
 
@@ -111,6 +112,8 @@ function cleanPart(p) {
     url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: safeImg(p.image),
     // Bildet er hentet fra en lignende vare (søk på tittelen), fordi originalen er fjernet hos AliExpress.
     imgSearch: !!p.imgSearch && !!safeImg(p.image),
+    // Pakketype (TO-92, SOT-23, 0805 …) fra tittel, variant og delenummer, ellers fra kjente delenumre.
+    pkg: findPackage(p.variant, p.title, p.mpn, p.description) || String(findPart(p.title, p.mpn)?.pkg || "").split("/")[0],
     // Datablad (PDF) og butikkens egen kategori (Mouser: «Sensors › Humidity Sensors»).
     datasheet: /^https:\/\/([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
     shopCat: clip(p.shopCat, 160), catHint: CAT_NAME[p.catHint] ? p.catHint : "",
@@ -436,8 +439,9 @@ function filtered() {
     (!pstate.cat || p.category === pstate.cat) &&
     (!pstate.owner || p.owner === pstate.owner) &&
     (!pstate.source || p.source === pstate.source) &&
+    (!pstate.pkg || p.pkg === pstate.pkg) &&
     (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0)) &&
-    (!q || [p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, CAT_NAME[p.category], p.owner].join(" ").toLowerCase().includes(q)));
+    (!q || [p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, p.pkg, CAT_NAME[p.category], p.owner].join(" ").toLowerCase().includes(q)));
   const by = {
     new: (a, b) => b.orderDate.localeCompare(a.orderDate) || a.title.localeCompare(b.title),
     old: (a, b) => a.orderDate.localeCompare(b.orderDate) || a.title.localeCompare(b.title),
@@ -461,6 +465,7 @@ function partCard(p) {
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
       <span class="part-meta"><b>${ctx.esc(qty)}</b>${fmtMoney(p) ? ` · ${ctx.esc(fmtMoney(p))}/stk` : ""}</span>
+      ${p.pkg ? `<span class="part-pkg" title="${ctx.esc(packageInfo(p.pkg))}">${packageSvg(p.pkg, 22)}${ctx.esc(p.pkg)}</span>` : ""}
       <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(p.orderDate))}</span></span>
     </span>
   </button>`;
@@ -479,6 +484,9 @@ function render() {
   const list = filtered();
   const count = (key, val) => all.filter((p) => p[key] === val && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0))).length;
   const owners = [...new Set(all.map((p) => p.owner).filter(Boolean))].sort();
+  const pkgCount = {};
+  for (const p of all) if (p.pkg) pkgCount[p.pkg] = (pkgCount[p.pkg] || 0) + 1;
+  const pkgs = Object.entries(pkgCount).sort((a, b) => b[1] - a[1]).slice(0, 18);
   const cats = CATEGORIES.map(([id, name]) => [id, name, count("category", id)]).filter(([, , n]) => n);
   const chip = (key, val, label, n, dot) => `<button class="chip${pstate[key] === val ? " active" : ""}" type="button" data-pf="${key}" data-pv="${ctx.esc(val)}">${dot ? `<span class="owner-dot" style="--owner:${dot}"></span>` : ""}${ctx.esc(label)}${n !== undefined ? ` <span class="chip-n">${n}</span>` : ""}</button>`;
   // Betalt: ordretotalen (inkl. frakt og avgifter) telles én gang per ordre, i alle valutaer.
@@ -524,6 +532,7 @@ function render() {
           </div>
           ${owners.length > 1 ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, undefined, ctx.userColor(o))).join("")}</div></div>` : ""}
           <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
+          ${pkgs.length ? `<div class="chip-row"><span class="chip-label">Pakke</span><div class="chips">${chip("pkg", "", "Alle")}${pkgs.map(([k, n]) => chip("pkg", k, k, n)).join("")}</div></div>` : ""}
         </section>
         ${pstate.loading ? `<p class="count">Henter komponenter…</p>` : pstate.error ? `<p class="notice">${ctx.esc(pstate.error)}</p>` : ""}
         ${!pstate.loading && !all.length ? `<section class="panel empty-parts"><h2>Ingen komponenter ennå</h2><p class="hint">Importer det du har kjøpt hos AliExpress eller Mouser, så havner alt her, sortert i kategorier.</p><button class="btn btn-primary" type="button" data-pview="import">Importer</button></section>` : ""}
@@ -635,6 +644,7 @@ function openPart(id) {
         ${row("Status", ctx.esc(p.status))}
         ${row("Produsent", ctx.esc(p.maker))}
         ${row("Delenummer", ctx.esc(p.mpn))}
+        ${row("Pakke", p.pkg ? `<span class="pkg-row">${packageSvg(p.pkg, 64)}<span><b>${ctx.esc(p.pkg)}</b><br><span class="hint">${ctx.esc(packageInfo(p.pkg))}</span></span></span>` : "")}
         ${row("Beskrivelse", ctx.esc(p.description))}
         ${row("Produktside", p.url ? `<a href="${ctx.esc(p.url)}" target="_blank" rel="noopener">Åpne hos ${ctx.esc(SOURCE_LABEL[p.source])} ↗</a>` : "")}
         ${row("Bilde", p.imgSearch ? "Fra en lignende vare. Originalen er fjernet hos AliExpress." : "")}
