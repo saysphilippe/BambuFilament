@@ -1,6 +1,7 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009165421";
-import { toRecords } from "./worker/src/records.js?v=20261009165421";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009165421";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009172214";
+import { toRecords } from "./worker/src/records.js?v=20261009172214";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009172214";
+import { initParts, showParts, refreshParts } from "./parts.js?v=20261009172214";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -3548,6 +3549,20 @@ function priceChart(rows) {
 
 const TABS = ["stock", "loans", "ams", "news", "shop", "cards", "settings"];
 
+// To hoveddeler: filamentet (fanene under) og komponentbiblioteket (parts.js).
+function showSection(section) {
+  const parts = section === "parts";
+  store("bf.section", parts ? "parts" : "filament");
+  document.body.dataset.section = parts ? "parts" : "filament";
+  document.querySelectorAll(".section-btn").forEach((b) => b.classList.toggle("active", b.dataset.section === (parts ? "parts" : "filament")));
+  $(".tabs").hidden = parts;
+  $("#parts-root").hidden = !parts;
+  if (parts) {
+    for (const t of TABS) $(`#tab-${t}`).hidden = true;
+    showParts();
+  } else showTab(state.tab);
+}
+
 function showTab(tab) {
   state.tab = TABS.includes(tab) ? tab : "stock";
   store("bf.tab", state.tab);
@@ -3787,7 +3802,13 @@ $("#setup-form").addEventListener("submit", setup);
 $("#su-done").addEventListener("click", setupDone);
 $("#users").addEventListener("close", () => (freshPasswords = []));
 $("#open-users").addEventListener("click", openUsers);
-$("#refresh").addEventListener("click", () => (state.tab === "ams" ? Promise.all([refresh(), refreshAms()]) : refresh()));
+$("#refresh").addEventListener("click", () => (document.body.dataset.section === "parts" ? refreshParts()
+  : state.tab === "ams" ? Promise.all([refresh(), refreshAms()]) : refresh()));
+document.querySelector(".sections").addEventListener("click", (e) => {
+  const b = e.target.closest(".section-btn");
+  if (b) showSection(b.dataset.section);
+});
+initParts({ $, esc, dbCall, token, userName, userColor, setSync, DEMO, showSection });
 $("#ams-me").addEventListener("change", (e) => e.target.dataset.ams?.startsWith("share") && amsAction(e.target.dataset.ams, e.target));
 $("#bambu form").addEventListener("submit", bambuSubmit);
 setInterval(() => document.visibilityState === "visible" && bambuToken() && refreshAms(), AMS_REFRESH_MS);
@@ -3806,6 +3827,8 @@ fetch("data/colors.json")
     }
     Promise.all([refresh(), loadCatalog(), loadStore()]).then(() => {
       showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store("bf.tab"));
+      // Komponenter: valgt sist, eller siden ble åpnet av import-bokmerket (#import).
+      if (location.hash === "#import" || location.hash === "#parts" || (!TABS.includes(location.hash.slice(1)) && store("bf.section") === "parts")) showSection("parts");
       // Hent AMS i bakgrunnen, så et delt øyeblikksbilde holdes oppdatert uansett fane.
       if (bambuToken() && state.tab !== "ams") refreshAms();
     });
