@@ -550,6 +550,11 @@ body.demo .demo-banner { display: block; }
 .news-color-text { display: flex; flex-direction: column; min-width: 0; flex: 1; font-size: 13px; }
 .news-color-text b { font-size: 14px; }
 .ext { color: var(--muted); }
+/* Kildeikoner (lager, bibliotek, AMS) øverst til høyre, pilen til butikken nederst */
+.news-side { align-self: stretch; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 6px; }
+.news-sources { display: flex; gap: 4px; }
+.news-sources .source { width: 22px; height: 22px; border: 1px solid var(--border); }
+.news-sources .source svg { width: 13px; height: 13px; }
 .owned { display: inline-flex; align-items: center; gap: 3px; margin-top: 3px; font-size: 12px; font-weight: 600; color: var(--in); }
 .owned .owner-dot { width: 8px; height: 8px; }
 

@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009164224";
-import { toRecords } from "./worker/src/records.js?v=20261009164224";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009164224";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009164501";
+import { toRecords } from "./worker/src/records.js?v=20261009164501";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009164501";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -660,6 +660,7 @@ function stockItems() {
         infoIdx: x.filamentId, color: x.color, names: libName(x),
         fallbackType: [x.vendor && x.vendor !== "Bambu Lab" ? x.vendor : "", x.name || x.type].filter(Boolean).join(" "),
         net: x.net, total: x.total, location: (x.rfid && where[x.rfid]) || "", note: x.note,
+        catKey: x.variant ? `GF${x.variant}` : state.colorIndex[`${x.filamentId}|#${(x.color || "").toUpperCase()}`]?.[2] || "",
       }));
     }
     for (const p of amsOf(u.name)?.printers || []) {
@@ -677,6 +678,7 @@ function stockItems() {
           cols: (t.cols.length ? t.cols : [t.color]).filter(Boolean).map((c) => "#" + c),
           infoIdx: t.infoIdx, color: t.color, fallbackType: t.subBrand || t.type,
           remain: t.remain !== null && t.remain >= 0 ? t.remain : null, total: t.weight || 0, location: where,
+          catKey: state.colorIndex[`${t.infoIdx}|#${(t.color || "").toUpperCase()}`]?.[2] || "",
         }));
       }
     }
@@ -2973,14 +2975,22 @@ async function loadCatalog() {
 }
 
 // Hvem som har en gitt farge: { "GFA00-A0": ["Philippe", ...] } (spoler på lager eller tatt ut).
-function ownedKeys() {
+// Farger vi har, per katalognøkkel («GFA00-K0»): hvem som har dem og hvor (lager, bibliotek, AMS).
+function stockByKey() {
   const map = {};
-  for (const s of state.spools) {
-    if (!s.tag || s.status === "empty") continue;
-    const key = `${s.tag.materialId}-${s.tag.variantId.split("-")[1]}`;
-    (map[key] ||= []).includes(s.owner) || map[key].push(s.owner);
+  for (const s of stockItems()) {
+    if (s.status === "empty") continue;
+    const key = s.kind === "rfid" ? s.tag?.materialId && `${s.tag.materialId}-${s.tag.variantId.split("-")[1]}` : s.catKey;
+    if (!key) continue;
+    const e = (map[key] ||= { owners: [], kinds: [] });
+    if (s.owner && !e.owners.includes(s.owner)) e.owners.push(s.owner);
+    if (!e.kinds.includes(s.kind)) e.kinds.push(s.kind);
   }
   return map;
+}
+
+function ownedKeys(stock = stockByKey()) {
+  return Object.fromEntries(Object.entries(stock).map(([k, e]) => [k, e.owners]));
 }
 
 const fmtDay = (d) => new Date(d).toLocaleDateString("nb-NO", { day: "numeric", month: "long", year: "numeric" });
@@ -3139,7 +3149,8 @@ function renderNews() {
   }
   const days = Number(state.newsDays);
   const since = Math.max(new Date(c.baseline).getTime() + DAY, days ? Date.now() - days * DAY : 0);
-  const owned = ownedKeys();
+  const stock = stockByKey();
+  const owned = ownedKeys(stock);
   const isNew = (d) => d && new Date(d).getTime() > since;
   // Utgått: ikke i butikken (eller typen har ingen produktside) og kjent i over 60 dager.
   // Nye farger som ikke er i butikken ennå, og det noen venter på, vises fortsatt.
@@ -3174,7 +3185,7 @@ function renderNews() {
           ${stockBadge(x.stock)}
           ${ownedBadge(owned[x.key])}
         </span>
-        <span class="ext">↗</span>
+        <span class="news-side"><span class="news-sources">${["rfid", "library", "ams"].filter((k) => stock[x.key]?.kinds.includes(k)).map(sourceIcon).join("")}</span><span class="ext">↗</span></span>
       </a>
       ${x.stock && x.stock !== "in" || wishersOf(x.key).length ? wishButton(x.key) : ""}
     </div>`;
@@ -3785,7 +3796,7 @@ fetch("data/colors.json")
     state.colorNames = names;
     for (const [key, [name, type, colors]] of Object.entries(names)) {
       const idx = key.split("-")[0];
-      if (colors[0]) state.colorIndex[`${idx}|${colors[0].toUpperCase()}`] ||= [name, type];
+      if (colors[0]) state.colorIndex[`${idx}|${colors[0].toUpperCase()}`] ||= [name, type, key];
     }
     Promise.all([refresh(), loadCatalog(), loadStore()]).then(() => {
       showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store("bf.tab"));
