@@ -98,7 +98,12 @@ export const CATEGORIES = [
     [/\b(safety (goggles|glasses|gloves)|protective (glasses|goggles|eyewear)|laser (safety )?goggles|cut resistant gloves|anti-?static (bags?|wrist|mat)|esd (bags?|mat|wrist))\b/, 9],
   ]],
   ["craft", "Hobby og håndverk", [
-    [/\b(craft\w*|hobby|paint\w*|brush(es)?|acrylic paint|watercolou?r|pigments?|mica powder|resin|uv resin|epoxy resin|molds?|moulds?|silicone mold|glitter|stickers?|decals?|vinyl|htv|heat transfer|transfer paper|wood (sheets?|veneer|board|blanks)|veneer|plywood|basswood|balsa|laser engrav\w*|laser cutt\w*|engraver|co2 laser|focus lens|znse|sewing|needles?|yarn|knitting|embroider\w*|stamps?|scrapbook\w*|acrylic (sheet|board|plate)|plexiglass|pmma|acetate|foam|leather|labels?|label printer|niimbot|price tags?|gift tags?|kraft paper)\b/, 5],
+    [/\b(craft\w*|hobby|paint\w*|brush(es)?|acrylic paint|watercolou?r|pigments?|mica powder|resin|uv resin|epoxy resin|molds?|moulds?|silicone mold|glitter|stickers?|decals?|vinyl|htv|heat transfer|transfer paper|sewing|needles?|yarn|knitting|embroider\w*|stamps?|scrapbook\w*|acrylic (sheet|board|plate)|plexiglass|pmma|acetate|foam|leather|labels?|label printer|niimbot|price tags?|gift tags?|kraft paper)\b/, 5],
+  ]],
+  ["laser", "Laser og treverk", [
+    [/\b(laser (engrav\w*|cutt\w*|module|head|tube|lens|mirror|machine|diode|power supply|goggles)|engravers?|engraving machine|co2 laser|k40|xtool|atomstack|sculpfun|ortur|neje|daja|focus(ing)? lens|znse|meniscus lens|reflect(ive|ion) mirrors?|mo mirrors?|si mirrors?|air assist|honeycomb (bed|panel|table|working)|laser bed)\b/, 7],
+    [/\b(veneers?|plywood|basswood|balsa|mdf|hardboard|walnut|cherry wood|teak|linden|birch ply\w*|wood (sheets?|veneer|board|boards|blanks|panels?|slices?|chips?)|wooden (sheets?|boards?|blanks|panels?|slices?)|unfinished wood|marquetry|inlay)\b/, 7],
+    [/\blaser\b/, 2],
   ]],
   ["house", "Husholdning", [
     [/\b(kitchen|cooking|bathroom|shower|toilet|towels?|bath|cleaning|cleaner|mop|broom|dish(es)?|sponges?|scrub\w*|laundry|hangers?|trash|garbage|vacuum|hepa|sink|faucet|curtains?|bedding|pillows?|blankets?|carpet|rugs?|doormat|furniture|shelf|storage box|organi[sz]er|air fryer|coffee|tea|mug|cup|bottle|lunch box|refrigerator|fridge|knife sharpener|household|home decor\w*|vase|planter|plant pot|plant (support|stakes?|cage|clips?)|watering|corkscrew|wine opener|food cover|saran wrap|cling film|zip ?lock|ziplock|fresh-?keeping|mosquito|insect|pest|window screen|door screen|net screen)\b/, 4],
@@ -165,6 +170,10 @@ export function scoreTitle(title, extra = "") {
   if (/\bjumper caps?\b|\bshunt\b/.test(t)) { scores.clothes = 0; scores.connector = (scores.connector || 0) + 10; }
   if (/\b(standoffs?|spacers?|pillars?)\b/.test(t)) scores.proto = (scores.proto || 0) / 3; // avstandsstykker er festemidler
   if (/\bbelts?\b/.test(t) && !/\b(timing|gt2|drive|conveyor) belts?\b/.test(t)) scores.mech = (scores.mech || 0) / 3;
+  if (/\b(rangefinder|range finder|distance meter|tape measure|laser level|laser pointer)\b/.test(t)) { scores.laser = 0; scores.tool = (scores.tool || 0) + 10; }
+  if (/\b(touch|sensor|switch)\b/.test(t) && !/\b(laser|veneer|plywood|basswood)\b/.test(t)) scores.laser = 0; // «touch switch for wood board»
+  if (/\bcnc\b/.test(t) && !/\blaser\b/.test(t)) scores.laser = (scores.laser || 0) / 3; // CNC-fres, ikke laser
+  if (/\blaser\b/.test(t) && /\b(acrylic|pmma|plexiglass|acetate)\b/.test(t)) scores.laser = (scores.laser || 0) + 8; // akryl til laserkutting
   return scores;
 }
 
