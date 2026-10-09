@@ -5,10 +5,10 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009200547";
-import { componentHtml, findPart } from "./circuits.js?v=20261009200547";
-import { detectPack } from "./pack.js?v=20261009200547";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009200547";
+import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009200812";
+import { componentHtml, findPart } from "./circuits.js?v=20261009200812";
+import { detectPack } from "./pack.js?v=20261009200812";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009200812";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
