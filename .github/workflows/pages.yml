@@ -1,0 +1,47 @@
+name: Publiser nettsiden
+
+# Publiserer GitHub Pages fra main. Versjonsnummeret (?v=…) settes automatisk her, så
+# nettlesere aldri får en gammel app.js – ingen trenger å kjøre bump-version selv.
+# Katalogjobben pusher med GITHUB_TOKEN, som ikke starter andre jobber; derfor også
+# workflow_run, så ny katalog publiseres.
+
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: ["Oppdater Bambu-katalog og butikk"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Låst til commit (ikke tagg), så en flyttet tagg ikke kan kjøre annen kode.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Sett versjonsnummer på skript og stilark
+        run: node scripts/bump-version.mjs
+      - name: Pakk nettsiden
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: .
+      - name: Publiser
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

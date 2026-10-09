@@ -1,7 +1,7 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009201410";
-import { toRecords } from "./worker/src/records.js?v=20261009201410";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009201410";
-import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, loadParts } from "./parts.js?v=20261009201410";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009202254";
+import { toRecords } from "./worker/src/records.js?v=20261009202254";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009202254";
+import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, loadParts } from "./parts.js?v=20261009202254";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -117,6 +117,13 @@ function saveSession(value, remember) {
 
 // Innlogget bruker: { user, token }. Tokenen er dekryptert med brukerens passord.
 let session = DEMO ? null : loadSession();
+// Lokal utvikling: http://127.0.0.1:8765/?dev=Navn logger inn mot den lokale Workeren
+// (wrangler dev med DEV_TOKEN=local-test, se CONTRIBUTING.md). Virker bare på 127.0.0.1/localhost.
+const devUser = ["127.0.0.1", "localhost"].includes(location.hostname) ? new URLSearchParams(location.search).get("dev") : null;
+if (devUser !== null && !DEMO) {
+  session = { user: devUser || "Utvikler", token: "local-test" };
+  saveSession(session, false);
+}
 const token = () => session?.token || "";
 const userName = () => session?.user || "";
 const isAdmin = () => !!state.doc.users.find((u) => u.name === userName())?.admin;

@@ -1,0 +1,50 @@
+name: Publiser Workeren
+
+# Publiserer Cloudflare-Workeren (worker/) når den endres på main, eller for hånd.
+# Krever repo-secrets CLOUDFLARE_API_TOKEN (Cloudflare → My Profile → API Tokens →
+# «Edit Cloudflare Workers», bare denne kontoen) og CLOUDFLARE_ACCOUNT_ID.
+# Uten token hoppes publiseringen over med en melding, så jobben ikke feiler.
+# Hemmeligheter i Workeren (Gmail, TICKET_SECRET osv.) settes fortsatt med wrangler secret put.
+
+on:
+  push:
+    branches: [main]
+    paths: ["worker/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sjekk at Cloudflare-nøkkelen finnes
+        id: check
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN mangler – Workeren publiseres ikke automatisk (publiser for hånd med wrangler deploy)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.check.outputs.ok == 'true'
+      - name: Syntakssjekk
+        if: steps.check.outputs.ok == 'true'
+        run: node --check worker/src/index.js && node --check worker/src/records.js
+      - name: Publiser med Wrangler
+        if: steps.check.outputs.ok == 'true'
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4.1.3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.149.0"
+          command: deploy
