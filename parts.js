@@ -5,9 +5,10 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009194900";
-import { detectPack } from "./pack.js?v=20261009194900";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009194900";
+import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009200116";
+import { componentHtml, findPart } from "./circuits.js?v=20261009200116";
+import { detectPack } from "./pack.js?v=20261009200116";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009200116";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -18,49 +19,36 @@ const PATCH_CHUNK = 400;
 
 // ---------- Kategorier ----------
 //
-// Første regel som treffer, vinner, så de smaleste står først (filtføtter er husholdning,
-// ikke festemidler). Hver vare kan få en annen kategori for hånd i detaljvinduet.
-export const CATEGORIES = [
-  ["3dprint", "3D-print", /3d print|\bprinter\b|nozzle|hotend|hot end|extruder|filament|bambu|prusa|\bender\b|\bpei\b|build plate|bowden|\bptfe\b|heat ?bed|bltouch|volcano|\be3d\b/],
-  ["house", "Husholdning", /\bfelt\b|furniture|chair leg|table leg|kitchen|bathroom|shower|toilet|towel|refrigerator|\bfridge|curtain|door stop|cleaning|\bmop\b|broom|\bdish|\bmugs?\b|\bcups?\b|water bottle|lunch box|pillow|bed sheet|blanket|laundry|hanger|trash|garbage|vacuum|\bsink\b|faucet|non-slip|anti-slip|carpet|\brugs?\b|household/],
-  ["sensor", "Sensorer", /sensor|\brfid\b|rc522|\bnfc\b|ultrasonic|hc-sr|\bpir\b|thermistor|thermocouple|\bdht\d|\bbme\d|\bbmp\d|accelerometer|gyro|\bmpu\d|hall effect|load cell|hx711|ds18b20|lidar|\btof\b|photoresistor|\bgps\b|\bgnss\b|neo-?6m|neo-?m8|atgm336|beidou|\blora(wan)?\b|\blocator\b|\btracker\b/],
-  ["tool", "Verktøy", /\btools?\b|plier|screwdriver|nail gun|staple gun|stapler|airbrush|soldering|\bsolder\b|multimeter|wrench|\bdrill|tweezer|\bknife|\bknives\b|cutter|\bsaws?\b|hacksaw|chain ?saw|caliper|crimping|heat gun|glue gun|file set|sandpaper|\bvise\b|tape measure|spirit level|oscilloscope|\btester\b|hex key|allen key|ratchet|socket set/],
-  ["mcu", "Mikrokontrollere", /esp32|esp8266|\besp-|arduino|raspberry|stm32|nodemcu|wemos|\bpico\b|attiny|atmega|development board|dev board|nrf52|rp2040|\bxiao\b|teensy|microcontroller/],
-  ["power", "Strøm og batterier", /batter(y|ies)|charger|charging|power supply|power bank|\bbuck\b|\bboost\b|step.?down|step.?up|dc-dc|converter|18650|lipo|li-ion|lithium|\bsolar\b|\badapter\b|transformer|inverter|\bpsu\b|tp4056/],
-  ["passive", "Halvledere og passive", /resistor|capacitor|inductor|\bdiodes?\b|transistor|mosfet|potentiometer|crystal oscillator|\bfuses?\b|varistor|thyristor|\btriac|\bic chip|optocoupler|voltage regulator|ams1117|\blm7\d|ne555|assortment kit|\b2n\d{4}\b|\bbc5\d\d\b|\bs80[0-9]{2}\b|\birf\w+|\birlz?\w+|\btip1[0-9]{2}\b/],
-  ["module", "Moduler og skjermer", /\boled\b|\blcd\b|\btft\b|display|\brelays?\b|\bmodule\b|driver board|motor driver|a4988|tmc2\d|amplifier|\bdac\b|\badc\b|\brtc\b|shield|breakout/],
-  ["led", "LED og lys", /\bleds?\b|\blamps?\b|\blights?\b|bulb|\bneon\b|ws281|sk6812|lantern|flashlight|torch|spotlight/],
-  ["cable", "Kabler og kontakter", /\bcables?\b|\bwires?\b|connector|\bjst\b|dupont|terminal|\bplugs?\b|\bsockets?\b|pin header|\bheaders?\b|heat shrink|\bcrimp|usb.?c\b|\bhdmi\b|ethernet|\bcords?\b|\bwago\b|banana plug|\bxt60|\bxt30|cable ties|zip ties|velcro|sleeving/],
-  ["motor", "Motorer og mekanikk", /\bmotors?\b|stepper|\bservo|bearing|pulley|timing belt|\bgears?\b|linear rail|lead screw|\bshafts?\b|\bsprings?\b|coupling|v-slot|alumin(i)?um profile|extrusion|\bwheels?\b|caster|\bhinges?\b|slide rail/],
-  ["fastener", "Festemidler", /\bscrews?\b|\bbolts?\b|\bnuts?\b|washers?|rivets?|standoffs?|\binserts?\b|threaded|\banchors?\b|\bnails?\b|fastener|spacers?|\bclips?\b|\bclamps?\b|\bhooks?\b|\bmagnets?\b(?!.*\b(sheets?|mats?)\b)/],
-  ["craft", "Hobby og håndverk", /\bcraft|\bdiy\b|\bpaint|\bbrush|sticker|\bvinyl|decal|\bwood|plywood|basswood|\blaser\b|sewing|needle|\byarn|\bresin|\bmold|\bmould|epoxy|glitter|\bstamp|embroider|magnetic (sheet|mat)/],
-  ["computer", "Data og mobil", /\bphones?\b|iphone|samsung|\bcase\b|screen protector|keyboard|\bmouse\b|headphone|earphone|earbuds|speaker|usb hub|sd card|memory card|\bssd\b|flash drive|laptop|tablet|smart ?watch|webcam|router/],
-  ["outdoor", "Bil, sykkel og friluft", /\bcars?\b|vehicle|\bbike|bicycle|cycling|camping|\btents?\b|canopy|fishing|hiking|outdoor|garden|kayak|motorcycle|scooter|survival/],
-  ["clothes", "Klær, skjønnhet og tilbehør", /\bshirts?\b|t-shirt|\bshoes?\b|\bsocks?\b|jacket|\bhats?\b|\bcaps?\b|\bgloves?\b|\bbags?\b|backpack|wallet|watch band|\bstraps?\b|glasses|sunglasses|jewelry|necklace|nail art|manicure|eyeshadow|cosmetic|makeup|pimple|\brings?\b/],
-  ["other", "Annet", /$^/],
-];
-const CAT_NAME = Object.fromEntries(CATEGORIES.map(([id, name]) => [id, name]));
+// Kategoriene og den automatiske klassifiseringen ligger i categories.js (poeng per nøkkelord,
+// tidlige ord teller mest). Butikkens egen kategori (Mouser, LCSC) går foran når den finnes,
+// og en kategori satt for hånd går foran alt.
+export { CATEGORIES, classify };
 // Kategorier der datablad og koblingsskjema er aktuelt.
-const ELECTRONICS = new Set(["mcu", "sensor", "power", "passive", "module", "led"]);
+const ELECTRONICS = new Set(["mcu", "display", "sensor", "wireless", "module", "semi", "passive", "switch", "led", "power", "audio", "connector"]);
 
-// Mousers kategoristi -> vår kategori.
+// Butikkens kategoristi (Mouser, LCSC) -> vår kategori.
 export function mouserCategory(crumbs) {
   const c = crumbs.join(" › ").toLowerCase();
+  if (/display|lcd|oled/.test(c)) return "display";
   if (/sensor/.test(c)) return "sensor";
+  if (/rf |rf\/|wireless|antenna|bluetooth|wifi/.test(c)) return "wireless";
   if (/embedded|development boards|microcontroller|mcu|engineering tools/.test(c)) return "mcu";
-  if (/led|optoelectronic|lighting|display/.test(c)) return /display/.test(c) ? "module" : "led";
-  if (/power management|power supplies|battery|batteries|voltage regulator|dc-dc|converter/.test(c)) return "power";
-  if (/connector|wire|cable|terminal|header/.test(c)) return "cable";
-  if (/motor|fan|electromechanical|switch|relay/.test(c)) return /relay|switch/.test(c) ? "module" : "motor";
+  if (/driver ics?|motor driver/.test(c)) return "semi";
+  if (/buzzer|speaker|microphone/.test(c)) return "audio";
+  if (/vibration motor/.test(c)) return "motor";
+  if (/audio/.test(c)) return "audio";
+  if (/led|optoelectronic|lighting/.test(c)) return /optocoupler|photo/.test(c) ? "semi" : "led";
+  if (/switch|button|encoder|potentiometer knob/.test(c)) return "switch";
+  if (/connector|terminal|header|socket/.test(c)) return "connector";
+  if (/wire|cable/.test(c)) return "cable";
+  if (/battery|batteries|power supplies|charger/.test(c)) return "power";
+  if (/motor|fan|actuator|solenoid/.test(c)) return "motor";
+  if (/relay/.test(c)) return "module";
   if (/tool|supplies|solder/.test(c)) return "tool";
   if (/hardware|fastener|standoff|screw/.test(c)) return "fastener";
-  if (/semiconductor|passive|resistor|capacitor|inductor|diode|transistor|mosfet|discrete|integrated circuit|ics?\b|crystal|oscillator|circuit protection|fuse/.test(c)) return "passive";
+  if (/resistor|capacitor|inductor|choke|ferrite|crystal|oscillator|resonator|circuit protection|fuse|varistor|potentiometer|passive/.test(c)) return "passive";
+  if (/semiconductor|diode|transistor|mosfet|thyristor|discrete|integrated circuit|ics?\b|power management|pmic|regulator|amplifier|logic|interface|memory|data acquisition|driver ic|motor driver/.test(c)) return "semi";
   return "";
-}
-
-export function classify(title) {
-  const t = ` ${String(title || "").toLowerCase()} `;
-  return (CATEGORIES.find(([, , re]) => re.test(t)) || ["other"])[0];
 }
 
 // ---------- Hjelpere ----------
@@ -125,10 +113,11 @@ function cleanPart(p) {
     pkg: findPackage(p.pkgFixed) || clip(p.pkgFixed, 30) || findPackage(p.variant, p.title, p.mpn, p.description) || String(findPart(p.title, p.mpn)?.pkg || "").split("/")[0],
     // Datablad (PDF) og butikkens egen kategori (Mouser: «Sensors › Humidity Sensors»).
     datasheet: /^https:\/\/(([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf|datasheet\.lcsc\.com\/[^\s"'<>]+)$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
-    shopCat: clip(p.shopCat, 160), catHint: CAT_NAME[p.catHint] ? p.catHint : "",
+    // Regnes ut på nytt fra butikkens kategoritekst, så nye kategorier (f.eks. Halvledere) slår inn.
+    shopCat: clip(p.shopCat, 160), catHint: (p.shopCat && mouserCategory(String(p.shopCat).split(" › "))) || (CAT_NAME[p.catHint] ? p.catHint : ""),
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
     // Kategorien regnes ut på nytt med de nyeste reglene, med mindre den er satt for hånd.
-    category: p.catManual && CAT_NAME[p.category] ? p.category : CAT_NAME[p.catHint] ? p.catHint : classify(p.title), catManual: !!p.catManual,
+    category: p.catManual && CAT_NAME[p.category] ? p.category : CAT_NAME[p.catHint] ? p.catHint : classify(p.title, [p.variant, p.shopCat].filter(Boolean).join(" ")), catManual: !!p.catManual,
     location: clip(p.location, 80), note: clip(p.note, 400),
     added: clip(p.added, 30), updated: clip(p.updated, 30),
   };
