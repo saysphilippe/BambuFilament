@@ -5,8 +5,8 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009181100";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009181100";
+import { componentHtml, findPart } from "./circuits.js?v=20261009181244";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009181244";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -119,7 +119,7 @@ function cleanPart(p) {
     pkgFixed: clip(p.pkgFixed, 30),
     pkg: findPackage(p.pkgFixed) || clip(p.pkgFixed, 30) || findPackage(p.variant, p.title, p.mpn, p.description) || String(findPart(p.title, p.mpn)?.pkg || "").split("/")[0],
     // Datablad (PDF) og butikkens egen kategori (Mouser: «Sensors › Humidity Sensors»).
-    datasheet: /^https:\/\/([a-z0-9-]+\.)*(mouser\.[a-z.]+|lcsc\.com)\/.+\.pdf$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
+    datasheet: /^https:\/\/(([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf|datasheet\.lcsc\.com\/[^\s"'<>]+)$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
     shopCat: clip(p.shopCat, 160), catHint: CAT_NAME[p.catHint] ? p.catHint : "",
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
     // Kategorien regnes ut på nytt med de nyeste reglene, med mindre den er satt for hånd.
