@@ -91,7 +91,7 @@ li { margin: 4px 0; }
       <label>Wi-Fi-passord<input type="password" id="f-pass" value="" placeholder="passord" autocomplete="off"></label>
       <label>Standardbruker uten kort (OWNER, tom = ukjent)<input type="text" id="f-owner" value="Philippe" autocomplete="off"></label>
     </div>
-    <p class="note" style="margin-top:14px">Det du skriver inn her, blir bare brukt til å lage <code>config.h</code> i nettleseren din. Ingenting sendes noe sted. GitHub-tokenen limer du inn i filen selv etterpå.</p>
+    <p class="note" style="margin-top:14px">Det du skriver inn her, blir bare brukt til å lage <code>config.h</code> i nettleseren din. Ingenting sendes noe sted. Lesernøkkelen limer du inn i filen selv etterpå.</p>
   </section>
 
   <h2>2. Koble sammen</h2>
@@ -103,7 +103,7 @@ li { margin: 4px 0; }
   <p class="note warn" style="margin-top:14px">RC522 og OLED skal ha <b>3,3 V</b>, ikke 5 V. Lysdiodene trenger en motstand på 220–330 Ω i serie, ellers kan pinnen eller dioden ta skade.</p>
 
   <h2>3. config.h</h2>
-  <p>Lagre som <code>firmware/BambuFilament/config.h</code> (ved siden av <code>BambuFilament.ino</code>). Bytt ut <code>github_pat_...</code> med din egen token.</p>
+  <p>Lagre som <code>firmware/BambuFilament/config.h</code> (ved siden av <code>BambuFilament.ino</code>). Bytt ut <code>rk_...</code> med lesernøkkelen du får fra administrator.</p>
   <div class="codehead"><b class="mono">config.h</b><button class="btn" id="copy-config" type="button">Kopier config.h</button></div>
   <pre id="config"></pre>
 
@@ -175,8 +175,8 @@ li { margin: 4px 0; }
     </tbody>
   </table></div>
 
-  <h2>Token til leseren</h2>
-  <p>Lag en egen token for hver leser på <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>: <i>Only select repositories</i> → <code>BambuFilament-data</code>, <i>Repository permissions</i> → <i>Contents: Read</i>. Workeren bruker tokenen bare til å sjekke at leseren har tilgang, og lagrer selv i databasen. Da kan du trekke tilbake én leser uten å påvirke de andre, og leseren kan ikke endre nettsidens kode.</p>
+  <h2>Nøkkel til leseren</h2>
+  <p>Hver leser har sin egen lesernøkkel, som administrator lager med <code>node scripts/reader-key.mjs ny "Navn på leseren"</code>. Nøkkelen virker bare for skanning og RFID-kort hos Workeren, ikke for GitHub eller resten av databasen. Om noen får tak i leseren og leser ut minnet, kan de derfor ikke se e-postadresser eller endre lån. En leser trekkes tilbake med <code>node scripts/reader-key.mjs slett "Navn på leseren"</code> uten å påvirke de andre.</p>
 </div>
 
 <script>
@@ -342,9 +342,9 @@ function configText(b, opt) {
 #define WIFI_SSID     ${q(ssid)}
 #define WIFI_PASSWORD ${q(pass)}
 
-// Fine-grained token KUN for saysphilippe/BambuFilament-data, "Contents: Read" (eller Read and write).
-// Workeren bruker den til å sjekke at leseren har tilgang. Lag en egen token for hver leser.
-#define GITHUB_TOKEN  "github_pat_..."
+// Lesernøkkel fra administrator (node scripts/reader-key.mjs ny "Navn på leseren").
+// Virker bare for skanning og RFID-kort hos Workeren. Egen nøkkel for hver leser.
+#define READER_KEY    "rk_..."
 
 // Workeren som tar imot skanninger og RFID-kort (lagrer i databasen).
 #define WORKER_URL    "https://bambufilament-proxy.saysphilippe.workers.dev"

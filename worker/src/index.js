@@ -113,6 +113,11 @@ export default {
           // Én e-post per bruker/adresse per minutt. Nøkkelen er det som ble skrevet inn,
           // så svaret er det samme om brukeren finnes eller ikke.
           const who = String((path === "/reset" ? body.who : body.email) || "").trim().toLowerCase().slice(0, 100);
+          // Felles tak for alle: hvert kall bruker GitHub-kvoten til den delte tokenen, og grensene
+          // per IP og per adresse kan omgås med mange IP-er eller nye navn.
+          if (env?.PUBLIC_LIMIT && !(await env.PUBLIC_LIMIT.limit({ key: "reset+register" })).success) {
+            return json({ error: "Mange forespørsler akkurat nå. Prøv igjen om et minutt." }, 429, origin);
+          }
           if (env?.EMAIL_LIMIT && !(await env.EMAIL_LIMIT.limit({ key: `${path}:${who}` })).success) {
             return json({ error: "Det er nettopp sendt en e-post. Vent et minutt." }, 429, origin);
           }
@@ -163,7 +168,7 @@ async function readerRequest(request, env, path) {
     const ip = request.headers.get("CF-Connecting-IP") || "ukjent";
     if (env.DB_LIMIT && !(await env.DB_LIMIT.limit({ key: `${path}:${ip}` })).success) return reply({ error: "For mange forsøk" }, 429);
     const tok = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-    await requireUser(tok, env);
+    await requireReader(tok, env);
     const body = await request.json().catch(() => ({}));
     if (path === "/reader/card") return reply(await readerCard(body, env));
     if (path === "/reader/scan") return reply(await readerScan(body, env));
@@ -177,6 +182,15 @@ async function readerRequest(request, env, path) {
 
 function fail(message, status = 400) {
   return Object.assign(new Error(message), { status });
+}
+
+// Sammenligning i konstant tid (nøkler og signaturer).
+function sameString(a, b) {
+  a = String(a); b = String(b);
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }
 
 // Billett for /send-code: signert med en hemmelig nøkkel (TICKET_SECRET, satt med
@@ -200,12 +214,7 @@ async function makeTicket(email, env) {
 async function checkTicket(email, ticket, env) {
   const [exp, sig] = String(ticket || "").split(".");
   if (!env?.TICKET_SECRET || !exp || !sig || Number(exp) < Date.now()) return false;
-  const expected = await hmac(env.TICKET_SECRET, `${email.toLowerCase()}|${exp}`);
-  // Sammenligning i konstant tid
-  if (expected.length !== sig.length) return false;
-  let diff = 0;
-  for (let i = 0; i < sig.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  return diff === 0;
+  return sameString(sig, await hmac(env.TICKET_SECRET, `${email.toLowerCase()}|${exp}`));
 }
 
 // Steg 1: e-post + passord. Steg 2 (hvis Bambu ber om det): e-post + kode fra e-post.
@@ -537,6 +546,7 @@ const DATA_REPO = "saysphilippe/BambuFilament-data";
 const AUTH_REPO = "saysphilippe/BambuFilament-auth";
 const SITE_URL = "https://saysphilippe.github.io/BambuFilament/";
 const RESET_TTL_MS = 4 * 3600e3; // 4 timer
+const RESET_GAP_MS = 10 * 60e3;
 const MAX_PENDING = 20;
 const EMAIL_RE = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
 const NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,38}[\p{L}\p{N}]$/u;
@@ -645,6 +655,9 @@ async function sendReset(who, env) {
   const saved = await updateJson(AUTH_REPO, "users.json", tok, () => ({ version: 1, users: [] }), (doc) => {
     const u = doc.users?.find((x) => x.name === name);
     if (!u) return false;
+    // Nytt passord høyst hvert 10. minutt per bruker (ingen commit og e-post for hvert forsøk).
+    const left = new Date(u.reset?.exp || 0).getTime() - Date.now();
+    if (left > RESET_TTL_MS - RESET_GAP_MS) return false;
     u.reset = reset;
   }, `Midlertidig passord på e-post (${name})`);
   if (!saved) return done;
@@ -751,7 +764,7 @@ async function approveLink(name, email, env) {
 
 async function readApproveLink(url, env) {
   const p = url.searchParams.get("p") || "", sig = url.searchParams.get("s") || "";
-  if (!p || !env.TICKET_SECRET || sig !== (await hmac(env.TICKET_SECRET, `approve|${p}`))) return null;
+  if (!p || !env.TICKET_SECRET || !sameString(sig, await hmac(env.TICKET_SECRET, `approve|${p}`))) return null;
   try {
     const { n, e, x } = JSON.parse(new TextDecoder().decode(unb64url(p)));
     return Date.now() < x ? { name: String(n), email: String(e) } : { expired: true };
@@ -945,7 +958,8 @@ async function sendMail(env, to, subject, text, html) {
 // (samme token som siden og leserne bruker i dag).
 
 const DB_COLLS = new Set(Object.values(FILE_COLLS).flat());
-const AUTH_TTL_MS = 10 * 60 * 1000;
+// Kort hurtigbuffer, så en token som trekkes tilbake på GitHub slutter å virke innen 5 minutter.
+const AUTH_TTL_MS = 5 * 60 * 1000;
 const authCache = new Map();
 
 async function sha256Hex(text) {
@@ -967,7 +981,15 @@ async function requireUser(tok, env) {
   }
   if (!(await isSiteUser(tok))) throw fail("Ugyldig eller utløpt token.", 401);
   authCache.set(key, Date.now() + AUTH_TTL_MS);
-  if (env.RESET_KV) await env.RESET_KV.put(`auth:${key}`, "1", { expirationTtl: 900 });
+  if (env.RESET_KV) await env.RESET_KV.put(`auth:${key}`, "1", { expirationTtl: AUTH_TTL_MS / 1000 });
+}
+
+// Leserne har egne nøkler ("rk_...", lagd med scripts/reader-key.mjs) som bare virker på
+// /reader/*. Nøkkelen lagres som SHA-256 i KV (reader:<hash>), så den kan trekkes tilbake
+// uten å røre GitHub. Eldre lesere med GitHub-token godtas fortsatt til de er flashet på nytt.
+async function requireReader(tok, env) {
+  if (!tok.startsWith("rk_")) return requireUser(tok, env);
+  if (!env.RESET_KV || !(await env.RESET_KV.get(`reader:${await sha256Hex(tok)}`))) throw fail("Ukjent lesernøkkel.", 401);
 }
 
 async function loadRows(env, colls) {
@@ -1083,7 +1105,7 @@ async function storeIngest(request, env) {
   const reply = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
   if (request.method !== "POST") return reply({ error: "Bruk POST" }, 405);
   const key = request.headers.get("X-Store-Key") || "";
-  if (!env.STORE_INGEST_KEY || key.length < 32 || key !== env.STORE_INGEST_KEY) return reply({ error: "Ugyldig nøkkel" }, 401);
+  if (!env.STORE_INGEST_KEY || key.length < 32 || !sameString(key, env.STORE_INGEST_KEY)) return reply({ error: "Ugyldig nøkkel" }, 401);
   const body = await request.json().catch(() => null);
   const products = Array.isArray(body?.products) ? body.products.filter((p) => p && typeof p.handle === "string") : null;
   if (!products?.length) return reply({ error: "Mangler produkter" }, 400);

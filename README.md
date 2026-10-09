@@ -53,8 +53,11 @@ samling + nøkkel → JSON, se `worker/schema.sql` og `worker/src/records.js`). 
 - **Tre repoer:** koden her (offentlig), [BambuFilament-auth](https://github.com/saysphilippe/BambuFilament-auth)
   (offentlig, bare `users.json` med navn, farger og krypterte innloggingsnøkler) og BambuFilament-data
   (**privat**: `spools.json` med spoler, også for leserne, og `shared.json` med AMS, bibliotek og venteliste).
-  Den delte tokenen har tilgang til data og auth, aldri til koden. Lesernes tokener trenger bare data. Den delte
-  skrivetokenen og tokenene i leserne gjelder **bare** det repoet, så de kan ikke endre nettsidekoden.
+  Den delte tokenen har tilgang til data og auth, aldri til koden, så den kan ikke endre nettsidekoden.
+- **Leserne** har egne lesernøkler (`node scripts/reader-key.mjs ny "Navn"`), ikke GitHub-tokener. En nøkkel virker
+  bare på Workerens `/reader/*`, lagres som SHA-256 i KV og kan trekkes tilbake per leser.
+- **Registrering og nytt passord** har et felles tak (10 per minutt for alle), og en bruker får høyst ett nytt
+  midlertidig passord per 10 minutter, så den delte tokenens GitHub-kvote ikke kan tømmes utenfra.
 - **Delte data kontrolleres** før de vises: farger må være gyldig hex, tall må være tall, og all tekst escapes.
 - **Innloggingen** gjelder bare fanen, med mindre man velger «Husk meg» (30 dager).
 - **Passord:** minst 12 tegn, ikke vanlige ord eller brukernavnet. PBKDF2-SHA256 med 600 000 runder.

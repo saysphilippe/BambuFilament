@@ -34,6 +34,16 @@
 #include "config.h"
 #include "worker_roots.h"
 
+// Lesernøkkel (scripts/reader-key.mjs). Eldre config.h med GITHUB_TOKEN virker fortsatt.
+#if defined(READER_KEY)
+#define READER_AUTH READER_KEY
+#elif defined(GITHUB_TOKEN)
+#warning "config.h bruker GITHUB_TOKEN. Lag en lesernøkkel (READER_KEY) og trekk tilbake GitHub-tokenen."
+#define READER_AUTH GITHUB_TOKEN
+#else
+#error "config.h mangler READER_KEY"
+#endif
+
 static const int SECTORS = 5;               // Bambu-dataene ligger i sektor 0–4 (blokk 0–19)
 static const int BLOCKS = SECTORS * 4;
 static const int MAX_TRIES = 3;             // nye forsøk ved 409 (noen andre lagret samtidig)
@@ -342,7 +352,7 @@ int workerPost(const char *path, JsonDocument &body, JsonDocument &reply) {
   client.setCACert(WORKER_ROOT_CAS);        // sjekker at det faktisk er Workeren
   HTTPClient http;
   http.begin(client, String(WORKER_URL) + path);
-  http.addHeader("Authorization", String("Bearer ") + GITHUB_TOKEN);
+  http.addHeader("Authorization", String("Bearer ") + READER_AUTH);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("User-Agent", "BambuFilament-ESP32");
   String payload;

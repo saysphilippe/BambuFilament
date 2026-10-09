@@ -5,10 +5,9 @@
 #define WIFI_SSID     "MittWiFi"
 #define WIFI_PASSWORD "passord"
 
-// Fine-grained token fra https://github.com/settings/personal-access-tokens
-// KUN repoet saysphilippe/BambuFilament-data, "Contents: Read" (eller Read and write).
-// Workeren bruker den til å sjekke at leseren har tilgang. Lag en egen token per leser.
-#define GITHUB_TOKEN  "github_pat_..."
+// Lesernøkkel fra administrator: node scripts/reader-key.mjs ny "Navn på leseren"
+// Virker bare for skanning og RFID-kort hos Workeren. Egen nøkkel per leser.
+#define READER_KEY    "rk_..."
 
 // Workeren som tar imot skanninger og RFID-kort (lagrer i databasen).
 #define WORKER_URL    "https://bambufilament-proxy.saysphilippe.workers.dev"

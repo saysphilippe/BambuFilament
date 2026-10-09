@@ -1,6 +1,12 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261008202948";
-import { toRecords } from "./worker/src/records.js?v=20261008202948";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261008202948";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009145822";
+import { toRecords } from "./worker/src/records.js?v=20261009145822";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009145822";
+
+// Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
+if (window.top !== window.self) {
+  document.documentElement.replaceChildren();
+  throw new Error("Filament Universet kan ikke vises i en ramme.");
+}
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
 // data- og auth-repoet, så den kan ikke endre nettsidekoden i saysphilippe/BambuFilament.

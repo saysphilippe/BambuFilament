@@ -23,6 +23,12 @@ name = "DB_LIMIT"
 namespace_id = "1005"
 simple = { limit = 300, period = 60 }
 
+# Felles tak for /reset og /register (alle IP-er sammen), så den delte GitHub-tokenen ikke tømmes.
+[[ratelimits]]
+name = "PUBLIC_LIMIT"
+namespace_id = "1006"
+simple = { limit = 10, period = 60 }
+
 [[ratelimits]]
 name = "EMAIL_LIMIT"
 namespace_id = "1004"
