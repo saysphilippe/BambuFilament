@@ -5,9 +5,9 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009182423";
-import { detectPack } from "./pack.js?v=20261009182423";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009182423";
+import { componentHtml, findPart } from "./circuits.js?v=20261009194702";
+import { detectPack } from "./pack.js?v=20261009194702";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009194702";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -735,7 +735,7 @@ function render() {
               ${[["new", "Nyeste først"], ["old", "Eldste først"], ["name", "Navn"], ["cat", "Kategori"], ["price", "Pris per stk"]].map(([v, l]) => `<option value="${v}"${pstate.sort === v ? " selected" : ""}>Sorter: ${l}</option>`).join("")}
             </select>
           </div>
-          ${owners.length > 1 ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, undefined, ctx.userColor(o))).join("")}</div></div>` : ""}
+          ${owners.length ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, count("owner", o), ctx.userColor(o))).join("")}</div></div>` : ""}
           <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "lcsc", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
           ${pkgs.length ? `<div class="chip-row"><span class="chip-label">Pakke</span><div class="chips">${chip("pkg", "", "Alle")}${pkgs.map(([k, n]) => chip("pkg", k, k, n)).join("")}</div></div>` : ""}
         </section>
@@ -837,7 +837,10 @@ function openPart(id) {
   const row = (k, v) => (v ? `<tr><th>${ctx.esc(k)}</th><td>${v}</td></tr>` : "");
   dlg.innerHTML = `<button type="button" class="dlg-close" aria-label="Lukk" title="Lukk (Esc)">×</button>
   <form method="dialog" class="part-detail">
-    <div class="part-detail-img">${p.image ? `<img src="${ctx.esc(p.image)}" alt="" referrerpolicy="no-referrer">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}</div>
+    <div class="part-detail-side">
+      <div class="part-detail-img">${p.image ? `<img src="${ctx.esc(p.image)}" alt="" referrerpolicy="no-referrer">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}</div>
+      ${ELECTRONICS.has(p.category) || p.source === "mouser" || p.source === "lcsc" ? componentHtml(p) : ""}
+    </div>
     <div class="part-detail-text">
       <h2>${ctx.esc(p.title)}</h2>
       ${p.variant ? `<p class="part-variant">${ctx.esc(p.variant)}</p>` : ""}
@@ -857,7 +860,6 @@ function openPart(id) {
         ${row("Kategori hos butikken", ctx.esc(p.shopCat))}
         ${row("Datablad", p.datasheet ? `<a href="${ctx.esc(p.datasheet)}" target="_blank" rel="noopener">Åpne PDF ↗</a>` : "")}
       </table>
-      ${ELECTRONICS.has(p.category) || p.source === "mouser" || p.source === "lcsc" ? componentHtml(p) : ""}
       <div class="part-edit">
         <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${CATEGORIES.map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
         <label>Stk per pakke<input id="pd-pack" type="number" min="1" max="100000" value="${p.pack}" ${mine ? "" : "disabled"}></label>

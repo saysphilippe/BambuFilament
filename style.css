@@ -865,3 +865,15 @@ dialog.part-dialog { overflow-y: auto; }
 }
 .dlg-close:hover { border-color: var(--accent); color: var(--accent); }
 .dlg-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Produktvinduet: bilde, datablad og koblingsskjema i venstre kolonne */
+dialog.part-dialog { width: min(1040px, calc(100vw - 32px)); }
+.part-dialog .part-detail { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); }
+.part-detail-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.part-detail-side .part-detail-img { max-width: 100%; }
+.part-detail-side .component-info { margin: 0; padding-top: 0; border-top: 0; }
+.part-detail-side .schematic-wrap { padding: 6px; }
+.part-detail-side .schematic { min-width: 0; }
+@media (max-width: 720px) {
+  .part-dialog .part-detail { grid-template-columns: 1fr; }
+  .part-detail-side .part-detail-img { max-width: 260px; }
+}
