@@ -5,6 +5,8 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
+import { componentHtml } from "./circuits.js?v=20261009174215";
+
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
 const MOUSER_ORIGINS = /^https:\/\/([a-z]+\.)?mouser\.[a-z.]+$/;
@@ -22,7 +24,7 @@ export const CATEGORIES = [
   ["tool", "Verktøy", /\btools?\b|plier|screwdriver|nail gun|staple gun|stapler|airbrush|soldering|\bsolder\b|multimeter|wrench|\bdrill|tweezer|\bknife|\bknives\b|cutter|\bsaws?\b|hacksaw|chain ?saw|caliper|crimping|heat gun|glue gun|file set|sandpaper|\bvise\b|tape measure|spirit level|oscilloscope|\btester\b|hex key|allen key|ratchet|socket set/],
   ["mcu", "Mikrokontrollere", /esp32|esp8266|\besp-|arduino|raspberry|stm32|nodemcu|wemos|\bpico\b|attiny|atmega|development board|dev board|nrf52|rp2040|\bxiao\b|teensy|microcontroller/],
   ["power", "Strøm og batterier", /batter(y|ies)|charger|charging|power supply|power bank|\bbuck\b|\bboost\b|step.?down|step.?up|dc-dc|converter|18650|lipo|li-ion|lithium|\bsolar\b|\badapter\b|transformer|inverter|\bpsu\b|tp4056/],
-  ["passive", "Passive komponenter", /resistor|capacitor|inductor|\bdiodes?\b|transistor|mosfet|potentiometer|crystal oscillator|\bfuses?\b|varistor|thyristor|\btriac|\bic chip|optocoupler|voltage regulator|ams1117|\blm7\d|ne555|assortment kit|\b2n\d{4}\b|\bbc5\d\d\b|\bs80[0-9]{2}\b|\birf\w+|\birlz?\w+|\btip1[0-9]{2}\b/],
+  ["passive", "Halvledere og passive", /resistor|capacitor|inductor|\bdiodes?\b|transistor|mosfet|potentiometer|crystal oscillator|\bfuses?\b|varistor|thyristor|\btriac|\bic chip|optocoupler|voltage regulator|ams1117|\blm7\d|ne555|assortment kit|\b2n\d{4}\b|\bbc5\d\d\b|\bs80[0-9]{2}\b|\birf\w+|\birlz?\w+|\btip1[0-9]{2}\b/],
   ["module", "Moduler og skjermer", /\boled\b|\blcd\b|\btft\b|display|\brelays?\b|\bmodule\b|driver board|motor driver|a4988|tmc2\d|amplifier|\bdac\b|\badc\b|\brtc\b|shield|breakout/],
   ["led", "LED og lys", /\bleds?\b|\blamps?\b|\blights?\b|bulb|\bneon\b|ws281|sk6812|lantern|flashlight|torch|spotlight/],
   ["cable", "Kabler og kontakter", /\bcables?\b|\bwires?\b|connector|\bjst\b|dupont|terminal|\bplugs?\b|\bsockets?\b|pin header|\bheaders?\b|heat shrink|\bcrimp|usb.?c\b|\bhdmi\b|ethernet|\bcords?\b|\bwago\b|banana plug|\bxt60|\bxt30|cable ties|zip ties|velcro|sleeving/],
@@ -35,6 +37,23 @@ export const CATEGORIES = [
   ["other", "Annet", /$^/],
 ];
 const CAT_NAME = Object.fromEntries(CATEGORIES.map(([id, name]) => [id, name]));
+// Kategorier der datablad og koblingsskjema er aktuelt.
+const ELECTRONICS = new Set(["mcu", "sensor", "power", "passive", "module", "led"]);
+
+// Mousers kategoristi -> vår kategori.
+export function mouserCategory(crumbs) {
+  const c = crumbs.join(" › ").toLowerCase();
+  if (/sensor/.test(c)) return "sensor";
+  if (/embedded|development boards|microcontroller|mcu|engineering tools/.test(c)) return "mcu";
+  if (/led|optoelectronic|lighting|display/.test(c)) return /display/.test(c) ? "module" : "led";
+  if (/power management|power supplies|battery|batteries|voltage regulator|dc-dc|converter/.test(c)) return "power";
+  if (/connector|wire|cable|terminal|header/.test(c)) return "cable";
+  if (/motor|fan|electromechanical|switch|relay/.test(c)) return /relay|switch/.test(c) ? "module" : "motor";
+  if (/tool|supplies|solder/.test(c)) return "tool";
+  if (/hardware|fastener|standoff|screw/.test(c)) return "fastener";
+  if (/semiconductor|passive|resistor|capacitor|inductor|diode|transistor|mosfet|discrete|integrated circuit|ics?\b|crystal|oscillator|circuit protection|fuse/.test(c)) return "passive";
+  return "";
+}
 
 export function classify(title) {
   const t = ` ${String(title || "").toLowerCase()} `;
@@ -92,9 +111,12 @@ function cleanPart(p) {
     url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: safeImg(p.image),
     // Bildet er hentet fra en lignende vare (søk på tittelen), fordi originalen er fjernet hos AliExpress.
     imgSearch: !!p.imgSearch && !!safeImg(p.image),
+    // Datablad (PDF) og butikkens egen kategori (Mouser: «Sensors › Humidity Sensors»).
+    datasheet: /^https:\/\/([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
+    shopCat: clip(p.shopCat, 160), catHint: CAT_NAME[p.catHint] ? p.catHint : "",
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
     // Kategorien regnes ut på nytt med de nyeste reglene, med mindre den er satt for hånd.
-    category: p.catManual && CAT_NAME[p.category] ? p.category : classify(p.title), catManual: !!p.catManual,
+    category: p.catManual && CAT_NAME[p.category] ? p.category : CAT_NAME[p.catHint] ? p.catHint : classify(p.title), catManual: !!p.catManual,
     location: clip(p.location, 80), note: clip(p.note, 400),
     added: clip(p.added, 30), updated: clip(p.updated, 30),
   };
@@ -107,6 +129,9 @@ const fmtMoney = (p) => {
   return { NOK: `${v} kr`, EUR: `€${v}`, USD: `$${v}`, GBP: `£${v}` }[p.currency] || v;
 };
 const fmtDate = (d) => (d ? new Date(d + "T12:00:00").toLocaleDateString("nb-NO", { day: "numeric", month: "short", year: "numeric" }) : "");
+
+// Omtrentlige kurser for å vise samlet beløp i kroner (summen per valuta står i verktøytipset).
+const FX_NOK = { NOK: 1, EUR: 11.6, USD: 10.6, GBP: 13.6 };
 
 const SOURCE_LABEL = { aliexpress: "AliExpress", mouser: "Mouser", manual: "Lagt inn for hånd" };
 
@@ -165,7 +190,8 @@ function mergeImport(rows, source) {
       : `mo:${clip(r.orderId, 30)}:${clip(r.mpn || r.title, 60)}`;
     ids.add(id);
     const price = r.priceText ? parsePrice(r.priceText) : { amount: r.unitPrice, currency: r.currency };
-    const fresh = cleanPart({ ...r, unitPrice: price.amount, currency: price.currency || r.currency, id, source, owner, added: now, updated: now });
+    const catHint = r.catHint || (r.shopCat ? mouserCategory(String(r.shopCat).split(" › ")) : "");
+    const fresh = cleanPart({ ...r, catHint, unitPrice: price.amount, currency: price.currency || r.currency, id, source, owner, added: now, updated: now });
     if (!fresh) continue;
     const old = byId.get(id);
     if (old) {
@@ -431,14 +457,28 @@ function render() {
   const owners = [...new Set(all.map((p) => p.owner).filter(Boolean))].sort();
   const cats = CATEGORIES.map(([id, name]) => [id, name, count("category", id)]).filter(([, , n]) => n);
   const chip = (key, val, label, n, dot) => `<button class="chip${pstate[key] === val ? " active" : ""}" type="button" data-pf="${key}" data-pv="${ctx.esc(val)}">${dot ? `<span class="owner-dot" style="--owner:${dot}"></span>` : ""}${ctx.esc(label)}${n !== undefined ? ` <span class="chip-n">${n}</span>` : ""}</button>`;
-  const totalNok = all.filter((p) => p.currency === "NOK" && p.unitPrice !== null).reduce((s, p) => s + p.unitPrice * p.qty, 0);
+  // Betalt: ordretotalen (inkl. frakt og avgifter) telles én gang per ordre, i alle valutaer.
+  // Ordre uten total (Mouser, lagt inn for hånd) teller stykkpris × antall.
+  const spent = {};
+  const seenOrders = new Set();
+  for (const p of all.filter((x) => !pstate.owner || x.owner === pstate.owner)) {
+    const key = `${p.source}:${p.orderId}`;
+    if (p.orderTotal && p.orderId) {
+      if (seenOrders.has(key)) continue;
+      seenOrders.add(key);
+      const t = parsePrice(p.orderTotal);
+      if (t.amount !== null) spent[t.currency || p.currency || "NOK"] = (spent[t.currency || p.currency || "NOK"] || 0) + t.amount;
+    } else if (p.unitPrice !== null) spent[p.currency || "NOK"] = (spent[p.currency || "NOK"] || 0) + p.unitPrice * p.qty;
+  }
+  const totalNok = Object.entries(spent).reduce((s, [c, v]) => s + v * (FX_NOK[c] || 1), 0);
+  const spentTip = Object.entries(spent).sort((a, b) => b[1] - a[1]).map(([c, v]) => `${Math.round(v).toLocaleString("nb-NO")} ${c}`).join(" + ");
   box.innerHTML = `
     <div class="parts-layout">
       <aside class="parts-rail">
         <div class="stats stats-side">
           <div class="stat"><b>${all.length.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
           <div class="stat"><b>${all.filter((p) => remaining(p) > 0).length.toLocaleString("nb-NO")}</b><span>har igjen</span></div>
-          ${totalNok ? `<div class="stat"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr handlet (NOK-ordre)</span></div>` : ""}
+          ${totalNok ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca.${seenOrders.size ? ` (${seenOrders.size.toLocaleString("nb-NO")} ordre, inkl. frakt)` : ""}</span></div>` : ""}
         </div>
         <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori</span><div class="chips">
           ${chip("cat", "", "Alle", undefined)}${cats.map(([id, name, n]) => chip("cat", id, name, n)).join("")}
@@ -574,7 +614,10 @@ function openPart(id) {
         ${row("Beskrivelse", ctx.esc(p.description))}
         ${row("Produktside", p.url ? `<a href="${ctx.esc(p.url)}" target="_blank" rel="noopener">Åpne hos ${ctx.esc(SOURCE_LABEL[p.source])} ↗</a>` : "")}
         ${row("Bilde", p.imgSearch ? "Fra en lignende vare. Originalen er fjernet hos AliExpress." : "")}
+        ${row("Kategori hos butikken", ctx.esc(p.shopCat))}
+        ${row("Datablad", p.datasheet ? `<a href="${ctx.esc(p.datasheet)}" target="_blank" rel="noopener">Åpne PDF ↗</a>` : "")}
       </table>
+      ${ELECTRONICS.has(p.category) || p.source === "mouser" ? componentHtml(p) : ""}
       <div class="part-edit">
         <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${CATEGORIES.map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
         <label>Antall igjen<input id="pd-left" type="number" min="0" max="100000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
@@ -676,6 +719,11 @@ function demoParts() {
     ["Hardened Steel Nozzle for Bambu Lab X1 P1", "0.4mm", 2, 89.0, "2026-05-14"],
     ["Mini Precision Screwdriver Set 25 in 1", "", 1, 112.5, "2026-03-03"],
     ["18650 Battery Charger Module TP4056 USB-C", "", 10, 4.2, "2026-02-17"],
+    ["100PCS 2N2222 NPN Transistor TO-92 2N2222A", "", 1, 19.5, "2026-01-20"],
+    ["10PCS IRLZ44N Logic Level N-Channel MOSFET TO-220", "", 1, 48.0, "2026-01-20"],
+    ["20PCS NE555 Timer IC DIP-8", "", 1, 22.0, "2025-12-02"],
+    ["AMS1117-3.3 Voltage Regulator SOT-223 50pcs", "", 1, 18.0, "2025-11-11"],
+    ["GY-BME280 Temperature Humidity Pressure Sensor Module I2C", "3.3V", 2, 39.0, "2025-10-05"],
   ];
   return rows.map(([title, variant, qty, price, date], i) => cleanPart({
     id: `demo:${i}`, source: "aliexpress", owner: ["Philippe", "Niklas", "Peter"][i % 3], title, variant, qty,

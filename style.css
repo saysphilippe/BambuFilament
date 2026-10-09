@@ -776,3 +776,18 @@ dialog.wide-dialog { width: min(820px, calc(100vw - 32px)); }
 .import-log li { padding: 4px 0; border-top: 1px solid var(--border); }
 /* Langt navn i toppen: mindre skrift på smale skjermer, så knappene får plass. */
 @media (max-width: 560px) { header h1 { font-size: 15px; line-height: 1.2; } }
+
+/* Datablad og koblingsskjema i detaljvinduet */
+.component-info { margin: 4px 0 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.component-info h3 { margin-top: 0; }
+.component-info .mpn { font-family: ui-monospace, Consolas, monospace; text-transform: none; letter-spacing: 0; color: var(--text); }
+.ds-links { font-size: 14px; }
+.pinout { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
+.pinout .hint { margin: 0 4px 0 0; }
+.pin { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 3px; border: 1px solid var(--border); border-radius: 99px; font: 600 13px ui-monospace, Consolas, monospace; }
+.pin b { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--muted-bg); font-size: 11px; }
+.schematic-fig { margin: 10px 0 0; }
+.schematic-fig figcaption { font-size: 13.5px; color: var(--muted); max-width: 70ch; }
+.schematic-fig figcaption:first-child { color: var(--text); margin-bottom: 6px; }
+.schematic-wrap { overflow-x: auto; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); margin-bottom: 8px; }
+.schematic { display: block; width: 100%; min-width: 420px; max-width: 620px; height: auto; color: var(--text); }
