@@ -144,7 +144,8 @@ const reqNok = (q) => {
 // Sum for en liste med ønsker, og hvor mange som mangler pris.
 function reqSum(list) {
   let sum = 0, missing = 0;
-  for (const q of list) { const v = reqNok(q); if (v === null) missing++; else sum += v; }
+  // Avviste ønsker («Kan ikke») kommer ikke, så de teller ikke med i summen.
+  for (const q of list.filter((x) => x.status !== "declined")) { const v = reqNok(q); if (v === null) missing++; else sum += v; }
   return `<span class="req-sum">ca. <b>${nok(sum)}</b>${missing ? ` <span class="hint">(${missing} uten pris)</span>` : ""}</span>`;
 }
 const kicadHint = (p) => {
@@ -731,7 +732,8 @@ function partCard(p) {
   return `<div class="part-card${left === 0 ? " used-up" : ""}">
   <button class="part-open" type="button" data-part="${ctx.esc(p.id)}">
     <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
-      <span class="part-cat">${ctx.esc(CAT_NAME[p.category])}</span></span>
+</span>
+    <span class="part-cat">${ctx.esc(CAT_NAME[p.category])}</span>
     <span class="part-body">
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}

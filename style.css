@@ -745,7 +745,7 @@ dialog.wide-dialog { width: min(820px, calc(100vw - 32px)); }
 .part-img { position: relative; display: grid; place-items: center; aspect-ratio: 1; max-width: 100%; background: #fff; border-bottom: 1px solid var(--border); overflow: hidden; }
 .part-img img { width: 100%; height: 100%; object-fit: contain; }
 .part-noimg { display: grid; place-items: center; width: 100%; height: 100%; padding: 12px; text-align: center; color: var(--muted); background: var(--muted-bg); font-size: 13px; font-weight: 600; }
-.part-cat { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); padding: 2px 8px; border-radius: 99px; background: rgba(255, 255, 255, .92); color: #333; font-size: 11.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 0 0 1px rgba(0, 0, 0, .08); }
+.part-cat { display: block; max-width: 100%; margin: 6px 10px 0; color: var(--muted); font-size: 11.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .part-body { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; flex: 1; min-width: 0; }
 .part-title { font-weight: 650; font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .part-variant { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
@@ -908,7 +908,7 @@ dialog.part-dialog { width: min(1040px, calc(100vw - 32px)); }
   .part-title { font-size: 13px; -webkit-line-clamp: 3; }
   .part-variant, .part-meta { font-size: 12px; }
   .part-foot { font-size: 11.5px; }
-  .part-cat { font-size: 10.5px; left: 6px; bottom: 6px; }
+  .part-cat { font-size: 10.5px; margin-inline: 8px; }
   .part-pkg { font-size: 10.5px; }
   .part-step { grid-template-columns: 38px 1fr 38px; padding: 6px 8px 8px; font-size: 11.5px; }
   .part-step button { height: 36px; }
