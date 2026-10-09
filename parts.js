@@ -15,8 +15,7 @@ const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
 const MOUSER_ORIGINS = /^https:\/\/([a-z]+\.)?mouser\.[a-z.]+$/;
 const LCSC_ORIGINS = /^https:\/\/(www\.)?lcsc\.com$/;
-// jlc-prod-smt: JLCPCB sine bilder av LCSC-deler (samme C-nummer), for deler LCSC ikke selger lenger.
-const IMG_HOSTS = /^https:\/\/(([a-z0-9-]+\.)*(alicdn\.com|aliexpress-media\.com|mouser\.com|lcsc\.com)|jlc-prod-smt\.oss-eu-central-1\.aliyuncs\.com)\//;
+const IMG_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(alicdn\.com|aliexpress-media\.com|mouser\.com|lcsc\.com)\//;
 const PATCH_CHUNK = 400;
 
 // ---------- Kategorier ----------
@@ -968,7 +967,7 @@ function openPart(id) {
         <label>Antall igjen (stk)<input id="pd-left" type="number" min="0" max="10000000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
         <label>Plassering<input id="pd-loc" type="text" maxlength="80" value="${ctx.esc(p.location)}" placeholder="F.eks. Skuff 3, verkstedet" ${mine ? "" : "disabled"}></label>
         <label class="pd-note">Notat<textarea id="pd-note" rows="2" maxlength="400" ${mine ? "" : "disabled"}>${ctx.esc(p.note)}</textarea></label>
-        <label class="pd-note">Bilde (lenke fra AliExpress, LCSC, JLCPCB eller Mouser; tom = ingen bilde)<input id="pd-img" type="url" maxlength="400" value="${ctx.esc(p.image)}" placeholder="https://ae-pic-a1.aliexpress-media.com/kf/….jpg" ${mine ? "" : "disabled"}></label>
+        <label class="pd-note">Bilde (lenke fra AliExpress, LCSC eller Mouser; tom = ingen bilde)<input id="pd-img" type="url" maxlength="400" value="${ctx.esc(p.image)}" placeholder="https://ae-pic-a1.aliexpress-media.com/kf/….jpg" ${mine ? "" : "disabled"}></label>
       </div>
       ${mine ? "" : `<p class="hint">Bare ${ctx.esc(p.owner)} kan endre denne varen.</p>`}
       ${ctx.token() || ctx.DEMO ? `<div class="cart-add">
