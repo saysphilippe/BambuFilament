@@ -311,7 +311,7 @@ function reqRow(q, mode) {
       ? `<label>Antall<input type="number" min="1" max="${Math.max(1, left)}" value="${q.qty}" data-reqqty="${ctx.esc(q.id)}"></label>`
       : `<b>${q.qty} stk</b>`}
       ${pieceMoney(p) ? `<span class="req-line-total">${ctx.esc(fmtMoney({ ...pieceMoney(p), unitPrice: pieceMoney(p).unitPrice * q.qty }))}</span>` : ""}
-      <span class="req-status">${ctx.esc(REQ_STATUS[q.status])}${q.sentAt && q.status === "sent" ? ` ${ctx.esc(fmtDate(q.sentAt.slice(0, 10)))}` : ""}</span>
+      ${mode === "cart" && q.status === "draft" ? "" : `<span class="req-status">${ctx.esc(REQ_STATUS[q.status])}${q.sentAt && q.status === "sent" ? ` ${ctx.esc(fmtDate(q.sentAt.slice(0, 10)))}` : ""}</span>`}
     </div>
     <div class="req-actions">${actions}</div>
   </li>`;
