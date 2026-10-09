@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009165407";
-import { toRecords } from "./worker/src/records.js?v=20261009165407";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009165407";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009165421";
+import { toRecords } from "./worker/src/records.js?v=20261009165421";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009165421";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -1808,7 +1808,7 @@ function renderSettings() {
     <h2>Innstillinger</h2>
     <h3>RFID-leser</h3>
     <p class="hint">Leseren henter innstillingene hver gang et kort eller en spole skannes, så endringer gjelder med en gang. ${edit ? "" : "Bare administrator kan endre dem."}</p>
-    <p><a class="btn btn-small" href="docs/leserbygger.html" target="_blank" rel="noopener">Bygg din egen leser ↗</a>
+    <p><a class="btn btn-small" href="https://claude.ai/artifact/4PxCr7dD1bRuCPpwZpn3t3" target="_blank" rel="noopener">Bygg din egen leser ↗</a>
       <span class="hint">Velg ESP32-kort, få koblingsskjema og ferdig config.h.</span></p>
     ${field("cardMinutes", "RFID-kort gjelder i", "Hvor lenge spoler registreres på den som tappet kortet sitt. Hver spole som tappes, starter tiden på nytt.")}
     ${field("checkoutMinutes", "Utsjekk etter", "En spole som er inne, sjekkes ut når den skannes på nytt etter så lang tid. Skannes den før det, skjer ingenting.")}
