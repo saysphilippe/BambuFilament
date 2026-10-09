@@ -152,7 +152,7 @@ li { margin: 4px 0; }
           <tr><td>Rød, 3 rolige blink</td><td>Sjekket ut</td></tr>
           <tr><td>Grønn, ett kort blink</td><td>Allerede inne, ingenting endret</td></tr>
           <tr><td>Vekselvis grønn/rød</td><td>Kort gjenkjent («Hei Niklas!»)</td></tr>
-          <tr><td>Begge raskt</td><td>Feil: Wi-Fi, GitHub, ukjent kort eller lesefeil</td></tr>
+          <tr><td>Begge raskt</td><td>Feil: Wi-Fi, Workeren, ukjent kort eller lesefeil</td></tr>
         </tbody>
       </table></div>
       <p class="if-oled">Skjermen viser hvem som bruker leseren (med nedtelling), hva som ble skannet og om det ble lagret. Ø vises som ö.</p>
@@ -169,7 +169,7 @@ li { margin: 4px 0; }
       <tr><td><code>RC522 versjon: 0x0</code> eller <code>0xFF</code></td><td>Leseren svarer ikke. Sjekk SPI-ledningene, at SDA på RC522 går til SS-pinnen, og at den får 3,3 V.</td></tr>
       <tr><td>Autentisering feilet i sektor …</td><td>Brikken er ikke en Bambu-spole, eller den ble flyttet under lesing. Hold den stille mot leseren. Et RFID-kort blir behandlet som brukerkort.</td></tr>
       <tr><td>Klokken er ikke synkronisert (NTP)</td><td>Leseren trenger internett for å sette klokken før den kan snakke sikkert med Workeren. Sjekk Wi-Fi.</td></tr>
-      <tr><td>Workeren svarte 401: Ugyldig eller utløpt token</td><td>Tokenen er feil, utløpt eller har ikke tilgang. Den skal gjelde <b>kun</b> <code>saysphilippe/BambuFilament-data</code> med <i>Contents: Read</i> (eller Read and write).</td></tr>
+      <tr><td>Workeren svarte 401: Ukjent lesernøkkel</td><td>Nøkkelen i <code>READER_KEY</code> er feil, eller den er slettet. Be administrator om en ny (<code>node scripts/reader-key.mjs ny "Navn"</code>).</td></tr>
       <tr><td>Fant ikke OLED-skjermen</td><td>Sjekk SDA/SCL og adressen (0x3C, noen skjermer bruker 0x3D).</td></tr>
       <tr><td>Ingen utskrift i seriemonitoren (C3/S3)</td><td>Bruk riktig USB-port, eller slå på «USB CDC On Boot» (se steg 4).</td></tr>
     </tbody>
