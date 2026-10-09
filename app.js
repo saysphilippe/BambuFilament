@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009164501";
-import { toRecords } from "./worker/src/records.js?v=20261009164501";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009164501";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009164841";
+import { toRecords } from "./worker/src/records.js?v=20261009164841";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009164841";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -593,6 +593,9 @@ const SOURCE_ICON = {
   library: '<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>',
   ams: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v6.5M12 14.5V21M3 12h6.5M14.5 12H21"/>',
 };
+// Hvor spolen er nå: står den i en AMS (eller ble sist sett der), vises AMS-ikonet uansett om
+// den er registrert i lageret eller biblioteket.
+const placeKind = (s) => (s.kind === "ams" || s.location || usage(s)?.kind === "ams" ? "ams" : s.kind);
 const sourceIcon = (kind) => `<span class="source source-${kind}" title="${SOURCE[kind]}" aria-label="${SOURCE[kind]}" role="img">` +
   `<svg viewBox="0 0 24 24" aria-hidden="true">${SOURCE_ICON[kind]}</svg></span>`;
 
@@ -826,7 +829,7 @@ function spoolCard(s, showType = true) {
   return `
     <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""}>
       <div class="swatch" style="background:${swatch(s.tag)}">
-        <span class="swatch-corner">${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}${sourceIcon(s.kind)}</span>
+        <span class="swatch-corner">${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}${sourceIcon(placeKind(s))}</span>
         ${productionTip(s) ? `<span class="tip">${productionTip(s)}</span>` : ""}
       </div>
       <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${amountText(left.g, left.total)} igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
@@ -2804,7 +2807,7 @@ function renderLibrary(lib, owner = "") {
     const pct = x.total > 0 ? Math.round((x.net / x.total) * 100) : null;
     const n = libName(x);
     const loc = x.rfid && where[x.rfid];
-    return `<div class="lib-item${x.net <= 0 ? " lib-empty" : ""}">${sourceIcon("library")}
+    return `<div class="lib-item${x.net <= 0 ? " lib-empty" : ""}">${sourceIcon(loc ? "ams" : "library")}
       <span class="lib-swatch" style="background:${libSwatch(x)}"></span>
       <div class="lib-text">
         <b>${esc(n.color || x.name || x.type)}</b>
@@ -2984,7 +2987,8 @@ function stockByKey() {
     if (!key) continue;
     const e = (map[key] ||= { owners: [], kinds: [] });
     if (s.owner && !e.owners.includes(s.owner)) e.owners.push(s.owner);
-    if (!e.kinds.includes(s.kind)) e.kinds.push(s.kind);
+    const kind = placeKind(s);
+    if (!e.kinds.includes(kind)) e.kinds.push(kind);
   }
   return map;
 }
