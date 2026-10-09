@@ -5,10 +5,10 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009200116";
-import { componentHtml, findPart } from "./circuits.js?v=20261009200116";
-import { detectPack } from "./pack.js?v=20261009200116";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009200116";
+import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009200547";
+import { componentHtml, findPart } from "./circuits.js?v=20261009200547";
+import { detectPack } from "./pack.js?v=20261009200547";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009200547";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -107,6 +107,8 @@ function cleanPart(p) {
     url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: safeImg(p.image),
     // Bildet er hentet fra en lignende vare (søk på tittelen), fordi originalen er fjernet hos AliExpress.
     imgSearch: !!p.imgSearch && !!safeImg(p.image),
+    // Bildet er satt eller fjernet for hånd; automatiske bildesøk rører det ikke.
+    imgManual: !!p.imgManual,
     // Pakketype (TO-92, SOT-23, 0805 …) fra tittel, variant og delenummer, ellers fra kjente delenumre.
     // Butikkens egen pakkeangivelse (LCSC) går foran det vi finner i teksten.
     pkgFixed: clip(p.pkgFixed, 30),
@@ -425,6 +427,28 @@ function listenForImport() {
     const isAli = ALI_ORIGINS.test(e.origin), isMouser = MOUSER_ORIGINS.test(e.origin), isLcsc = LCSC_ORIGINS.test(e.origin);
     if (!isAli && !isMouser && !isLcsc) return;
     const msg = e.data;
+    // Nye bilder for gitte varer: [{ id, image }] (tom image = fjern bildet). Bare egne varer endres.
+    if (msg?.type === "bf-images" && Array.isArray(msg.images)) {
+      try {
+        await load();
+        const byId = new Map(pstate.parts.map((p) => [p.id, p]));
+        const changed = [];
+        for (const { id, image } of msg.images.slice(0, 20000)) {
+          const p = byId.get(String(id));
+          if (!p || p.owner !== ctx.userName() || p.imgManual) continue;
+          const img = safeImg(image);
+          if (img === p.image) continue;
+          p.image = img; p.imgSearch = !!img; p.updated = new Date().toISOString();
+          changed.push(p);
+        }
+        if (changed.length && !ctx.DEMO) await savePatch(changed.map((p) => ({ id: p.id, data: p })));
+        render();
+        e.source?.postMessage({ type: "bf-imported", count: changed.length }, e.origin);
+      } catch (err) {
+        e.source?.postMessage({ type: "bf-import-error", error: err.message }, e.origin);
+      }
+      return;
+    }
     // Bare ordretotaler (f.eks. Invoice Total fra Mouser, inkl. frakt og mva): { ordrenummer: "kr 1 341,25" }.
     if (msg?.type === "bf-ordertotals" && msg.totals && typeof msg.totals === "object") {
       const source = isAli ? "aliexpress" : isLcsc ? "lcsc" : "mouser";
@@ -482,6 +506,26 @@ function aliBookmarklet(SITE) {
   box.querySelector("#bf-send").onclick = () => { stop = true; };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const text = (el, sel) => (el.querySelector(sel)?.innerText || "").trim();
+  // Søkeord: de første meningsbærende ordene (uten «1pc», «10PCS/lot» og rene tall).
+  const words = (t) => String(t).toLowerCase().replace(/[^\w\s.-]/g, " ").split(/\s+/)
+    .filter((w) => w.length > 1 && !/^\d+(pcs?|pc|x|set|lot|pieces?)?$/.test(w) && !/^(pcs|lot|set|new|for|and|with|the|of|in|to|original|high|quality|free|shipping)$/.test(w));
+  const searchQuery = (t) => words(t).slice(0, 7).join("-");
+  // Velger hovedbildet til treffet med mest lik tittel (andel felles ord).
+  const bestImage = (html, title) => {
+    const mine = new Set(words(title).slice(0, 14));
+    const starts = [...html.matchAll(/"productId":"?(\d{10,})/g)].map((m) => m.index);
+    let best = "", top = 0;
+    starts.forEach((s, k) => {
+      const seg = html.slice(s, starts[k + 1] || s + 8000);
+      const img = (seg.match(/"imgUrl":"((?:https?:)?\/\/[^"]+\/kf\/[A-Za-z0-9_]+\.(?:jpg|jpeg|png|webp))/) || [])[1];
+      const t = (seg.match(/"displayTitle":"([^"]+)/) || [])[1];
+      if (!img || !t) return;
+      const theirs = new Set(words(t));
+      const score = [...mine].filter((w) => theirs.has(w)).length / Math.max(4, mine.size);
+      if (score > top) { top = score; best = img; }
+    });
+    return top >= 0.35 ? best : "";
+  };
   const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   const isoDate = (s) => {
     const m = s.match(/([A-Za-z]{3})[a-z]*\.? (\d{1,2}), (\d{4})/);
@@ -550,17 +594,18 @@ function aliBookmarklet(SITE) {
       }
     }
     // Gamle varer som er fjernet fra AliExpress har bare en plassholder som bilde. Da søkes det
-    // etter tittelen, og bildet fra det første treffet brukes (merket som lignende vare).
+    // etter tittelen, og bildet fra treffet med mest lik tittel brukes (merket som lignende vare).
+    // Ligner ingen treff nok, blir det ikke noe bilde – heller ingen enn feil.
     const PH = /Sf5a31ce867174aa7bf499352d6875ddcs/;
     const noImg = rows.filter((r) => r.title && (!r.image || PH.test(r.image)));
     const found = {};
     for (const [i, r] of noImg.entries()) {
-      const q = r.title.replace(/[^\w\s-]/g, " ").trim().split(/\s+/).slice(0, 8).join("-");
+      const q = searchQuery(r.title);
       if (!(q in found)) {
         status(`Søker etter bilder til varer som er fjernet: ${i + 1} av ${noImg.length}…`);
         try {
           const html = await (await fetch(`/w/wholesale-${encodeURIComponent(q)}.html`, { credentials: "include" })).text();
-          found[q] = (html.match(/"imgUrl":"((?:https?:)?\/\/[^"]+\/kf\/[A-Za-z0-9_]+\.(?:jpg|jpeg|png|webp))/) || [])[1] || "";
+          found[q] = bestImage(html, r.title);
         } catch { found[q] = ""; }
         await sleep(1500 + Math.random() * 1000);
       }
@@ -702,10 +747,13 @@ function render() {
   const chip = (key, val, label, n, dot) => `<button class="chip${pstate[key] === val ? " active" : ""}" type="button" data-pf="${key}" data-pv="${ctx.esc(val)}">${dot ? `<span class="owner-dot" style="--owner:${dot}"></span>` : ""}${ctx.esc(label)}${n !== undefined ? ` <span class="chip-n">${n}</span>` : ""}</button>`;
   // Betalt: ordretotalen (inkl. frakt og avgifter) telles én gang per ordre, i alle valutaer.
   // Ordre uten total (Mouser, lagt inn for hånd) teller stykkpris × antall.
+  // Gamle AliExpress-ordre (2018–2019) har ingen total hos AliExpress lenger; der telles bare varene.
   const spent = {};
-  const seenOrders = new Set();
+  const seenOrders = new Set(), noTotal = new Set(), allOrders = new Set();
   for (const p of all.filter((x) => !pstate.owner || x.owner === pstate.owner)) {
     const key = `${p.source}:${p.orderId}`;
+    if (p.orderId) allOrders.add(key);
+    if (!p.orderTotal && p.orderId) noTotal.add(key);
     if (p.orderTotal && p.orderId) {
       if (seenOrders.has(key)) continue;
       seenOrders.add(key);
@@ -721,7 +769,7 @@ function render() {
         <div class="stats stats-side">
           <div class="stat"><b>${all.length.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
           <div class="stat"><b>${all.filter((p) => remaining(p) > 0).length.toLocaleString("nb-NO")}</b><span>har igjen</span></div>
-          ${totalNok ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca.${seenOrders.size ? ` (${seenOrders.size.toLocaleString("nb-NO")} ordre, inkl. frakt)` : ""}</span></div>` : ""}
+          ${totalNok ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.${noTotal.size ? ` For ${noTotal.size} ordre finnes ikke totalen lenger hos butikken (gamle AliExpress-ordre), så der er bare varene med, uten frakt.` : ""}`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca. (${allOrders.size.toLocaleString("nb-NO")} ordre${noTotal.size ? `, frakt mangler for ${noTotal.size}` : ", inkl. frakt"})</span></div>` : ""}
         </div>
         <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori</span><div class="chips">
           ${chip("cat", "", "Alle", undefined)}${cats.map(([id, name, n]) => chip("cat", id, name, n)).join("")}
@@ -871,6 +919,7 @@ function openPart(id) {
         <label>Antall igjen (stk)<input id="pd-left" type="number" min="0" max="10000000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
         <label>Plassering<input id="pd-loc" type="text" maxlength="80" value="${ctx.esc(p.location)}" placeholder="F.eks. Skuff 3, verkstedet" ${mine ? "" : "disabled"}></label>
         <label class="pd-note">Notat<textarea id="pd-note" rows="2" maxlength="400" ${mine ? "" : "disabled"}>${ctx.esc(p.note)}</textarea></label>
+        <label class="pd-note">Bilde (lenke fra AliExpress, LCSC eller Mouser; tom = ingen bilde)<input id="pd-img" type="url" maxlength="400" value="${ctx.esc(p.image)}" placeholder="https://ae-pic-a1.aliexpress-media.com/kf/….jpg" ${mine ? "" : "disabled"}></label>
       </div>
       ${mine ? "" : `<p class="hint">Bare ${ctx.esc(p.owner)} kan endre denne varen.</p>`}
       ${ctx.token() || ctx.DEMO ? `<div class="cart-add">
@@ -895,6 +944,12 @@ function openPart(id) {
     p.left = left === units(p) ? null : left;
     p.location = clip(dlg.querySelector("#pd-loc").value, 80);
     p.note = clip(dlg.querySelector("#pd-note").value, 400);
+    const imgIn = dlg.querySelector("#pd-img").value.trim();
+    if (imgIn !== p.image) {
+      const img = safeImg(imgIn.replace(/_\d+x\d+\.(jpg|png|webp)$/i, ""));
+      if (imgIn && !img) { ctx.setSync("Bildelenken må være fra AliExpress, LCSC eller Mouser.", true); }
+      else { p.image = img; p.imgSearch = false; p.imgManual = true; }
+    }
     try { await saveOne(p); ctx.setSync("Lagret"); } catch (err) { ctx.setSync(err.message, true); }
   };
   dlg.onclick = async (e) => {
