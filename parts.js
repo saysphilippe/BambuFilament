@@ -5,7 +5,7 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml } from "./circuits.js?v=20261009175727";
+import { componentHtml } from "./circuits.js?v=20261009175959";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -191,10 +191,15 @@ function mergeImport(rows, source) {
   const now = new Date().toISOString();
   const changed = [], ids = new Set();
   let added = 0, updated = 0;
+  const seen = {};
   for (const r of rows) {
-    const id = source === "aliexpress"
+    const base = source === "aliexpress"
       ? `ae:${clip(r.orderId, 30)}:${clip(r.itemId, 30) || clip(r.title, 40)}:${clip(r.variant, 60)}`
       : `mo:${clip(r.orderId, 30)}:${clip(r.mpn || r.title, 60)}`;
+    // Samme vare flere ganger i samme ordre (f.eks. ulike varianter som ikke oppgis for gamle
+    // ordre): egen linje nummer 2, 3, … i den rekkefølgen butikken viser dem.
+    seen[base] = (seen[base] || 0) + 1;
+    const id = seen[base] > 1 ? `${base}#${seen[base]}` : base;
     ids.add(id);
     const price = r.priceText ? parsePrice(r.priceText) : { amount: r.unitPrice, currency: r.currency };
     const catHint = r.catHint || (r.shopCat ? mouserCategory(String(r.shopCat).split(" › ")) : "");
