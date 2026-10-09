@@ -7,7 +7,8 @@ export const FILE_COLLS = {
   shared: ["ams", "library", "wishes"],
   activity: ["logins", "seen"],
   // Komponentbiblioteket: én post per vare fra en ordre (AliExpress, Mouser) eller lagt inn for hånd.
-  parts: ["parts"],
+  // partreqs: handlekurven – én post per vare noen trenger fra en annens (eller eget) lager.
+  parts: ["parts", "partreqs"],
 };
 
 const MAX_LOGINS = 500;
@@ -31,6 +32,7 @@ export function toRecords(file, doc) {
     for (const [k, v] of Object.entries(doc.seen || {})) add("seen", k, v);
   } else if (file === "parts") {
     for (const p of doc.parts || []) if (p?.id) add("parts", p.id, p);
+    for (const q of doc.requests || []) if (q?.id) add("partreqs", q.id, q);
   }
   return out;
 }
@@ -53,6 +55,6 @@ export function fromRecords(file, rows) {
     const logins = by("logins").map((r) => r.data).sort((a, b) => String(a.at).localeCompare(String(b.at))).slice(-MAX_LOGINS);
     return { version: 1, logins, seen: map("seen") };
   }
-  if (file === "parts") return { version: 1, parts: by("parts").map((r) => r.data) };
+  if (file === "parts") return { version: 1, parts: by("parts").map((r) => r.data), requests: by("partreqs").map((r) => r.data) };
   throw new Error(`Ukjent fil: ${file}`);
 }

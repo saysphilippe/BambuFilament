@@ -800,3 +800,42 @@ dialog.wide-dialog { width: min(820px, calc(100vw - 32px)); }
 .pkg-row { display: flex; align-items: center; gap: 12px; }
 .pkg-row .pkg-art { flex: none; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--muted-bg); }
 .pkg-art { color: var(--text); }
+
+/* Komponenter: undermeny og handlekurv */
+.parts-nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.parts-tab { padding: 7px 15px; border: 1px solid var(--border); border-radius: 99px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.parts-tab.active { background: var(--text); border-color: var(--text); color: var(--bg); }
+.nav-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 4px; border-radius: 99px; background: var(--muted-bg); color: var(--text); font-size: 12px; font-weight: 700; }
+.nav-n.alert { background: #e5484d; color: #fff; }
+.req-panel { max-width: 980px; }
+.req-panel h3 { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--text); }
+.req-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.req-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+.req-img { width: 64px; height: 64px; padding: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; cursor: pointer; }
+.req-img img { width: 100%; height: 100%; object-fit: contain; }
+.req-img .part-noimg { font-size: 10px; }
+.req-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.req-text b { font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.req-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); }
+.req-meta .owner-dot { display: inline-block; margin-right: 4px; }
+.req-loc { color: var(--accent); font-weight: 700; font-size: 13.5px; }
+.req-loc.missing { color: var(--muted); font-weight: 500; }
+.req-note { font-size: 13px; font-style: italic; }
+.req-qty { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-variant-numeric: tabular-nums; }
+.req-qty label { font-size: 12px; color: var(--muted); }
+.req-qty input { width: 76px; padding: 5px 8px; }
+.req-status { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.status-sent .req-status { color: var(--accent); font-weight: 700; }
+.status-declined .req-status { color: #e5484d; font-weight: 700; }
+.req-actions { display: flex; gap: 6px; }
+.req-list.done .req-row { opacity: .7; }
+.req-send { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.cart-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 8px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 10px; }
+.cart-add label { margin: 0; width: 90px; }
+.cart-add label.grow { flex: 1 1 200px; width: auto; }
+.cart-msg { min-height: 1em; margin: 4px 0 0; }
+@media (max-width: 640px) {
+  .req-row { grid-template-columns: 56px minmax(0, 1fr); }
+  .req-qty { grid-column: 2; align-items: flex-start; flex-direction: row; gap: 10px; }
+  .req-actions { grid-column: 2; }
+}

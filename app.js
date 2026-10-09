@@ -1,7 +1,7 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009180307";
-import { toRecords } from "./worker/src/records.js?v=20261009180307";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009180307";
-import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, loadParts } from "./parts.js?v=20261009180307";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009180655";
+import { toRecords } from "./worker/src/records.js?v=20261009180655";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009180655";
+import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, loadParts } from "./parts.js?v=20261009180655";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -3834,6 +3834,8 @@ fetch("data/colors.json")
     Promise.all([refresh(), loadCatalog(), loadStore()]).then(() => {
       showTab(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : store("bf.tab"));
       // Komponenter: valgt sist, eller siden ble åpnet av import-bokmerket (#import).
+      // Hent komponentene i bakgrunnen, så Komponenter-knappen viser ønsker som venter.
+      setTimeout(() => token() && loadParts(), 2500);
       if (location.hash === "#import" || location.hash === "#parts" || (!TABS.includes(location.hash.slice(1)) && store("bf.section") === "parts")) showSection("parts");
       // Hent AMS i bakgrunnen, så et delt øyeblikksbilde holdes oppdatert uansett fane.
       if (bambuToken() && state.tab !== "ams") refreshAms();

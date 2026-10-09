@@ -5,8 +5,8 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009180307";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009180307";
+import { componentHtml, findPart } from "./circuits.js?v=20261009180655";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009180655";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -66,6 +66,7 @@ export function classify(title) {
 let ctx = null; // fra app.js: { $, esc, dbCall, token, userName, userColor, users, store, DEMO, setSync }
 const pstate = {
   parts: [], loaded: false, loading: false, error: "",
+  reqs: [],
   q: "", cat: "", owner: "", source: "", pkg: "", sort: "new", show: "have", view: "list",
   importLog: [], importBusy: false,
 };
@@ -142,7 +143,7 @@ const SOURCE_LABEL = { aliexpress: "AliExpress", mouser: "Mouser", manual: "Lagt
 
 async function load(force = false) {
   if (ctx.DEMO) {
-    if (!pstate.loaded) pstate.parts = demoParts();
+    if (!pstate.loaded) { pstate.parts = demoParts(); pstate.reqs = demoReqs(); }
     pstate.loaded = true;
     return render();
   }
@@ -160,6 +161,7 @@ async function loadNow() {
   try {
     const { parts } = await ctx.dbCall("/db/load", { files: ["parts"] });
     pstate.parts = (parts?.parts || []).map(cleanPart).filter(Boolean);
+    pstate.reqs = (parts?.requests || []).map(cleanReq).filter(Boolean);
     pstate.loaded = true;
   } catch (err) {
     pstate.error = err.message;
@@ -172,7 +174,7 @@ async function loadNow() {
 // Lagrer endrede poster (null = slett), i porsjoner så hvert kall holder seg lite.
 async function savePatch(ops, onProgress) {
   for (let i = 0; i < ops.length; i += PATCH_CHUNK) {
-    await ctx.dbCall("/db/patch", { ops: ops.slice(i, i + PATCH_CHUNK).map((o) => ({ coll: "parts", id: o.id, data: o.data })) });
+    await ctx.dbCall("/db/patch", { ops: ops.slice(i, i + PATCH_CHUNK).map((o) => ({ coll: o.coll || "parts", id: o.id, data: o.data })) });
     onProgress?.(Math.min(ops.length, i + PATCH_CHUNK), ops.length);
   }
 }
@@ -182,6 +184,167 @@ async function saveOne(p) {
   if (ctx.DEMO) return render();
   await savePatch([{ id: p.id, data: p }]);
   render();
+}
+
+// ---------- Handlekurv ----------
+//
+// Noen trenger en vare fra en annens lager: den legges i handlekurven (utkast), sendes som
+// ønske til eieren, og eieren ser den under «Ønsket fra meg» med plassering, så den er lett å
+// finne fram. Når eieren trykker «Sendt», trekkes antallet fra det eieren har igjen.
+
+const REQ_STATUS = { draft: "I handlekurven", open: "Venter på eier", sent: "Sendt", declined: "Kan ikke", received: "Mottatt" };
+
+function cleanReq(q) {
+  if (!q || typeof q !== "object" || !q.id) return null;
+  return {
+    id: clip(q.id, 60), partId: clip(q.partId, 200), owner: clip(q.owner, 40), by: clip(q.by, 40),
+    qty: Math.max(1, Math.min(100000, Math.round(num(q.qty) ?? 1))), note: clip(q.note, 200), reply: clip(q.reply, 200),
+    status: REQ_STATUS[q.status] ? q.status : "draft",
+    at: clip(q.at, 30), sentAt: clip(q.sentAt, 30), updated: clip(q.updated, 30),
+  };
+}
+
+const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+async function saveReqs(list, parts = []) {
+  const now = new Date().toISOString();
+  for (const x of [...list, ...parts]) x.updated = now;
+  if (ctx.DEMO) return render();
+  await savePatch(list.map((q) => ({ coll: "partreqs", id: q.id, data: q })).concat(parts.map((p) => ({ id: p.id, data: p }))));
+  render();
+}
+
+async function removeReq(q) {
+  pstate.reqs = pstate.reqs.filter((x) => x !== q);
+  if (!ctx.DEMO) await savePatch([{ coll: "partreqs", id: q.id, data: null }]);
+  render();
+}
+
+async function addToCart(part, qty, note) {
+  const me = ctx.userName() || (ctx.DEMO ? "Philippe" : "");
+  if (!me) throw new Error("Logg inn først.");
+  const old = pstate.reqs.find((q) => q.partId === part.id && q.by === me && q.status === "draft");
+  if (old) {
+    old.qty += qty;
+    if (note) old.note = clip(note, 200);
+    return saveReqs([old]);
+  }
+  const q = cleanReq({ id: newId(), partId: part.id, owner: part.owner, by: me, qty, note, status: "draft", at: new Date().toISOString() });
+  pstate.reqs.push(q);
+  return saveReqs([q]);
+}
+
+const meName = () => ctx.userName() || (ctx.DEMO ? "Philippe" : "");
+const cartDrafts = () => pstate.reqs.filter((q) => q.by === meName() && q.status === "draft");
+const askedOfMe = () => pstate.reqs.filter((q) => q.owner === meName() && q.status === "open");
+
+// Komponenter-knappen øverst viser hvor mange ønsker som venter på deg.
+function updateBadge() {
+  const b = document.querySelector('.section-btn[data-section="parts"]');
+  if (!b) return;
+  const n = askedOfMe().length;
+  b.innerHTML = `Komponenter${n ? ` <span class="nav-n alert" title="${n} ønsker venter på deg">${n}</span>` : ""}`;
+}
+
+function subnav() {
+  const n = cartDrafts().length, m = askedOfMe().length;
+  const b = (view, label) => `<button type="button" class="parts-tab${pstate.view === view ? " active" : ""}" data-pview="${view}">${label}</button>`;
+  return `<nav class="parts-nav" aria-label="Komponenter">
+    ${b("list", "Alle komponenter")}
+    ${b("cart", `Handlekurv${n ? ` <span class="nav-n">${n}</span>` : ""}`)}
+    ${b("requests", `Ønsket fra meg${m ? ` <span class="nav-n alert">${m}</span>` : ""}`)}
+    ${b("import", "Importer")}
+  </nav>`;
+}
+
+function reqRow(q, mode) {
+  const p = pstate.parts.find((x) => x.id === q.partId);
+  const img = p?.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="part-noimg">${ctx.esc(p ? CAT_NAME[p.category] : "Slettet")}</span>`;
+  const who = mode === "cart" ? q.owner : q.by;
+  const left = p ? remaining(p) : 0;
+  const act = (a, label, primary = false) => `<button type="button" class="btn btn-small${primary ? " btn-primary" : ""}" data-reqact="${a}" data-req="${ctx.esc(q.id)}">${label}</button>`;
+  let actions = "";
+  if (mode === "cart") {
+    if (q.status === "draft") actions = act("remove", "Fjern");
+    else if (q.status === "open") actions = act("withdraw", "Trekk tilbake");
+    else if (q.status === "sent") actions = act("receive", "Mottatt", true);
+    else actions = act("remove", "Fjern");
+  } else if (q.status === "open") {
+    actions = act("decline", "Kan ikke") + act("send", "Sendt", true);
+  }
+  return `<li class="req-row status-${q.status}">
+    <button type="button" class="req-img" data-part="${ctx.esc(q.partId)}" ${p ? "" : "disabled"}>${img}</button>
+    <div class="req-text">
+      <b>${ctx.esc(p?.title || "Varen er slettet")}</b>
+      ${p?.variant ? `<span class="hint">${ctx.esc(p.variant)}</span>` : ""}
+      <span class="req-meta">
+        ${mode === "requests" ? `<span class="req-loc${p?.location ? "" : " missing"}">${ctx.esc(p?.location ? `Ligger: ${p.location}` : "Ingen plassering registrert")}</span>` : ""}
+        <span><span class="owner-dot" style="--owner:${ctx.userColor(who)}"></span>${mode === "cart" ? "Eier" : "Ønsket av"}: ${ctx.esc(who || "Ukjent")}</span>
+        ${p ? `<span>${left} igjen</span>` : ""}
+        ${p?.pkg ? `<span>${ctx.esc(p.pkg)}</span>` : ""}
+      </span>
+      ${q.note ? `<span class="req-note">«${ctx.esc(q.note)}»</span>` : ""}
+    </div>
+    <div class="req-qty">${mode === "cart" && q.status === "draft"
+      ? `<label>Antall<input type="number" min="1" max="${Math.max(1, left)}" value="${q.qty}" data-reqqty="${ctx.esc(q.id)}"></label>`
+      : `<b>${q.qty} stk</b>`}
+      <span class="req-status">${ctx.esc(REQ_STATUS[q.status])}${q.sentAt && q.status === "sent" ? ` ${ctx.esc(fmtDate(q.sentAt.slice(0, 10)))}` : ""}</span>
+    </div>
+    <div class="req-actions">${actions}</div>
+  </li>`;
+}
+
+function groupBy(list, key) {
+  const g = new Map();
+  for (const x of list) (g.get(x[key]) || g.set(x[key], []).get(x[key])).push(x);
+  return [...g.entries()].sort((a, b) => String(a[0]).localeCompare(String(b[0]), "nb"));
+}
+
+function renderCart(box) {
+  const me = meName();
+  const mine = pstate.reqs.filter((q) => q.by === me && q.status !== "received").sort((a, b) => b.at.localeCompare(a.at));
+  const drafts = mine.filter((q) => q.status === "draft");
+  box.innerHTML = subnav() + `<section class="panel req-panel">
+    <h2>Handlekurv</h2>
+    <p class="hint">Legg varer du trenger i handlekurven fra detaljvinduet til en komponent. Når du sender, får eieren dem under «Ønsket fra meg» og kan finne dem fram og sende dem til deg.</p>
+    ${mine.length ? groupBy(mine, "owner").map(([owner, list]) => `<h3><span class="owner-dot" style="--owner:${ctx.userColor(owner)}"></span> Fra ${ctx.esc(owner || "ukjent eier")}</h3><ul class="req-list">${list.map((q) => reqRow(q, "cart")).join("")}</ul>`).join("")
+      : `<p class="empty-msg">Handlekurven er tom. Åpne en komponent og trykk «Legg i handlekurv».</p>`}
+    ${drafts.length ? `<div class="req-send"><span class="hint">${drafts.length} ${drafts.length === 1 ? "vare" : "varer"} er ikke sendt ennå.</span><button type="button" class="btn btn-primary" data-sendcart>Send ønskene til eierne</button></div>` : ""}
+  </section>`;
+}
+
+function renderRequests(box) {
+  const me = meName();
+  const recent = Date.now() - 14 * 864e5;
+  const list = pstate.reqs.filter((q) => q.owner === me && (q.status === "open" || ((q.status === "sent" || q.status === "declined") && new Date(q.updated || q.at).getTime() > recent)));
+  const open = list.filter((q) => q.status === "open");
+  box.innerHTML = subnav() + `<section class="panel req-panel">
+    <h2>Ønsket fra meg</h2>
+    <p class="hint">Varer fra ditt lager som andre trenger. Finn dem fram (plasseringen står på hver linje), send dem, og trykk «Sendt». Da trekkes antallet fra det du har igjen.</p>
+    ${open.length ? groupBy(open, "by").map(([by, l]) => `<h3><span class="owner-dot" style="--owner:${ctx.userColor(by)}"></span> Til ${ctx.esc(by)}</h3><ul class="req-list">${l.map((q) => reqRow(q, "requests")).join("")}</ul>`).join("")
+      : `<p class="empty-msg">Ingen venter på noe fra deg akkurat nå.</p>`}
+    ${list.length > open.length ? `<h3>Siste 14 dager</h3><ul class="req-list done">${list.filter((q) => q.status !== "open").map((q) => reqRow(q, "requests")).join("")}</ul>` : ""}
+  </section>`;
+}
+
+async function reqAction(action, id) {
+  const q = pstate.reqs.find((x) => x.id === id);
+  if (!q) return;
+  if (action === "remove") return removeReq(q);
+  if (action === "withdraw") return removeReq(q);
+  if (action === "receive") { q.status = "received"; return saveReqs([q]); }
+  if (action === "decline") { q.status = "declined"; return saveReqs([q]); }
+  if (action === "send") {
+    q.status = "sent";
+    q.sentAt = new Date().toISOString();
+    const p = pstate.parts.find((x) => x.id === q.partId);
+    if (p) {
+      const left = Math.max(0, remaining(p) - q.qty);
+      p.left = left === p.qty ? null : left;
+      return saveReqs([q], [p]);
+    }
+    return saveReqs([q]);
+  }
 }
 
 // ---------- Import ----------
@@ -472,9 +635,12 @@ function partCard(p) {
 }
 
 function render() {
+  updateBadge();
   const box = ctx.$("#parts-root");
   if (!box || box.hidden) return;
   if (pstate.view === "import") return renderImport(box);
+  if (pstate.view === "cart" && (ctx.token() || ctx.DEMO)) return renderCart(box);
+  if (pstate.view === "requests" && (ctx.token() || ctx.DEMO)) return renderRequests(box);
   if (!ctx.token() && !ctx.DEMO) {
     box.innerHTML = `<section class="panel"><h2>Komponenter</h2><p class="hint">Logg inn for å se komponentbiblioteket.</p></section>`;
     return;
@@ -504,7 +670,7 @@ function render() {
   }
   const totalNok = Object.entries(spent).reduce((s, [c, v]) => s + v * (FX_NOK[c] || 1), 0);
   const spentTip = Object.entries(spent).sort((a, b) => b[1] - a[1]).map(([c, v]) => `${Math.round(v).toLocaleString("nb-NO")} ${c}`).join(" + ");
-  box.innerHTML = `
+  box.innerHTML = subnav() + `
     <div class="parts-layout">
       <aside class="parts-rail">
         <div class="stats stats-side">
@@ -528,7 +694,6 @@ function render() {
             <select id="parts-sort" aria-label="Sortering">
               ${[["new", "Nyeste først"], ["old", "Eldste først"], ["name", "Navn"], ["cat", "Kategori"], ["price", "Pris per stk"]].map(([v, l]) => `<option value="${v}"${pstate.sort === v ? " selected" : ""}>Sorter: ${l}</option>`).join("")}
             </select>
-            <button class="btn" type="button" data-pview="import">Importer</button>
           </div>
           ${owners.length > 1 ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, undefined, ctx.userColor(o))).join("")}</div></div>` : ""}
           <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
@@ -545,9 +710,9 @@ function render() {
 
 function renderImport(box) {
   const signedIn = !!ctx.token();
-  box.innerHTML = `
+  box.innerHTML = subnav() + `
     <section class="panel import-panel">
-      <div class="import-head"><h2>Importer komponenter</h2><button class="btn" type="button" data-pview="list">Tilbake til komponentene</button></div>
+      <div class="import-head"><h2>Importer komponenter</h2></div>
       ${signedIn ? "" : `<p class="notice">Logg inn i Filament og elektronikk universet først, så havner varene på deg.</p>`}
       <h3>AliExpress</h3>
       <ol class="import-steps">
@@ -659,6 +824,12 @@ function openPart(id) {
         <label class="pd-note">Notat<textarea id="pd-note" rows="2" maxlength="400" ${mine ? "" : "disabled"}>${ctx.esc(p.note)}</textarea></label>
       </div>
       ${mine ? "" : `<p class="hint">Bare ${ctx.esc(p.owner)} kan endre denne varen.</p>`}
+      ${ctx.token() || ctx.DEMO ? `<div class="cart-add">
+        <label>Antall<input id="pd-cartqty" type="number" min="1" max="${Math.max(1, remaining(p))}" value="1"></label>
+        <label class="grow">Hva skal det brukes til? (valgfritt)<input id="pd-cartnote" type="text" maxlength="200" placeholder="F.eks. reservedel til leseren"></label>
+        <button type="button" class="btn" data-addcart>${p.owner && p.owner !== meName() ? `Legg i handlekurv (fra ${ctx.esc(p.owner)})` : "Legg i handlekurv"}</button>
+      </div>
+      <p class="hint cart-msg" role="status">${(() => { const n = pstate.reqs.filter((q) => q.partId === p.id && ["draft", "open"].includes(q.status)).reduce((s, q) => s + q.qty, 0); return n ? `${n} stk av denne er i en handlekurv eller ønsket.` : ""; })()}</p>` : ""}
       <div class="part-actions">
         ${mine ? `<button class="btn btn-primary" value="save" type="submit">Lagre</button>` : ""}
         <button class="btn" value="cancel" type="submit">Lukk</button>
@@ -675,6 +846,17 @@ function openPart(id) {
     p.note = clip(dlg.querySelector("#pd-note").value, 400);
     try { await saveOne(p); ctx.setSync("Lagret"); } catch (err) { ctx.setSync(err.message, true); }
   };
+  dlg.onclick = async (e) => {
+    if (!e.target.closest("[data-addcart]")) return;
+    const qty = Math.max(1, Math.round(Number(dlg.querySelector("#pd-cartqty").value) || 1));
+    const msg = dlg.querySelector(".cart-msg");
+    try {
+      await addToCart(p, qty, dlg.querySelector("#pd-cartnote").value);
+      msg.textContent = `${qty} stk lagt i handlekurven. Send ønskene fra fanen Handlekurv.`;
+    } catch (err) {
+      msg.textContent = err.message;
+    }
+  };
   dlg.returnValue = "";
   dlg.showModal();
 }
@@ -686,9 +868,16 @@ export function initParts(context) {
   listenForImport();
   const root = ctx.$("#parts-root");
   root.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-pimport]");
+    const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-pimport], [data-reqact], [data-sendcart]");
     if (!t) return;
-    if (t.dataset.pf) {
+    if (t.dataset.reqact) {
+      t.disabled = true;
+      try { await reqAction(t.dataset.reqact, t.dataset.req); } catch (err) { ctx.setSync(err.message, true); t.disabled = false; }
+    } else if (t.hasAttribute("data-sendcart")) {
+      const drafts = cartDrafts();
+      for (const q of drafts) { q.status = "open"; q.at = new Date().toISOString(); }
+      try { await saveReqs(drafts); ctx.setSync(`${drafts.length} ønsker sendt`); } catch (err) { ctx.setSync(err.message, true); }
+    } else if (t.dataset.pf) {
       pstate[t.dataset.pf] = pstate[t.dataset.pf] === t.dataset.pv ? "" : t.dataset.pv;
       shown = PAGE;
       render();
@@ -723,6 +912,10 @@ export function initParts(context) {
   root.addEventListener("change", (e) => {
     if (e.target.id === "parts-sort") { pstate.sort = e.target.value; render(); }
     if (e.target.id === "parts-show") { pstate.show = e.target.value; shown = PAGE; render(); }
+    if (e.target.dataset.reqqty) {
+      const q = pstate.reqs.find((x) => x.id === e.target.dataset.reqqty);
+      if (q) { q.qty = Math.max(1, Math.round(Number(e.target.value) || 1)); saveReqs([q]).catch((err) => ctx.setSync(err.message, true)); }
+    }
   });
   // Bilder som ikke finnes i liten størrelse: prøv originalen, ellers kategorinavnet.
   root.addEventListener("error", (e) => {
@@ -762,6 +955,15 @@ export function setCategoryShown(id, shown) {
 export const loadParts = () => (pstate.loaded || ctx.DEMO ? null : load());
 
 // ---------- Demo ----------
+
+function demoReqs() {
+  const at = new Date(Date.now() - 36e5).toISOString();
+  return [
+    { id: "demo-r1", partId: "demo:0", owner: "Philippe", by: "Niklas", qty: 1, note: "Til leseren i garasjen", status: "open", at },
+    { id: "demo-r2", partId: "demo:3", owner: "Philippe", by: "Peter", qty: 10, note: "", status: "open", at },
+    { id: "demo-r3", partId: "demo:1", owner: "Niklas", by: "Philippe", qty: 1, note: "Ekstra RFID-leser", status: "draft", at },
+  ].map(cleanReq);
+}
 
 function demoParts() {
   const rows = [
