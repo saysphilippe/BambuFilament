@@ -6,8 +6,9 @@
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
 import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009202254";
-import { componentHtml, findPart } from "./circuits.js?v=20261009202254";
+import { componentHtml, findPart, semiType, SEMI_TYPES } from "./circuits.js?v=20261009202254";
 import { detectPack } from "./pack.js?v=20261009202254";
+import { footprintSvg, footprintCaption, kicadName } from "./footprints.js?v=20261009202254";
 import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009202254";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
@@ -24,7 +25,7 @@ const PATCH_CHUNK = 400;
 // og en kategori satt for hånd går foran alt.
 export { CATEGORIES, classify };
 // Kategorier der datablad og koblingsskjema er aktuelt.
-const ELECTRONICS = new Set(["mcu", "display", "sensor", "wireless", "module", "semi", "passive", "switch", "led", "power", "audio", "connector"]);
+const ELECTRONICS = new Set(["mcu", "display", "sensor", "wireless", "module", "semi", "passive", "switch", "led", "power", "audio", "connector", "motor"]);
 
 // Butikkens kategoristi (Mouser, LCSC) -> vår kategori.
 export function mouserCategory(crumbs) {
@@ -57,7 +58,7 @@ let ctx = null; // fra app.js: { $, esc, dbCall, token, userName, userColor, use
 const pstate = {
   parts: [], loaded: false, loading: false, error: "",
   reqs: [], prefs: {},
-  q: "", cat: "", owner: "", source: "", pkg: "", sort: "new", show: "have", view: "list",
+  q: "", cat: "", sub: "", owner: "", source: "", pkg: "", sort: "new", show: "have", view: "list",
   importLog: [], importBusy: false,
 };
 
@@ -132,6 +133,10 @@ const fmtMoney = (p) => {
   if (p.unitPrice === null) return "";
   const v = p.unitPrice.toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return { NOK: `${v} kr`, EUR: `€${v}`, USD: `$${v}`, GBP: `£${v}` }[p.currency] || v;
+};
+const kicadHint = (p) => {
+  const t = `${p.title} ${p.variant} ${p.description}`.toLowerCase();
+  return /\bleds?\b/.test(t) ? "LED" : /capacitor|\d\s?(uf|nf|pf|µf)\b/.test(t) ? "C" : /inductor|ferrite|\d\s?(uh|mh|µh)\b/.test(t) ? "L" : /\bdiodes?\b|zener|schottky/.test(t) ? "D" : "R";
 };
 const fmtDate = (d) => (d ? new Date(d + "T12:00:00").toLocaleDateString("nb-NO", { day: "numeric", month: "short", year: "numeric" }) : "");
 
@@ -671,6 +676,7 @@ function filtered() {
   const q = pstate.q.trim().toLowerCase();
   const list = visibleParts().filter((p) =>
     (!pstate.cat || p.category === pstate.cat) &&
+    (!pstate.sub || pstate.cat !== "semi" || semiType(p) === pstate.sub) &&
     (!pstate.owner || p.owner === pstate.owner) &&
     (!pstate.source || p.source === pstate.source) &&
     (!pstate.pkg || p.pkg === pstate.pkg) &&
@@ -702,7 +708,7 @@ function partCard(p) {
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
       <span class="part-meta"><b>${ctx.esc(qty)}</b>${fmtMoney(p) ? ` · ${ctx.esc(fmtMoney(p))}/stk` : ""}</span>
-      ${p.pkg ? `<span class="part-pkg" title="${ctx.esc(packageInfo(p.pkg))}">${packageSvg(p.pkg, 22)}${ctx.esc(p.pkg)}</span>` : ""}
+      ${p.pkg ? `<span class="part-pkg" title="${ctx.esc(packageInfo(p.pkg))}">${footprintSvg(p.pkg, 24) || packageSvg(p.pkg, 22)}${ctx.esc(p.pkg)}</span>` : ""}
       <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(p.orderDate))}</span></span>
     </span>
   </button>
@@ -782,6 +788,12 @@ function render() {
         <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori</span><div class="chips">
           ${chip("cat", "", "Alle", undefined)}${cats.map(([id, name, n]) => chip("cat", id, name, n)).join("")}
         </div></nav>
+        ${pstate.cat === "semi" ? (() => {
+          const semis = all.filter((p) => p.category === "semi" && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0)));
+          const n = {};
+          for (const p of semis) n[semiType(p)] = (n[semiType(p)] || 0) + 1;
+          return `<nav class="parts-cats parts-sub" aria-label="Type halvleder"><span class="rail-label">Type halvleder</span><div class="chips">${chip("sub", "", "Alle", undefined)}${SEMI_TYPES.filter(([id]) => n[id]).map(([id, name]) => chip("sub", id, name, n[id])).join("")}</div></nav>`;
+        })() : ""}
       </aside>
       <div class="parts-main">
         <section class="panel filters">
@@ -914,7 +926,7 @@ function openPart(id) {
         ${row("Status", ctx.esc(p.status))}
         ${row("Produsent", ctx.esc(p.maker))}
         ${row("Delenummer", ctx.esc(p.mpn))}
-        ${row("Pakke", p.pkg ? `<span class="pkg-row">${packageSvg(p.pkg, 64)}<span><b>${ctx.esc(p.pkg)}</b><br><span class="hint">${ctx.esc(packageInfo(p.pkg))}</span></span></span>` : "")}
+        ${row("Pakke", p.pkg ? `<span class="pkg-row">${footprintSvg(p.pkg, 150, { detail: true }) || packageSvg(p.pkg, 64)}<span><b>${ctx.esc(p.pkg)}</b><br><span class="hint">${ctx.esc(packageInfo(p.pkg))}</span>${kicadName(p.pkg, kicadHint(p)) ? `<br><code class="kicad-name" title="Fotavtrykk i KiCads standardbibliotek">${ctx.esc(kicadName(p.pkg, kicadHint(p)))}</code>` : ""}${footprintCaption(p.pkg) ? `<br><span class="hint fp-cap">${ctx.esc(footprintCaption(p.pkg, kicadHint(p)))}</span><span class="fp-legend"><i class="cu"></i>F.Cu <i class="silk"></i>F.SilkS <i class="drill"></i>Drill</span>` : ""}</span></span>` : "")}
         ${row("Beskrivelse", ctx.esc(p.description))}
         ${row("Produktside", p.url ? `<a href="${ctx.esc(p.url)}" target="_blank" rel="noopener">Åpne hos ${ctx.esc(SOURCE_LABEL[p.source])} ↗</a>` : "")}
         ${row("Bilde", p.imgSearch ? "Fra en lignende vare. Originalen er fjernet hos AliExpress." : "")}
@@ -996,6 +1008,7 @@ export function initParts(context) {
       try { await saveReqs(drafts); ctx.setSync(`${drafts.length} ønsker sendt`); } catch (err) { ctx.setSync(err.message, true); }
     } else if (t.dataset.pf) {
       pstate[t.dataset.pf] = pstate[t.dataset.pf] === t.dataset.pv ? "" : t.dataset.pv;
+      if (t.dataset.pf === "cat") pstate.sub = "";
       shown = PAGE;
       render();
     } else if (t.dataset.part) openPart(t.dataset.part);

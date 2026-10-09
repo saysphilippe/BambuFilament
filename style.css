@@ -934,3 +934,16 @@ dialog.part-dialog { width: min(1040px, calc(100vw - 32px)); }
 }
 /* Rader som rulles sidelengs må få krympe, ellers blir hele siden bredere enn skjermen */
 .parts-layout > *, .parts-rail, .parts-cats, .parts-main, .chip-row, .chip-row .chips { min-width: 0; }
+/* Fotavtrykk (land pattern) */
+.fp-art { color: var(--text); flex: none; }
+.pkg-row { align-items: flex-start; }
+.pkg-row .fp-art { padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: #1c1f1d; }
+.part-pkg .fp-art { color: var(--text); }
+.fp-cap { display: inline-block; margin-top: 4px; font-size: 12px; }
+@media (max-width: 600px) { .pkg-row { flex-direction: column; } }
+.kicad-name { display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 6px; background: var(--muted-bg); font: 600 12px ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+.fp-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font: 11.5px ui-monospace, Consolas, monospace; color: var(--muted); }
+.fp-legend i { display: inline-block; width: 12px; height: 9px; margin-right: 4px; vertical-align: -1px; border-radius: 2px; }
+.fp-legend i.cu { background: #c99a2e; border: 1px solid #8a6a1c; }
+.fp-legend i.silk { border: 1.5px solid currentColor; background: transparent; }
+.fp-legend i.drill { width: 9px; border-radius: 50%; background: var(--surface); border: 1px solid #8a6a1c; box-shadow: 0 0 0 2px #c99a2e; }

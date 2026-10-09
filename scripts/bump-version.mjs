@@ -7,7 +7,7 @@ const v = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
 const files = {
   "index.html": [/(app\.js|style\.css)(\?v=\w+)?"/g, (_, f) => `${f}?v=${v}"`],
   "app.js": [/from "\.\/((?:worker\/src\/)?(?:bambu|auth|records|parts))\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
-  "parts.js": [/from "\.\/(circuits|packages|pack|categories)\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
+  "parts.js": [/from "\.\/(circuits|packages|pack|categories|footprints)\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
 };
 for (const [file, [re, fn]] of Object.entries(files)) {
   const text = await readFile(file, "utf8");
