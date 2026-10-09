@@ -47,8 +47,10 @@ a { color: var(--accent); }
 .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; }
 .checks label { display: flex; gap: 6px; align-items: center; font-size: 14px; }
 
-.diagram-wrap { overflow-x: auto; margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
-.diagram-wrap svg { display: block; min-width: 720px; width: 100%; height: auto; }
+.diagram-fig { margin: 14px 0 0; }
+.diagram-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.diagram-wrap svg { display: block; min-width: 760px; width: 100%; height: auto; }
+.diagram-fig figcaption { margin-top: 8px; max-width: 80ch; font-size: 14px; color: var(--muted); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; color: var(--muted); }
 .legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 
@@ -96,7 +98,10 @@ li { margin: 4px 0; }
 
   <h2>2. Koble sammen</h2>
   <p id="board-notes"></p>
-  <div class="diagram-wrap"><svg id="diagram" role="img" aria-labelledby="diagram-title"><title id="diagram-title">Koblingsskjema</title></svg></div>
+  <figure class="diagram-fig">
+    <div class="diagram-wrap"><svg id="diagram" role="img" aria-label="Koblingsskjema"></svg></div>
+    <figcaption>Hver farget ledning går rett fra pinnen på kortet til pinnen på modulen. Strøm (3,3 V) og jord (GND) samles i to skinner til høyre, for eksempel på et koblingsbrett. Der en ledning har en liten bue, krysser den skinnen uten å være koblet til den. Nederst i hver modul ser du pinnene i den rekkefølgen de sitter, og hule ringer er pinner som ikke brukes.</figcaption>
+  </figure>
   <div class="legend" id="legend"></div>
   <h3>Koblingstabell</h3>
   <div class="table-wrap"><table id="wiring"><thead><tr><th>Fra modul</th><th>Til kortet</th><th>Signal</th></tr></thead><tbody></tbody></table></div>
@@ -255,76 +260,132 @@ function connections(b, opt) {
   return list;
 }
 
-// Koblingsskjema: kortet til venstre, modulene til høyre, hver ledning i sitt eget løp.
+// Pinnene i den rekkefølgen de sitter på modulen, så de er lette å finne når man kobler.
+const HEADER = {
+  RC522: { pins: ["SDA", "SCK", "MOSI", "MISO", "IRQ", "GND", "RST", "3.3V"], note: "IRQ brukes ikke." },
+  OLED: { pins: ["GND", "VCC", "SCL", "SDA"], note: "Sjekk: VCC og GND kan være byttet om." },
+};
+
+// Koblingsskjema: hver signalledning går rett fra kortet til modulen på samme høyde.
+// Strøm og jord samles i to skinner til høyre for modulene; kortets 3V3 og GND føres
+// inn i skinnene langs bunnen. En bue betyr at ledningen krysser skinnen uten kontakt.
 function drawDiagram(b, opt) {
   const conns = connections(b, opt);
   const comps = [...new Set(conns.map((c) => c.comp))];
-  const ROW = 24, CW = 190, PAD = 14;
-  // Modulenes posisjoner
-  let y = 30;
-  const compBox = {};
+  const ROW = 26, TOP = 52, TITLE = 36;
+  const boardX = 16, boardW = 196, padB = boardX + boardW - 9;
+  const modX = 484, modW = 252, padL = modX + 9, padR = modX + modW - 9;
+  const railG = modX + modW + 42, railP = railG + 32;
+  const W = railP + 30;
+  const t = (x, y, s, attrs = "") => `<text x="${x}" y="${y}" ${attrs}>${esc(s)}</text>`;
+  const pad = (x, y) => `<circle cx="${x}" cy="${y}" r="4.5" fill="#d9b44a" stroke="#8a6d1c" stroke-width="1"/>`;
+  let wires = "", boxes = "", pads = "";
+
+  // Moduler, med signalpinner til venstre og strømpinner til høyre
+  let y = TOP;
+  const powerStubs = [];
   for (const name of comps) {
-    const pins = conns.filter((c) => c.comp === name);
-    const h = 34 + pins.length * ROW;
-    compBox[name] = { y, h, pins };
-    y += h + 26;
-  }
-  const height = Math.max(y, 120);
-  // Kortets pinner i samme rekkefølge som modulene, strøm og jord nederst
-  const sigRows = [], seen = new Set();
-  for (const c of conns) {
-    const key = c.gpio !== undefined ? "g" + c.gpio : c.power;
-    if (c.gpio !== undefined && !seen.has(key)) { seen.add(key); sigRows.push({ key, label: pinName(b, c.gpio) }); }
-  }
-  sigRows.push({ key: "3V3", label: "3V3" }, { key: "GND", label: "GND" });
-  const boardX = 20, boardW = 210;
-  const boardTop = 30, rowsTop = boardTop + 44;
-  const boardH = 44 + sigRows.length * ROW + 30;
-  const rowY = {};
-  sigRows.forEach((r, i) => (rowY[r.key] = rowsTop + i * ROW + ROW / 2));
-  const compX = 660;
-  const W = compX + CW + 20, H = Math.max(height, boardTop + boardH + 20);
-  let svg = `<title>Koblingsskjema for ${esc(b.name)}</title>`;
-  // Kort
-  svg += `<rect x="${boardX}" y="${boardTop}" width="${boardW}" height="${boardH}" rx="12" fill="var(--pcb)"/>`;
-  svg += `<text x="${boardX + 14}" y="${boardTop + 26}" fill="var(--pcb-fg)" font-family="var(--display)" font-weight="800" font-size="15">${esc(b.name)}</text>`;
-  sigRows.forEach((r) => {
-    const yy = rowY[r.key];
-    svg += `<text x="${boardX + boardW - 18}" y="${yy + 4}" text-anchor="end" fill="var(--pcb-fg)" font-family="var(--mono)" font-size="12">${esc(r.label)}</text>`;
-    svg += `<circle cx="${boardX + boardW - 7}" cy="${yy}" r="4" fill="#d9b44a"/>`;
-  });
-  svg += `<rect x="${boardX + 70}" y="${boardTop + boardH - 14}" width="60" height="10" rx="3" fill="#9aa59f"/><text x="${boardX + 100}" y="${boardTop + boardH + 12}" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="11">USB</text>`;
-  // Moduler
-  for (const name of comps) {
-    const box = compBox[name];
-    const fill = name === "RC522" ? "#1f4fa3" : name === "OLED" ? "#121212" : "var(--surface)";
+    const sig = conns.filter((c) => c.comp === name && c.gpio !== undefined);
+    const pwr = conns.filter((c) => c.comp === name && c.power);
+    const header = HEADER[name];
     const isLed = name.endsWith(" LED");
+    const rows = Math.max(sig.length, pwr.length);
+    const h = TITLE + rows * ROW + (header ? 70 : isLed ? 26 : 8);
+    const fill = name === "RC522" ? "#1f4fa3" : name === "OLED" ? "#17191a" : "var(--surface)";
     const fg = isLed ? "var(--fg)" : "#ffffff";
-    svg += `<rect x="${compX}" y="${box.y}" width="${CW}" height="${box.h}" rx="10" fill="${fill}" stroke="var(--line)"/>`;
-    const title = name === "RC522" ? "RC522 RFID-leser" : name === "OLED" ? "OLED SSD1306 (I2C)" : name;
-    svg += `<text x="${compX + 12}" y="${box.y + 22}" fill="${fg}" font-family="var(--display)" font-weight="800" font-size="14">${esc(title)}</text>`;
-    if (isLed) svg += `<circle cx="${compX + CW - 22}" cy="${box.y + 18}" r="8" fill="${name.startsWith("Grønn") ? "var(--w-green)" : "var(--w-red)"}"/>`;
-    box.pins.forEach((p, i) => {
-      const yy = box.y + 34 + i * ROW + ROW / 2;
-      p.y = yy;
-      svg += `<circle cx="${compX + 7}" cy="${yy}" r="4" fill="#d9b44a"/>`;
-      svg += `<text x="${compX + 18}" y="${yy + 4}" fill="${fg}" font-family="var(--mono)" font-size="12">${esc(p.pin)}</text>`;
+    const title = name === "RC522" ? "RC522 RFID-leser" : name === "OLED" ? "OLED SSD1306 (I2C)" : `${name} (3 eller 5 mm)`;
+    boxes += `<rect x="${modX}" y="${y}" width="${modW}" height="${h}" rx="10" fill="${fill}" stroke="var(--line)"/>`;
+    boxes += t(modX + 14, y + 23, title, `fill="${fg}" font-family="var(--display)" font-weight="800" font-size="14"`);
+    if (isLed) boxes += `<circle cx="${modX + modW - 24}" cy="${y + 18}" r="8" fill="${name.startsWith("Grønn") ? "var(--w-green)" : "var(--w-red)"}"/>`;
+    sig.forEach((c, i) => {
+      c.y = y + TITLE + i * ROW + ROW / 2;
+      boxes += t(padL + 12, c.y + 4, c.pin.replace(" via 220 Ω", ""), `fill="${fg}" font-family="var(--mono)" font-size="12"`);
     });
+    pwr.forEach((c, i) => {
+      c.y = y + TITLE + i * ROW + ROW / 2;
+      boxes += t(padR - 12, c.y + 4, c.pin, `fill="${fg}" font-family="var(--mono)" font-size="12" text-anchor="end"`);
+      powerStubs.push(c);
+    });
+    if (header) {
+      // Pinnerekken slik den sitter på modulen; ubrukte pinner er hule
+      const hy = y + h - 54, step = (modW - 28) / header.pins.length;
+      boxes += `<line x1="${modX + 10}" y1="${hy - 12}" x2="${modX + modW - 10}" y2="${hy - 12}" stroke="${fg}" stroke-opacity=".25"/>`;
+      header.pins.forEach((p, i) => {
+        const used = conns.find((c) => c.comp === name && c.pin.split(" ")[0] === p);
+        const cx = modX + 14 + step * (i + 0.5);
+        boxes += used ? `<circle cx="${cx}" cy="${hy}" r="5" fill="${WIRE[used.c]}" stroke="${fg}" stroke-width="1"/>` : `<circle cx="${cx}" cy="${hy}" r="4.5" fill="none" stroke="${fg}" stroke-opacity=".6"/>`;
+        boxes += t(cx, hy + 17, p, `fill="${fg}" font-family="var(--mono)" font-size="10" text-anchor="middle"`);
+      });
+      boxes += t(modX + 14, y + h - 12, header.note, `fill="${fg}" fill-opacity=".75" font-family="var(--body)" font-size="11"`);
+    } else if (isLed) {
+      boxes += t(modX + 14, y + h - 12, "Langt bein = +, kort bein = −", `fill="var(--muted)" font-family="var(--body)" font-size="11"`);
+    }
+    y += h + 22;
   }
-  // Ledninger: ut fra kortet, ned/opp i eget løp, inn til modulen
-  const laneStart = boardX + boardW + 40, laneEnd = compX - 50;
-  const step = conns.length > 1 ? (laneEnd - laneStart) / (conns.length - 1) : 0;
-  conns.forEach((c, i) => {
-    const from = rowY[c.gpio !== undefined ? "g" + c.gpio : c.power];
-    const x0 = boardX + boardW - 3, x1 = compX + 3;
-    const lane = laneStart + i * step;
-    const path = `M${x0},${from} H${lane} V${c.y} H${x1}`;
-    svg += `<path d="${path}" fill="none" stroke="${WIRE[c.c]}" stroke-width="2.4" stroke-linejoin="round"/>`;
-    if (c.pin.includes("220")) svg += `<rect x="${x1 - 40}" y="${c.y - 6}" width="26" height="12" rx="3" fill="#d8c7a0" stroke="${WIRE[c.c]}"/>`;
-  });
+
+  // Kortet: bare pinnene som brukes, på samme høyde som modulpinnen de går til
+  const gndY = y + 6, pwrY = gndY + ROW;
+  const boardTop = 16, boardH = pwrY + ROW / 2 + 34 - boardTop;
+  let board = `<rect x="${boardX}" y="${boardTop}" width="${boardW}" height="${boardH}" rx="12" fill="var(--pcb)"/>`;
+  // Kortnavnet på to linjer når det har en del i parentes, så det holder seg innenfor kortet
+  const [name1, name2] = b.name.includes(" (") ? [b.name.split(" (")[0], "(" + b.name.split(" (")[1]] : [b.name, ""];
+  board += t(boardX + 14, boardTop + 22, name1, `fill="var(--pcb-fg)" font-family="var(--display)" font-weight="800" font-size="14"`);
+  if (name2) board += t(boardX + 14, boardTop + 38, name2, `fill="var(--pcb-fg)" font-family="var(--display)" font-weight="600" font-size="12"`);
+  board += t(boardX + 14, boardTop + (name2 ? 54 : 38), "Bare pinnene som brukes", `fill="var(--pcb-fg)" fill-opacity=".7" font-family="var(--body)" font-size="11"`);
+  const boardPin = (yy, label) => {
+    board += t(padB - 12, yy + 4, label, `fill="var(--pcb-fg)" font-family="var(--mono)" font-size="12" text-anchor="end"`);
+    pads += pad(padB, yy);
+  };
+  board += `<rect x="${boardX + boardW / 2 - 30}" y="${boardTop + boardH - 12}" width="60" height="12" rx="3" fill="#9aa59f"/>`;
+  board += t(boardX + boardW / 2, boardTop + boardH - 18, "USB", `fill="var(--pcb-fg)" fill-opacity=".7" font-family="var(--mono)" font-size="10" text-anchor="middle"`);
+
+  // Signalledninger: rett linje, med hva signalet er midt på
+  const midX = (padB + padL) / 2;
+  for (const c of conns.filter((x) => x.gpio !== undefined)) {
+    boardPin(c.y, pinName(b, c.gpio));
+    pads += pad(padL, c.y);
+    wires += `<line x1="${padB}" y1="${c.y}" x2="${padL}" y2="${c.y}" stroke="${WIRE[c.c]}" stroke-width="2.6" stroke-linecap="round"/>`;
+    if (c.pin.includes("220")) {
+      wires += `<rect x="${midX - 17}" y="${c.y - 6}" width="34" height="12" rx="3" fill="#e2cfa4" stroke="${WIRE[c.c]}" stroke-width="1.5"/>`;
+      wires += `<line x1="${midX - 8}" y1="${c.y - 6}" x2="${midX - 8}" y2="${c.y + 6}" stroke="#7a4a1d" stroke-width="2"/><line x1="${midX}" y1="${c.y - 6}" x2="${midX}" y2="${c.y + 6}" stroke="#1b1b1b" stroke-width="2"/><line x1="${midX + 8}" y1="${c.y - 6}" x2="${midX + 8}" y2="${c.y + 6}" stroke="#7a4a1d" stroke-width="2"/>`;
+      wires += t(midX, c.y - 11, `${c.sig} · 220 Ω`, `fill="var(--muted)" font-family="var(--body)" font-size="11" text-anchor="middle"`);
+    } else {
+      wires += t(midX, c.y - 7, c.sig, `fill="var(--muted)" font-family="var(--body)" font-size="11" text-anchor="middle"`);
+    }
+  }
+
+  // Strømskinner: GND nærmest, 3,3 V ytterst (3,3 V-stubbene hopper over GND-skinnen)
+  const gnds = powerStubs.filter((c) => c.power === "GND"), vccs = powerStubs.filter((c) => c.power === "3V3");
+  const rail = (x, y1, y2, c, label) => {
+    wires += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${WIRE[c]}" stroke-width="3.4" stroke-linecap="round"/>`;
+    wires += t(x, y1 - 9, label, `fill="var(--muted)" font-family="var(--mono)" font-size="11" text-anchor="middle"`);
+  };
+  const dot = (x, yy, c) => `<circle cx="${x}" cy="${yy}" r="3.6" fill="${WIRE[c]}"/>`;
+  if (gnds.length) rail(railG, Math.min(...gnds.map((c) => c.y)), gndY, "gnd", "GND");
+  if (vccs.length) rail(railP, Math.min(...vccs.map((c) => c.y)), pwrY, "pwr", "3,3 V");
+  for (const c of powerStubs) {
+    pads += pad(padR, c.y);
+    if (c.power === "GND") {
+      wires += `<line x1="${padR}" y1="${c.y}" x2="${railG}" y2="${c.y}" stroke="${WIRE.gnd}" stroke-width="2.6"/>` + dot(railG, c.y, "gnd");
+    } else {
+      const hop = gnds.length && c.y > Math.min(...gnds.map((g) => g.y)) && c.y < gndY;
+      const path = hop ? `M${padR},${c.y} H${railG - 6} a6,6 0 0 1 12,0 H${railP}` : `M${padR},${c.y} H${railP}`;
+      wires += `<path d="${path}" fill="none" stroke="${WIRE.pwr}" stroke-width="2.6"/>` + dot(railP, c.y, "pwr");
+    }
+  }
+  // Kortets GND og 3V3 inn i skinnene langs bunnen
+  boardPin(gndY, "GND");
+  boardPin(pwrY, "3V3");
+  if (gnds.length) wires += `<line x1="${padB}" y1="${gndY}" x2="${railG}" y2="${gndY}" stroke="${WIRE.gnd}" stroke-width="2.6"/>` + dot(railG, gndY, "gnd")
+    + t((padB + modX) / 2, gndY - 7, "Jord til alle moduler", `fill="var(--muted)" font-family="var(--body)" font-size="11" text-anchor="middle"`);
+  if (vccs.length) wires += `<line x1="${padB}" y1="${pwrY}" x2="${railP}" y2="${pwrY}" stroke="${WIRE.pwr}" stroke-width="2.6"/>` + dot(railP, pwrY, "pwr")
+    + t((padB + modX) / 2, pwrY - 7, "3,3 V til RC522 og skjerm (ikke 5 V)", `fill="var(--muted)" font-family="var(--body)" font-size="11" text-anchor="middle"`);
+
+  const H = boardTop + boardH + 14;
   const el = $("#diagram");
   el.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  el.innerHTML = svg;
+  el.setAttribute("aria-label", `Koblingsskjema for ${b.name}: ${conns.filter((c) => c.gpio !== undefined).map((c) => `${c.comp} ${c.pin.split(" ")[0]} til ${pinName(b, c.gpio)}`).join(", ")}. GND og 3,3 V fra kortet til alle moduler.`);
+  el.innerHTML = `<title>Koblingsskjema for ${esc(b.name)}</title>${board}${boxes}${wires}${pads}`;
   $("#legend").innerHTML = [["spi", "SPI (RC522)"], ["rst", "Reset"], ["i2c", "I2C (skjerm)"], ["pwr", "3,3 V"], ["gnd", "GND"], ["green", "Grønn LED"], ["red", "Rød LED"]]
     .filter(([k]) => conns.some((c) => c.c === k)).map(([k, t]) => `<span><i style="background:${WIRE[k]}"></i>${t}</span>`).join("");
   // Tabell
