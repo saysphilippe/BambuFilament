@@ -5,10 +5,10 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009200812";
-import { componentHtml, findPart } from "./circuits.js?v=20261009200812";
-import { detectPack } from "./pack.js?v=20261009200812";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009200812";
+import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009200852";
+import { componentHtml, findPart } from "./circuits.js?v=20261009200852";
+import { detectPack } from "./pack.js?v=20261009200852";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009200852";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -427,6 +427,14 @@ function listenForImport() {
     const isAli = ALI_ORIGINS.test(e.origin), isMouser = MOUSER_ORIGINS.test(e.origin), isLcsc = LCSC_ORIGINS.test(e.origin);
     if (!isAli && !isMouser && !isLcsc) return;
     const msg = e.data;
+    // AliExpress-fanen spør hvilke av mine varer som trenger nytt bilde (bilde fra søk eller ingen).
+    if (msg?.type === "bf-list-noimg" && isAli) {
+      await load();
+      const items = pstate.parts.filter((p) => p.source === "aliexpress" && p.owner === ctx.userName() && !p.imgManual && (p.imgSearch || !p.image))
+        .map((p) => ({ id: p.id, t: p.title }));
+      e.source?.postMessage({ type: "bf-noimg", items }, e.origin);
+      return;
+    }
     // Nye bilder for gitte varer: [{ id, image }] (tom image = fjern bildet). Bare egne varer endres.
     if (msg?.type === "bf-images" && Array.isArray(msg.images)) {
       try {
