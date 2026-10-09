@@ -948,3 +948,7 @@ dialog.part-dialog { width: min(1040px, calc(100vw - 32px)); }
 .fp-legend i.silk { border: 1.5px solid currentColor; background: transparent; }
 .fp-legend i.drill { width: 9px; border-radius: 50%; background: var(--surface); border: 1px solid #8a6a1c; box-shadow: 0 0 0 2px #c99a2e; }
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.req-sum { margin-left: 8px; font-weight: 400; font-size: 0.85em; }
+.req-total { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 12px 0 0; }
+.req-price { font-variant-numeric: tabular-nums; }
+.req-line-total { display: block; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9em; }

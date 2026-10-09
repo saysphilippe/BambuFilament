@@ -134,6 +134,19 @@ const fmtMoney = (p) => {
   const v = p.unitPrice.toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return { NOK: `${v} kr`, EUR: `€${v}`, USD: `$${v}`, GBP: `£${v}` }[p.currency] || v;
 };
+// Pris per stykk (kjøpt pris delt på pakkestørrelsen) og verdien av et ønske i kroner.
+const pieceMoney = (p) => (p && p.unitPrice !== null ? { unitPrice: p.unitPrice / (p.pack || 1), currency: p.currency } : null);
+const nok = (v) => `${Math.round(v).toLocaleString("nb-NO")} kr`;
+const reqNok = (q) => {
+  const p = pstate.parts.find((x) => x.id === q.partId), m = pieceMoney(p);
+  return m ? m.unitPrice * q.qty * (FX_NOK[m.currency] || 1) : null;
+};
+// Sum for en liste med ønsker, og hvor mange som mangler pris.
+function reqSum(list) {
+  let sum = 0, missing = 0;
+  for (const q of list) { const v = reqNok(q); if (v === null) missing++; else sum += v; }
+  return `<span class="req-sum">ca. <b>${nok(sum)}</b>${missing ? ` <span class="hint">(${missing} uten pris)</span>` : ""}</span>`;
+}
 const kicadHint = (p) => {
   const t = `${p.title} ${p.variant} ${p.description}`.toLowerCase();
   return /\bleds?\b/.test(t) ? "LED" : /capacitor|\d\s?(uf|nf|pf|µf)\b/.test(t) ? "C" : /inductor|ferrite|\d\s?(uh|mh|µh)\b/.test(t) ? "L" : /\bdiodes?\b|zener|schottky/.test(t) ? "D" : "R";
@@ -290,12 +303,14 @@ function reqRow(q, mode) {
         <span><span class="owner-dot" style="--owner:${ctx.userColor(who)}"></span>${mode === "cart" ? "Eier" : "Ønsket av"}: ${ctx.esc(who || "Ukjent")}</span>
         ${p ? `<span>${left} igjen</span>` : ""}
         ${p?.pkg ? `<span>${ctx.esc(p.pkg)}</span>` : ""}
+        ${pieceMoney(p) ? `<span class="req-price" title="Kjøpt pris per stykk">${ctx.esc(fmtMoney(pieceMoney(p)))} per stk</span>` : p ? `<span class="hint">ingen pris</span>` : ""}
       </span>
       ${q.note ? `<span class="req-note">«${ctx.esc(q.note)}»</span>` : ""}
     </div>
     <div class="req-qty">${mode === "cart" && q.status === "draft"
       ? `<label>Antall<input type="number" min="1" max="${Math.max(1, left)}" value="${q.qty}" data-reqqty="${ctx.esc(q.id)}"></label>`
       : `<b>${q.qty} stk</b>`}
+      ${pieceMoney(p) ? `<span class="req-line-total">${ctx.esc(fmtMoney({ ...pieceMoney(p), unitPrice: pieceMoney(p).unitPrice * q.qty }))}</span>` : ""}
       <span class="req-status">${ctx.esc(REQ_STATUS[q.status])}${q.sentAt && q.status === "sent" ? ` ${ctx.esc(fmtDate(q.sentAt.slice(0, 10)))}` : ""}</span>
     </div>
     <div class="req-actions">${actions}</div>
@@ -315,8 +330,9 @@ function renderCart(box) {
   box.innerHTML = subnav() + `<section class="panel req-panel">
     <h2>Handlekurv</h2>
     <p class="hint">Legg varer du trenger i handlekurven fra detaljvinduet til en komponent. Når du sender, får eieren dem under «Ønsket fra meg» og kan finne dem fram og sende dem til deg.</p>
-    ${mine.length ? groupBy(mine, "owner").map(([owner, list]) => `<h3><span class="owner-dot" style="--owner:${ctx.userColor(owner)}"></span> Fra ${ctx.esc(owner || "ukjent eier")}</h3><ul class="req-list">${list.map((q) => reqRow(q, "cart")).join("")}</ul>`).join("")
+    ${mine.length ? groupBy(mine, "owner").map(([owner, list]) => `<h3><span class="owner-dot" style="--owner:${ctx.userColor(owner)}"></span> Fra ${ctx.esc(owner || "ukjent eier")} ${reqSum(list)}</h3><ul class="req-list">${list.map((q) => reqRow(q, "cart")).join("")}</ul>`).join("")
       : `<p class="empty-msg">Handlekurven er tom. Åpne en komponent og trykk «Legg i handlekurv».</p>`}
+    ${mine.length ? `<p class="req-total">Verdi i handlekurven: ${reqSum(mine)} <span class="hint">Kjøpspris per stykk, omregnet til kroner med omtrentlig kurs.</span></p>` : ""}
     ${drafts.length ? `<div class="req-send"><span class="hint">${drafts.length} ${drafts.length === 1 ? "vare" : "varer"} er ikke sendt ennå.</span><button type="button" class="btn btn-primary" data-sendcart>Send ønskene til eierne</button></div>` : ""}
   </section>`;
 }
@@ -1057,7 +1073,7 @@ export function initParts(context) {
     if (e.target.id === "parts-show") { pstate.show = e.target.value; shown = PAGE; render(); }
     if (e.target.dataset.reqqty) {
       const q = pstate.reqs.find((x) => x.id === e.target.dataset.reqqty);
-      if (q) { q.qty = Math.max(1, Math.round(Number(e.target.value) || 1)); saveReqs([q]).catch((err) => ctx.setSync(err.message, true)); }
+      if (q) { q.qty = Math.max(1, Math.round(Number(e.target.value) || 1)); render(); saveReqs([q]).catch((err) => ctx.setSync(err.message, true)); }
     }
   });
   // Bilder som ikke finnes i liten størrelse: prøv originalen, ellers kategorinavnet.
