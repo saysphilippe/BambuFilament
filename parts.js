@@ -5,13 +5,14 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009180655";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009180655";
+import { componentHtml, findPart } from "./circuits.js?v=20261009181100";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009181100";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
 const MOUSER_ORIGINS = /^https:\/\/([a-z]+\.)?mouser\.[a-z.]+$/;
-const IMG_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(alicdn\.com|aliexpress-media\.com|mouser\.com)\//;
+const LCSC_ORIGINS = /^https:\/\/(www\.)?lcsc\.com$/;
+const IMG_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(alicdn\.com|aliexpress-media\.com|mouser\.com|lcsc\.com)\//;
 const PATCH_CHUNK = 400;
 
 // ---------- Kategorier ----------
@@ -104,7 +105,7 @@ export function parsePrice(text) {
 function cleanPart(p) {
   if (!p || typeof p !== "object" || !p.id) return null;
   return {
-    id: clip(p.id, 200), source: ["aliexpress", "mouser", "manual"].includes(p.source) ? p.source : "manual",
+    id: clip(p.id, 200), source: ["aliexpress", "mouser", "lcsc", "manual"].includes(p.source) ? p.source : "manual",
     owner: clip(p.owner, 40), title: clip(p.title, 300), variant: clip(p.variant, 200),
     qty: Math.max(0, Math.round(num(p.qty) ?? 1)), left: p.left === null || p.left === undefined ? null : Math.max(0, Math.round(num(p.left) ?? 0)),
     unitPrice: num(p.unitPrice), currency: clip(p.currency, 4), orderTotal: clip(p.orderTotal, 40),
@@ -114,9 +115,11 @@ function cleanPart(p) {
     // Bildet er hentet fra en lignende vare (søk på tittelen), fordi originalen er fjernet hos AliExpress.
     imgSearch: !!p.imgSearch && !!safeImg(p.image),
     // Pakketype (TO-92, SOT-23, 0805 …) fra tittel, variant og delenummer, ellers fra kjente delenumre.
-    pkg: findPackage(p.variant, p.title, p.mpn, p.description) || String(findPart(p.title, p.mpn)?.pkg || "").split("/")[0],
+    // Butikkens egen pakkeangivelse (LCSC) går foran det vi finner i teksten.
+    pkgFixed: clip(p.pkgFixed, 30),
+    pkg: findPackage(p.pkgFixed) || clip(p.pkgFixed, 30) || findPackage(p.variant, p.title, p.mpn, p.description) || String(findPart(p.title, p.mpn)?.pkg || "").split("/")[0],
     // Datablad (PDF) og butikkens egen kategori (Mouser: «Sensors › Humidity Sensors»).
-    datasheet: /^https:\/\/([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
+    datasheet: /^https:\/\/([a-z0-9-]+\.)*(mouser\.[a-z.]+|lcsc\.com)\/.+\.pdf$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
     shopCat: clip(p.shopCat, 160), catHint: CAT_NAME[p.catHint] ? p.catHint : "",
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
     // Kategorien regnes ut på nytt med de nyeste reglene, med mindre den er satt for hånd.
@@ -137,7 +140,7 @@ const fmtDate = (d) => (d ? new Date(d + "T12:00:00").toLocaleDateString("nb-NO"
 // Omtrentlige kurser for å vise samlet beløp i kroner (summen per valuta står i verktøytipset).
 const FX_NOK = { NOK: 1, EUR: 11.6, USD: 10.6, GBP: 13.6 };
 
-const SOURCE_LABEL = { aliexpress: "AliExpress", mouser: "Mouser", manual: "Lagt inn for hånd" };
+const SOURCE_LABEL = { aliexpress: "AliExpress", mouser: "Mouser", lcsc: "LCSC", manual: "Lagt inn for hånd" };
 
 // ---------- Lasting og lagring ----------
 
@@ -361,7 +364,7 @@ function mergeImport(rows, source) {
   for (const r of rows) {
     const base = source === "aliexpress"
       ? `ae:${clip(r.orderId, 30)}:${clip(r.itemId, 30) || clip(r.title, 40)}:${clip(r.variant, 60)}`
-      : `mo:${clip(r.orderId, 30)}:${clip(r.mpn || r.title, 60)}`;
+      : `${source === "lcsc" ? "lc" : "mo"}:${clip(r.orderId, 30)}:${clip(r.mpn || r.title, 60)}`;
     // Samme vare flere ganger i samme ordre (f.eks. ulike varianter som ikke oppgis for gamle
     // ordre): egen linje nummer 2, 3, … i den rekkefølgen butikken viser dem.
     seen[base] = (seen[base] || 0) + 1;
@@ -421,14 +424,14 @@ async function importRows(rows, source, label, replaceOrders = []) {
 // Mottar data fra bokmerket (vinduet som åpnet denne siden).
 function listenForImport() {
   window.addEventListener("message", async (e) => {
-    const isAli = ALI_ORIGINS.test(e.origin), isMouser = MOUSER_ORIGINS.test(e.origin);
-    if (!isAli && !isMouser) return;
+    const isAli = ALI_ORIGINS.test(e.origin), isMouser = MOUSER_ORIGINS.test(e.origin), isLcsc = LCSC_ORIGINS.test(e.origin);
+    if (!isAli && !isMouser && !isLcsc) return;
     const msg = e.data;
     if (!msg || msg.type !== "bf-import" || !Array.isArray(msg.rows)) return;
     ctx.showSection?.("parts");
     pstate.view = "import";
     try {
-      await importRows(msg.rows.slice(0, 20000), isAli ? "aliexpress" : "mouser", isAli ? "AliExpress" : "Mouser",
+      await importRows(msg.rows.slice(0, 20000), isAli ? "aliexpress" : isLcsc ? "lcsc" : "mouser", isAli ? "AliExpress" : isLcsc ? "LCSC" : "Mouser",
         Array.isArray(msg.replaceOrders) ? msg.replaceOrders.slice(0, 20000) : []);
       e.source?.postMessage({ type: "bf-imported", count: msg.rows.length }, e.origin);
     } catch (err) {
@@ -439,7 +442,7 @@ function listenForImport() {
   });
   // Si fra til bokmerket at siden er klar (den ble åpnet av ordresiden).
   if (window.opener && location.hash === "#import") {
-    for (const origin of ["https://www.aliexpress.com", "https://aliexpress.com", "https://www.aliexpress.us", "https://www.mouser.com", "https://eu.mouser.com", "https://no.mouser.com"]) {
+    for (const origin of ["https://www.aliexpress.com", "https://aliexpress.com", "https://www.aliexpress.us", "https://www.mouser.com", "https://eu.mouser.com", "https://no.mouser.com", "https://www.lcsc.com"]) {
       try { window.opener.postMessage({ type: "bf-ready" }, origin); } catch { /* annet domene */ }
     }
   }
@@ -696,7 +699,7 @@ function render() {
             </select>
           </div>
           ${owners.length > 1 ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, undefined, ctx.userColor(o))).join("")}</div></div>` : ""}
-          <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
+          <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "lcsc", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
           ${pkgs.length ? `<div class="chip-row"><span class="chip-label">Pakke</span><div class="chips">${chip("pkg", "", "Alle")}${pkgs.map(([k, n]) => chip("pkg", k, k, n)).join("")}</div></div>` : ""}
         </section>
         ${pstate.loading ? `<p class="count">Henter komponenter…</p>` : pstate.error ? `<p class="notice">${ctx.esc(pstate.error)}</p>` : ""}
@@ -816,7 +819,7 @@ function openPart(id) {
         ${row("Kategori hos butikken", ctx.esc(p.shopCat))}
         ${row("Datablad", p.datasheet ? `<a href="${ctx.esc(p.datasheet)}" target="_blank" rel="noopener">Åpne PDF ↗</a>` : "")}
       </table>
-      ${ELECTRONICS.has(p.category) || p.source === "mouser" ? componentHtml(p) : ""}
+      ${ELECTRONICS.has(p.category) || p.source === "mouser" || p.source === "lcsc" ? componentHtml(p) : ""}
       <div class="part-edit">
         <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${CATEGORIES.map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
         <label>Antall igjen<input id="pd-left" type="number" min="0" max="100000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
