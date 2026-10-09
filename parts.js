@@ -5,9 +5,9 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009194702";
-import { detectPack } from "./pack.js?v=20261009194702";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009194702";
+import { componentHtml, findPart } from "./circuits.js?v=20261009194900";
+import { detectPack } from "./pack.js?v=20261009194900";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009194900";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -436,6 +436,22 @@ function listenForImport() {
     const isAli = ALI_ORIGINS.test(e.origin), isMouser = MOUSER_ORIGINS.test(e.origin), isLcsc = LCSC_ORIGINS.test(e.origin);
     if (!isAli && !isMouser && !isLcsc) return;
     const msg = e.data;
+    // Bare ordretotaler (f.eks. Invoice Total fra Mouser, inkl. frakt og mva): { ordrenummer: "kr 1 341,25" }.
+    if (msg?.type === "bf-ordertotals" && msg.totals && typeof msg.totals === "object") {
+      const source = isAli ? "aliexpress" : isLcsc ? "lcsc" : "mouser";
+      try {
+        await load();
+        const changed = pstate.parts.filter((p) => p.source === source && p.owner === ctx.userName() && typeof msg.totals[p.orderId] === "string" && p.orderTotal !== clip(msg.totals[p.orderId], 40));
+        for (const p of changed) { p.orderTotal = clip(msg.totals[p.orderId], 40); p.updated = new Date().toISOString(); }
+        if (changed.length && !ctx.DEMO) await savePatch(changed.map((p) => ({ id: p.id, data: p })));
+        pstate.importLog.unshift(`${new Date().toLocaleTimeString("nb-NO")} Ordretotaler: ${Object.keys(msg.totals).length} ordre, ${changed.length} varer oppdatert.`);
+        render();
+        e.source?.postMessage({ type: "bf-imported", count: changed.length }, e.origin);
+      } catch (err) {
+        e.source?.postMessage({ type: "bf-import-error", error: err.message }, e.origin);
+      }
+      return;
+    }
     if (!msg || msg.type !== "bf-import" || !Array.isArray(msg.rows)) return;
     ctx.showSection?.("parts");
     pstate.view = "import";
