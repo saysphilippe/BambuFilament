@@ -1,12 +1,12 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009172214";
-import { toRecords } from "./worker/src/records.js?v=20261009172214";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009172214";
-import { initParts, showParts, refreshParts } from "./parts.js?v=20261009172214";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009172753";
+import { toRecords } from "./worker/src/records.js?v=20261009172753";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009172753";
+import { initParts, showParts, refreshParts } from "./parts.js?v=20261009172753";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
   document.documentElement.replaceChildren();
-  throw new Error("Filament Universet kan ikke vises i en ramme.");
+  throw new Error("Filament og elektronikk universet kan ikke vises i en ramme.");
 }
 
 // Data og kode ligger i hver sine repoer. Den delte skrivetokenen gjelder bare
@@ -1346,12 +1346,12 @@ function openVipps(loanId) {
     qr.addData(url);
     qr.make();
     qrBox.innerHTML = `<div class="v-qr-code">${qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true })}</div>
-      <p class="hint">Skann med mobilkameraet for å åpne dette vinduet på mobilen, og trykk «Åpne Vipps» der. Du må være innlogget på Filament Universet på mobilen.</p>`;
+      <p class="hint">Skann med mobilkameraet for å åpne dette vinduet på mobilen, og trykk «Åpne Vipps» der. Du må være innlogget på Filament og elektronikk universet på mobilen.</p>`;
   }
   $("#v-return").checked = false;
   $("#v-return-label").hidden = !spoolKr;
   setVippsAmount();
-  $("#v-msg").textContent = `Filament Universet: ${what}`;
+  $("#v-msg").textContent = `Filament og elektronikk universet: ${what}`;
   $("#v-error").textContent = "";
   $("#vipps").showModal();
 }
@@ -2941,7 +2941,7 @@ async function bambuSubmit(e) {
       if (bambuLogin.step === "code") {
         bambuLogin.step = "token";
         showBambuStep();
-        $("#b-error").textContent = "Bambu godtar ikke innlogging via Filament Universet akkurat nå (robotsjekk). Hent tilgangsnøkkelen fra bambulab.com som beskrevet over.";
+        $("#b-error").textContent = "Bambu godtar ikke innlogging via Filament og elektronikk universet akkurat nå (robotsjekk). Hent tilgangsnøkkelen fra bambulab.com som beskrevet over.";
         return;
       }
       return await bambuCodeLogin("Bambu ville sjekke at du ikke er en robot, så vi bruker kode på e-post i stedet. ");

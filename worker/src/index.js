@@ -248,7 +248,7 @@ async function isSiteUser(tok) {
 // sende Bambu-e-post til vilkårlige adresser.
 async function sendCode({ email, ticket }, env, tok) {
   if (typeof email !== "string" || !email) throw fail("Mangler e-post");
-  if (!(await checkTicket(email, ticket, env)) && !(await isSiteUser(tok))) throw fail("Logg inn på Filament Universet først.", 403);
+  if (!(await checkTicket(email, ticket, env)) && !(await isSiteUser(tok))) throw fail("Logg inn på Filament og elektronikk universet først.", 403);
   const { status, data } = await bambu("/v1/user-service/user/sendemail/code", {
     method: "POST",
     body: { email, type: "codeLogin" },
@@ -662,10 +662,10 @@ async function sendReset(who, env) {
   }, `Midlertidig passord på e-post (${name})`);
   if (!saved) return done;
 
-  await sendMail(env, email, "Midlertidig passord til Filament Universet", [
+  await sendMail(env, email, "Midlertidig passord til Filament og elektronikk universet", [
     `Hei ${name}!`,
     "",
-    "Her er et midlertidig passord til Filament Universet:",
+    "Her er et midlertidig passord til Filament og elektronikk universet:",
     "",
     `    ${password}`,
     "",
@@ -708,16 +708,16 @@ async function register({ name, email, phone }, env) {
   if (added) {
     const link = await approveLink(name, email, env);
     const h = escapeHtml;
-    const whatsapp = sendWhatsApp(env, `Filament Universet: ${name} (${email}) ber om tilgang.\n\nGodkjenn eller avvis: ${link}`)
+    const whatsapp = sendWhatsApp(env, `Filament og elektronikk universet: ${name} (${email}) ber om tilgang.\n\nGodkjenn eller avvis: ${link}`)
       .catch((err) => console.warn("WhatsApp-varsel feilet:", err.message));
     await sendMail(env, adminEmail(env), `Ny bruker venter: ${name}`, [
-      `${name} (${email}) har bedt om tilgang til Filament Universet.`,
+      `${name} (${email}) har bedt om tilgang til Filament og elektronikk universet.`,
       "",
       `Godkjenn eller avvis: ${link}`,
       "",
       `Du kan også gjøre det under Brukere på ${SITE_URL}`,
     ].join("\n"), `<div style="font-family:system-ui,sans-serif;font-size:15px;color:#1c1f1d">
-      <p><b>${h(name)}</b> (${h(email)}) har bedt om tilgang til Filament Universet.</p>
+      <p><b>${h(name)}</b> (${h(email)}) har bedt om tilgang til Filament og elektronikk universet.</p>
       <p style="margin:22px 0"><a href="${h(link)}" style="background:#00ae42;color:#fff;padding:11px 20px;border-radius:9px;text-decoration:none;font-weight:600">Godkjenn eller avvis</a></p>
       <p style="color:#666;font-size:13px">Lenken gjelder i 7 dager. Du kan også gjøre det under Brukere på <a href="${SITE_URL}">${SITE_URL}</a>.</p>
     </div>`).catch((err) => console.warn("Varsel feilet:", err.message));
@@ -775,7 +775,7 @@ async function readApproveLink(url, env) {
 
 function page(title, body, status = 200) {
   const html = `<!doctype html><html lang="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>${escapeHtml(title)} – Filament Universet</title>
+<meta name="robots" content="noindex"><title>${escapeHtml(title)} – Filament og elektronikk universet</title>
 <style>
   :root { color-scheme: light dark; --bg: #f5f5f4; --card: #fff; --text: #1c1f1d; --muted: #666; --accent: #00ae42; --danger: #c62828; }
   @media (prefers-color-scheme: dark) { :root { --bg: #161817; --card: #202321; --text: #eceeed; --muted: #a2a8a4; } }
@@ -788,7 +788,7 @@ function page(title, body, status = 200) {
   .ok { background: var(--accent); color: #fff; } .no { background: transparent; color: var(--danger); border-color: var(--danger); }
   a { color: var(--accent); }
 </style></head><body><main><h1>${escapeHtml(title)}</h1>${body}
-<p class="muted"><a href="${SITE_URL}">Til Filament Universet</a></p></main></body></html>`;
+<p class="muted"><a href="${SITE_URL}">Til Filament og elektronikk universet</a></p></main></body></html>`;
   return new Response(html, {
     status,
     headers: {
@@ -822,7 +822,7 @@ async function approvePage(request, env) {
     }
 
     if (request.method === "GET") {
-      return page("Ny bruker", `<p><b>${h(name)}</b> (${h(email)}) har bedt om tilgang til Filament Universet.</p>
+      return page("Ny bruker", `<p><b>${h(name)}</b> (${h(email)}) har bedt om tilgang til Filament og elektronikk universet.</p>
         <form method="post"><button class="ok" name="action" value="approve">Godkjenn</button><button class="no" name="action" value="reject">Avvis</button></form>
         <p class="muted">Ved godkjenning legges brukeren til og får et midlertidig passord på e-post.</p>`);
     }
@@ -914,7 +914,7 @@ async function sendMail(env, to, subject, text, html) {
   }
 
   const message = [
-    `From: ${encodeHeader("Filament Universet")} <${from}>`,
+    `From: ${encodeHeader("Filament og elektronikk universet")} <${from}>`,
     `To: <${to}>`,
     `Subject: ${encodeHeader(subject)}`,
     `Date: ${new Date().toUTCString().replace("GMT", "+0000")}`,

@@ -774,3 +774,5 @@ dialog.wide-dialog { width: min(820px, calc(100vw - 32px)); }
 .bookmarklet { margin-top: 8px; cursor: grab; }
 .import-log { list-style: none; padding: 0; margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
 .import-log li { padding: 4px 0; border-top: 1px solid var(--border); }
+/* Langt navn i toppen: mindre skrift på smale skjermer, så knappene får plass. */
+@media (max-width: 560px) { header h1 { font-size: 15px; line-height: 1.2; } }

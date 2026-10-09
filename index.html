@@ -7,16 +7,16 @@
        style-src trenger 'unsafe-inline' for fargefeltene (style-attributter med kontrollerte farger). -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://store.bblcdn.eu https://store.bblcdn.com https://*.alicdn.com https://*.aliexpress-media.com https://*.mouser.com; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://bambufilament-proxy.saysphilippe.workers.dev; base-uri 'none'; form-action 'self'; object-src 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Filament Universet</title>
-  <meta name="description" content="Felles oversikt over Bambu Lab-filament, skannet inn med RFID.">
+  <title>Filament og elektronikk universet</title>
+  <meta name="description" content="Felles oversikt over Bambu Lab-filament og elektronikkomponenter, skannet inn med RFID og importert fra AliExpress og Mouser.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%2300ae42'/><circle cx='16' cy='16' r='5' fill='white'/></svg>">
-  <link rel="stylesheet" href="style.css?v=20261009172214">
+  <link rel="stylesheet" href="style.css?v=20261009172753">
 </head>
 <body>
   <header>
     <a class="brand" href="./">
       <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="var(--accent)"/><circle cx="16" cy="16" r="5" fill="var(--bg)"/></svg>
-      <h1>Filament Universet</h1>
+      <h1>Filament og elektronikk universet</h1>
     </a>
     <div class="actions">
       <span id="sync" class="sync"></span>
@@ -39,7 +39,7 @@
     <div class="gate-card">
       <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="var(--accent)"/><circle cx="16" cy="16" r="5" fill="var(--bg)"/></svg>
       <h2>Logg inn for å se lagrene</h2>
-      <p class="hint">Filament Universet er en felles filamentoversikt for en lukket gruppe. Spoler, AMS, bibliotek og venteliste vises bare for innloggede brukere.</p>
+      <p class="hint">Filament og elektronikk universet er en felles oversikt over filament og komponenter for en lukket gruppe. Spoler, AMS, bibliotek, komponenter og venteliste vises bare for innloggede brukere.</p>
       <button id="gate-login" class="btn btn-primary">Logg inn</button>
       <p class="gate-links"><button type="button" class="link-btn" data-open="register">Ny bruker? Be om tilgang</button> · <button type="button" class="link-btn" data-open="forgot">Glemt passord?</button></p>
       <p class="hint"><a href="?demo">Se demo med eksempeldata</a></p>
@@ -214,14 +214,14 @@
     <form method="dialog">
       <h2>Koble til Bambu-konto</h2>
       <div id="b-step-password">
-        <p class="hint">Logg inn med Bambu Lab-kontoen din (samme som i Bambu Handy). Innloggingen går via Filament Universet sin proxy til Bambu. Bare tilgangsnøkkelen lagres, og bare i denne nettleseren. Passordet lagres ikke.</p>
+        <p class="hint">Logg inn med Bambu Lab-kontoen din (samme som i Bambu Handy). Innloggingen går via Filament og elektronikk universet sin proxy til Bambu. Bare tilgangsnøkkelen lagres, og bare i denne nettleseren. Passordet lagres ikke.</p>
         <label>E-post<input id="b-email" type="email" autocomplete="username"></label>
         <label>Passord<input id="b-password" type="password" autocomplete="current-password"></label>
         <p class="hint"><button value="code" class="link-btn" formnovalidate>Logg inn med kode på e-post i stedet</button> – uten passord.</p>
         <p class="hint">Stopper Bambu deg med robotsjekk? <button value="token" class="link-btn" formnovalidate>Lim inn tilgangsnøkkel fra bambulab.com</button></p>
       </div>
       <div id="b-step-token" hidden>
-        <p class="hint">Bambu godtar av og til ikke innlogging via Filament Universet og vil sjekke at du ikke er en robot. Da kan du logge inn hos Bambu selv og hente tilgangsnøkkelen derfra (på PC):</p>
+        <p class="hint">Bambu godtar av og til ikke innlogging via Filament og elektronikk universet og vil sjekke at du ikke er en robot. Da kan du logge inn hos Bambu selv og hente tilgangsnøkkelen derfra (på PC):</p>
         <ol class="hint token-steps">
           <li>Åpne <a href="https://bambulab.com/en/sign-in" target="_blank" rel="noopener">bambulab.com</a> og logg inn (løs robotsjekken der).</li>
           <li>Trykk <b>F12</b>, velg fanen <b>Application</b> (Programmer), så <b>Cookies</b> → <b>https://bambulab.com</b>.</li>
@@ -417,6 +417,6 @@ Peter</textarea></label>
   </dialog>
 
   <script src="vendor/qrcode.js"></script>
-  <script type="module" src="app.js?v=20261009172214"></script>
+  <script type="module" src="app.js?v=20261009172753"></script>
 </body>
 </html>

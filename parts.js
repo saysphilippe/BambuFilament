@@ -18,9 +18,9 @@ const PATCH_CHUNK = 400;
 export const CATEGORIES = [
   ["3dprint", "3D-print", /3d print|\bprinter\b|nozzle|hotend|hot end|extruder|filament|bambu|prusa|\bender\b|\bpei\b|build plate|bowden|\bptfe\b|heat ?bed|bltouch|volcano|\be3d\b/],
   ["house", "Husholdning", /\bfelt\b|furniture|chair leg|table leg|kitchen|bathroom|shower|toilet|towel|refrigerator|\bfridge|curtain|door stop|cleaning|\bmop\b|broom|\bdish|\bmugs?\b|\bcups?\b|water bottle|lunch box|pillow|bed sheet|blanket|laundry|hanger|trash|garbage|vacuum|\bsink\b|faucet|non-slip|anti-slip|carpet|\brugs?\b|household/],
-  ["tool", "Verktøy", /\btools?\b|plier|screwdriver|soldering|\bsolder\b|multimeter|wrench|\bdrill|tweezer|\bknife|\bknives\b|cutter|\bsaws?\b|hacksaw|chain ?saw|caliper|crimping|heat gun|glue gun|file set|sandpaper|\bvise\b|tape measure|spirit level|oscilloscope|\btester\b|hex key|allen key|ratchet|socket set/],
-  ["mcu", "Mikrokontrollere", /esp32|esp8266|\besp-|arduino|raspberry|stm32|nodemcu|wemos|\bpico\b|attiny|atmega|development board|dev board|nrf52|rp2040|\bxiao\b|teensy|microcontroller/],
   ["sensor", "Sensorer", /sensor|\brfid\b|rc522|\bnfc\b|ultrasonic|hc-sr|\bpir\b|thermistor|thermocouple|\bdht\d|\bbme\d|\bbmp\d|accelerometer|gyro|\bmpu\d|hall effect|load cell|hx711|ds18b20|lidar|\btof\b|photoresistor/],
+  ["tool", "Verktøy", /\btools?\b|plier|screwdriver|nail gun|staple gun|stapler|airbrush|soldering|\bsolder\b|multimeter|wrench|\bdrill|tweezer|\bknife|\bknives\b|cutter|\bsaws?\b|hacksaw|chain ?saw|caliper|crimping|heat gun|glue gun|file set|sandpaper|\bvise\b|tape measure|spirit level|oscilloscope|\btester\b|hex key|allen key|ratchet|socket set/],
+  ["mcu", "Mikrokontrollere", /esp32|esp8266|\besp-|arduino|raspberry|stm32|nodemcu|wemos|\bpico\b|attiny|atmega|development board|dev board|nrf52|rp2040|\bxiao\b|teensy|microcontroller/],
   ["power", "Strøm og batterier", /batter(y|ies)|charger|charging|power supply|power bank|\bbuck\b|\bboost\b|step.?down|step.?up|dc-dc|converter|18650|lipo|li-ion|lithium|\bsolar\b|\badapter\b|transformer|inverter|\bpsu\b|tp4056/],
   ["passive", "Passive komponenter", /resistor|capacitor|inductor|\bdiodes?\b|transistor|mosfet|potentiometer|crystal oscillator|\bfuses?\b|varistor|thyristor|\btriac|\bic chip|optocoupler|voltage regulator|ams1117|\blm7\d|ne555|assortment kit|\b2n\d{4}\b|\bbc5\d\d\b|\bs80[0-9]{2}\b|\birf\w+|\birlz?\w+|\btip1[0-9]{2}\b/],
   ["module", "Moduler og skjermer", /\boled\b|\blcd\b|\btft\b|display|\brelays?\b|\bmodule\b|driver board|motor driver|a4988|tmc2\d|amplifier|\bdac\b|\badc\b|\brtc\b|shield|breakout/],
@@ -31,7 +31,7 @@ export const CATEGORIES = [
   ["craft", "Hobby og håndverk", /\bcraft|\bdiy\b|\bpaint|\bbrush|sticker|\bvinyl|decal|\bwood|plywood|basswood|\blaser\b|sewing|needle|\byarn|\bresin|\bmold|\bmould|epoxy|glitter|\bstamp|embroider|magnetic (sheet|mat)/],
   ["computer", "Data og mobil", /\bphones?\b|iphone|samsung|\bcase\b|screen protector|keyboard|\bmouse\b|headphone|earphone|earbuds|speaker|usb hub|sd card|memory card|\bssd\b|flash drive|laptop|tablet|smart ?watch|webcam|router/],
   ["outdoor", "Bil, sykkel og friluft", /\bcars?\b|vehicle|\bbike|bicycle|cycling|camping|\btents?\b|canopy|fishing|hiking|outdoor|garden|kayak|motorcycle|scooter|survival/],
-  ["clothes", "Klær og tilbehør", /\bshirts?\b|t-shirt|\bshoes?\b|\bsocks?\b|jacket|\bhats?\b|\bcaps?\b|\bgloves?\b|\bbags?\b|backpack|wallet|watch band|\bstraps?\b|glasses|sunglasses|jewelry|necklace|\brings?\b/],
+  ["clothes", "Klær, skjønnhet og tilbehør", /\bshirts?\b|t-shirt|\bshoes?\b|\bsocks?\b|jacket|\bhats?\b|\bcaps?\b|\bgloves?\b|\bbags?\b|backpack|wallet|watch band|\bstraps?\b|glasses|sunglasses|jewelry|necklace|nail art|manicure|eyeshadow|cosmetic|makeup|pimple|\brings?\b/],
   ["other", "Annet", /$^/],
 ];
 const CAT_NAME = Object.fromEntries(CATEGORIES.map(([id, name]) => [id, name]));
@@ -88,7 +88,8 @@ function cleanPart(p) {
     status: clip(p.status, 60), store: clip(p.store, 100), itemId: clip(p.itemId, 30),
     url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: safeImg(p.image),
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
-    category: CAT_NAME[p.category] ? p.category : classify(p.title), catManual: !!p.catManual,
+    // Kategorien regnes ut på nytt med de nyeste reglene, med mindre den er satt for hånd.
+    category: p.catManual && CAT_NAME[p.category] ? p.category : classify(p.title), catManual: !!p.catManual,
     location: clip(p.location, 80), note: clip(p.note, 400),
     added: clip(p.added, 30), updated: clip(p.updated, 30),
   };
@@ -151,12 +152,13 @@ function mergeImport(rows, source) {
   const owner = ctx.userName();
   const byId = new Map(pstate.parts.map((p) => [p.id, p]));
   const now = new Date().toISOString();
-  const changed = [];
+  const changed = [], ids = new Set();
   let added = 0, updated = 0;
   for (const r of rows) {
     const id = source === "aliexpress"
       ? `ae:${clip(r.orderId, 30)}:${clip(r.itemId, 30) || clip(r.title, 40)}:${clip(r.variant, 60)}`
       : `mo:${clip(r.orderId, 30)}:${clip(r.mpn || r.title, 60)}`;
+    ids.add(id);
     const price = r.priceText ? parsePrice(r.priceText) : { amount: r.unitPrice, currency: r.currency };
     const fresh = cleanPart({ ...r, unitPrice: price.amount, currency: price.currency || r.currency, id, source, owner, added: now, updated: now });
     if (!fresh) continue;
@@ -175,20 +177,26 @@ function mergeImport(rows, source) {
       added++;
     }
   }
-  return { changed, added, updated };
+  return { changed, added, updated, ids };
 }
 
-async function importRows(rows, source, label) {
-  if (!ctx.token() && !ctx.DEMO) throw new Error("Logg inn i Filament Universet først.");
+// replaceOrders: ordrenumre der alle varene er lest på nytt (fra ordredetaljene). Egne poster
+// fra disse ordrene som ikke finnes i de nye radene (plassholdere uten navn), slettes.
+async function importRows(rows, source, label, replaceOrders = []) {
+  if (!ctx.token() && !ctx.DEMO) throw new Error("Logg inn i Filament og elektronikk universet først.");
   if (!Array.isArray(rows) || !rows.length) throw new Error("Fant ingen varer i dataene.");
   pstate.importBusy = true;
   const log = (t) => { pstate.importLog.unshift(`${new Date().toLocaleTimeString("nb-NO")} ${t}`); pstate.importLog.length = Math.min(pstate.importLog.length, 30); render(); };
   try {
-    const { changed, added, updated } = mergeImport(rows, source);
-    log(`${label}: ${rows.length} varer lest, ${added} nye, ${updated} oppdatert.`);
-    if (changed.length && !ctx.DEMO) {
-      await savePatch(changed.map((p) => ({ id: p.id, data: p })), (n, total) => log(`Lagret ${n} av ${total} i databasen…`));
-      log(`Ferdig. ${changed.length} varer lagret.`);
+    const { changed, added, updated, ids } = mergeImport(rows, source);
+    const replace = new Set(replaceOrders.map(String));
+    const gone = pstate.parts.filter((p) => p.source === source && p.owner === ctx.userName() && replace.has(p.orderId) && !ids.has(p.id));
+    pstate.parts = pstate.parts.filter((p) => !gone.includes(p));
+    log(`${label}: ${rows.length} varer lest, ${added} nye, ${updated} oppdatert${gone.length ? `, ${gone.length} plassholdere fjernet` : ""}.`);
+    const ops = changed.map((p) => ({ id: p.id, data: p })).concat(gone.map((p) => ({ id: p.id, data: null })));
+    if (ops.length && !ctx.DEMO) {
+      await savePatch(ops, (n, total) => log(`Lagret ${n} av ${total} i databasen…`));
+      log(`Ferdig. ${ops.length} endringer lagret.`);
     }
     pstate.view = "list";
   } finally {
@@ -207,7 +215,8 @@ function listenForImport() {
     ctx.showSection?.("parts");
     pstate.view = "import";
     try {
-      await importRows(msg.rows.slice(0, 20000), isAli ? "aliexpress" : "mouser", isAli ? "AliExpress" : "Mouser");
+      await importRows(msg.rows.slice(0, 20000), isAli ? "aliexpress" : "mouser", isAli ? "AliExpress" : "Mouser",
+        Array.isArray(msg.replaceOrders) ? msg.replaceOrders.slice(0, 20000) : []);
       e.source?.postMessage({ type: "bf-imported", count: msg.rows.length }, e.origin);
     } catch (err) {
       pstate.importLog.unshift(`Feil: ${err.message}`);
@@ -226,7 +235,7 @@ function listenForImport() {
 // ---------- Bokmerket ----------
 //
 // Kjører på ordresiden hos AliExpress (www.aliexpress.com/p/order/index.html). Laster inn alle
-// ordrene med «View orders», leser hver vare og sender alt til Filament Universet.
+// ordrene med «View orders», leser hver vare og sender alt til Filament og elektronikk universet.
 // Holdes uten avhengigheter, siden det kjøres som en javascript:-adresse.
 function aliBookmarklet(SITE) {
   if (!/aliexpress\./.test(location.hostname)) { alert("Åpne ordresiden på AliExpress først (Konto → Ordrer), og trykk på bokmerket der."); return; }
@@ -236,7 +245,7 @@ function aliBookmarklet(SITE) {
   const win = window.open(SITE + "#import", "bf-import");
   const box = document.createElement("div");
   box.style.cssText = "position:fixed;z-index:2147483647;right:16px;bottom:16px;width:300px;padding:14px 16px;border-radius:12px;background:#141615;color:#e8ebe9;font:14px/1.45 system-ui,sans-serif;box-shadow:0 8px 30px #0006";
-  box.innerHTML = '<b style="display:block;margin-bottom:4px">Filament Universet</b><div id="bf-status">Starter…</div><button id="bf-send" style="margin-top:10px;padding:7px 12px;border:0;border-radius:8px;background:#1fc25b;color:#04140a;font-weight:700;cursor:pointer">Send det som er lastet nå</button>';
+  box.innerHTML = '<b style="display:block;margin-bottom:4px">Filament og elektronikk universet</b><div id="bf-status">Starter…</div><button id="bf-send" style="margin-top:10px;padding:7px 12px;border:0;border-radius:8px;background:#1fc25b;color:#04140a;font-weight:700;cursor:pointer">Send det som er lastet nå</button>';
   document.body.appendChild(box);
   const status = (t) => { box.querySelector("#bf-status").textContent = t; };
   let stop = false, sent = false;
@@ -278,11 +287,40 @@ function aliBookmarklet(SITE) {
     }
     return rows;
   };
-  const send = () => {
+  // Ordre med flere produkter viser bare bilder i listen. Navn, antall, pris og variant
+  // hentes fra ordredetaljene med AliExpress sin egen API-klient på siden (window.lib.mtop).
+  const details = async (orderId) => {
+    const r = await window.lib.mtop.request({ api: "mtop.aliexpress.trade.buyer.order.detail", v: "1.0", data: { tradeOrderId: orderId, clientPlatform: "pc", _lang: "en_US" }, type: "GET", dataType: "jsonp", needLogin: true });
+    const blk = Object.values(r?.data?.data || {}).find((v) => v.fields?.productVOList);
+    return (blk?.fields.productVOList || []).map((p) => ({
+      title: p.itemTitle || "", itemId: String(p.productId || ""), qty: Number(p.quantity) || 1,
+      priceText: p.itemPriceText || p.formatPriceInfo || "", variant: (p.skuAttrs || []).map((a) => a.text).filter(Boolean).join(", "),
+      image: String(p.itemImgUrl || "").split("?")[0].replace(/_\d+x\d+\.(jpg|png|webp)$/i, ""),
+      url: p.productId ? `https://www.aliexpress.com/item/${p.productId}.html` : "",
+    }));
+  };
+  const send = async () => {
     if (sent) return;
     const rows = read();
-    status(`Sender ${rows.length} varer til Filament Universet…`);
-    win?.postMessage({ type: "bf-import", rows }, new URL(SITE).origin);
+    const multi = [...new Set(rows.filter((r) => !r.title && r.orderId).map((r) => r.orderId))];
+    const replaceOrders = [];
+    if (multi.length && window.lib?.mtop?.request) {
+      for (const [i, id] of multi.entries()) {
+        status(`Henter detaljer for ordre med flere varer: ${i + 1} av ${multi.length}…`);
+        try {
+          const items = await details(id);
+          if (items.length) {
+            const base = rows.find((r) => r.orderId === id);
+            for (let k = rows.length - 1; k >= 0; k--) if (rows[k].orderId === id) rows.splice(k, 1);
+            rows.push(...items.map((it) => ({ ...base, ...it })));
+            replaceOrders.push(id);
+          }
+        } catch { /* hopper over ordren, plassholderen blir stående */ }
+        await sleep(400 + Math.random() * 400);
+      }
+    }
+    status(`Sender ${rows.length} varer til Filament og elektronikk universet…`);
+    win?.postMessage({ type: "bf-import", rows, replaceOrders }, new URL(SITE).origin);
   };
   window.addEventListener("message", (e) => {
     if (e.origin !== new URL(SITE).origin) return;
@@ -415,11 +453,11 @@ function renderImport(box) {
   box.innerHTML = `
     <section class="panel import-panel">
       <div class="import-head"><h2>Importer komponenter</h2><button class="btn" type="button" data-pview="list">Tilbake til komponentene</button></div>
-      ${signedIn ? "" : `<p class="notice">Logg inn i Filament Universet først, så havner varene på deg.</p>`}
+      ${signedIn ? "" : `<p class="notice">Logg inn i Filament og elektronikk universet først, så havner varene på deg.</p>`}
       <h3>AliExpress</h3>
       <ol class="import-steps">
         <li>Dra knappen under til bokmerkelinjen i nettleseren (vis linjen med Ctrl+Shift+B).<br>
-          <a class="btn btn-primary bookmarklet" href="${ctx.esc(bookmarkletHref())}" title="Dra meg til bokmerkelinjen">Importer til Filament Universet</a></li>
+          <a class="btn btn-primary bookmarklet" href="${ctx.esc(bookmarkletHref())}" title="Dra meg til bokmerkelinjen">Importer til Filament og elektronikk universet</a></li>
         <li>Logg inn på <a href="https://www.aliexpress.com/p/order/index.html" target="_blank" rel="noopener">AliExpress → Ordrer</a> med din egen konto.</li>
         <li>Trykk på bokmerket. Det laster inn alle ordrene, åpner denne siden og sender varene hit. Med mange ordre tar det noen minutter. Dukker det opp en robotsjekk, drar du slideren, så fortsetter det.</li>
       </ol>
