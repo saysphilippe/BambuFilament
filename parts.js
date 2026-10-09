@@ -5,8 +5,9 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009181444";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009181444";
+import { componentHtml, findPart } from "./circuits.js?v=20261009181716";
+import { detectPack } from "./pack.js?v=20261009181716";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009181716";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -107,7 +108,11 @@ function cleanPart(p) {
   return {
     id: clip(p.id, 200), source: ["aliexpress", "mouser", "lcsc", "manual"].includes(p.source) ? p.source : "manual",
     owner: clip(p.owner, 40), title: clip(p.title, 300), variant: clip(p.variant, 200),
-    qty: Math.max(0, Math.round(num(p.qty) ?? 1)), left: p.left === null || p.left === undefined ? null : Math.max(0, Math.round(num(p.left) ?? 0)),
+    qty: Math.max(0, Math.round(num(p.qty) ?? 1)),
+    // Stk per kjøpt enhet («12pcs»). Mouser og LCSC oppgir stk direkte. Kan rettes for hånd.
+    pack: p.packManual && num(p.pack) >= 1 ? Math.round(num(p.pack)) : p.source === "mouser" || p.source === "lcsc" ? 1 : detectPack(p.variant, p.title),
+    packManual: !!p.packManual,
+    left: p.left === null || p.left === undefined ? null : Math.max(0, Math.round(num(p.left) ?? 0)),
     unitPrice: num(p.unitPrice), currency: clip(p.currency, 4), orderTotal: clip(p.orderTotal, 40),
     orderId: clip(p.orderId, 40), orderDate: /^\d{4}-\d{2}-\d{2}$/.test(p.orderDate || "") ? p.orderDate : "",
     status: clip(p.status, 60), store: clip(p.store, 100), itemId: clip(p.itemId, 30),
@@ -129,7 +134,9 @@ function cleanPart(p) {
   };
 }
 
-const remaining = (p) => (p.left === null ? p.qty : p.left);
+// Antall stk: kjøpt antall × stk per pakke. «Igjen» regnes også i stk.
+const units = (p) => p.qty * (p.pack || 1);
+const remaining = (p) => (p.left === null ? units(p) : p.left);
 const fmtMoney = (p) => {
   if (p.unitPrice === null) return "";
   const v = p.unitPrice.toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -343,7 +350,7 @@ async function reqAction(action, id) {
     const p = pstate.parts.find((x) => x.id === q.partId);
     if (p) {
       const left = Math.max(0, remaining(p) - q.qty);
-      p.left = left === p.qty ? null : left;
+      p.left = left === units(p) ? null : left;
       return saveReqs([q], [p]);
     }
     return saveReqs([q]);
@@ -623,7 +630,9 @@ let shown = PAGE;
 
 function partCard(p) {
   const left = remaining(p);
-  const qty = p.left === null || p.left === p.qty ? `${p.qty} stk` : `${left} av ${p.qty} igjen`;
+  const total = units(p);
+  const bought = p.pack > 1 ? `${p.qty} × ${p.pack} = ${total} stk` : `${total} stk`;
+  const qty = p.left === null || p.left === total ? bought : `${left} av ${total} stk igjen`;
   return `<div class="part-card${left === 0 ? " used-up" : ""}">
   <button class="part-open" type="button" data-part="${ctx.esc(p.id)}">
     <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
@@ -830,7 +839,7 @@ function openPart(id) {
       ${p.variant ? `<p class="part-variant">${ctx.esc(p.variant)}</p>` : ""}
       <table class="part-facts">
         ${row("Eier", `<span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span> ${ctx.esc(p.owner || "Ukjent")}`)}
-        ${row("Kjøpt", `${ctx.esc(p.qty)} stk${fmtMoney(p) ? ` à ${ctx.esc(fmtMoney(p))}` : ""}${p.orderTotal ? ` · ordre totalt ${ctx.esc(p.orderTotal)}` : ""}`)}
+        ${row("Kjøpt", `${p.pack > 1 ? `${ctx.esc(p.qty)} × ${ctx.esc(p.pack)} stk = <b>${units(p)} stk</b>` : `<b>${units(p)} stk</b>`}${fmtMoney(p) ? ` à ${ctx.esc(fmtMoney(p))}${p.pack > 1 ? ` (${ctx.esc(fmtMoney({ ...p, unitPrice: p.unitPrice / p.pack }))} per stk)` : ""}` : ""}${p.orderTotal ? ` · ordre totalt ${ctx.esc(p.orderTotal)}` : ""}`)}
         ${row("Dato", ctx.esc(fmtDate(p.orderDate)))}
         ${row("Butikk", `${ctx.esc(SOURCE_LABEL[p.source])}${p.store && p.store !== "Mouser" ? ` · ${p.storeUrl ? `<a href="${ctx.esc(p.storeUrl)}" target="_blank" rel="noopener">${ctx.esc(p.store)}</a>` : ctx.esc(p.store)}` : ""}`)}
         ${row("Ordrenummer", ctx.esc(p.orderId))}
@@ -847,7 +856,8 @@ function openPart(id) {
       ${ELECTRONICS.has(p.category) || p.source === "mouser" || p.source === "lcsc" ? componentHtml(p) : ""}
       <div class="part-edit">
         <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${CATEGORIES.map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
-        <label>Antall igjen<input id="pd-left" type="number" min="0" max="100000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
+        <label>Stk per pakke<input id="pd-pack" type="number" min="1" max="100000" value="${p.pack}" ${mine ? "" : "disabled"}></label>
+        <label>Antall igjen (stk)<input id="pd-left" type="number" min="0" max="10000000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
         <label>Plassering<input id="pd-loc" type="text" maxlength="80" value="${ctx.esc(p.location)}" placeholder="F.eks. Skuff 3, verkstedet" ${mine ? "" : "disabled"}></label>
         <label class="pd-note">Notat<textarea id="pd-note" rows="2" maxlength="400" ${mine ? "" : "disabled"}>${ctx.esc(p.note)}</textarea></label>
       </div>
@@ -868,8 +878,10 @@ function openPart(id) {
     if (dlg.returnValue !== "save" || !mine) return;
     const cat = dlg.querySelector("#pd-cat").value;
     if (cat !== p.category) { p.category = cat; p.catManual = true; }
+    const pack = Math.max(1, Math.round(Number(dlg.querySelector("#pd-pack").value) || 1));
+    if (pack !== p.pack) { p.pack = pack; p.packManual = true; }
     const left = Math.max(0, Math.round(Number(dlg.querySelector("#pd-left").value) || 0));
-    p.left = left === p.qty ? null : left;
+    p.left = left === units(p) ? null : left;
     p.location = clip(dlg.querySelector("#pd-loc").value, 80);
     p.note = clip(dlg.querySelector("#pd-note").value, 400);
     try { await saveOne(p); ctx.setSync("Lagret"); } catch (err) { ctx.setSync(err.message, true); }
