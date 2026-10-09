@@ -1,6 +1,6 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009145822";
-import { toRecords } from "./worker/src/records.js?v=20261009145822";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009145822";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009164102";
+import { toRecords } from "./worker/src/records.js?v=20261009164102";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009164102";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -587,6 +587,14 @@ const familyOfHex = (hex) => (hex ? familyLabel(family({ colors: ["#" + String(h
 const title = (s) => s.name || s.colorName || familyLabel(s.family) || "Ukjent farge";
 
 const SOURCE = { rfid: "Lager", library: "Bibliotek", ams: "I AMS" };
+// Ikon for kilden øverst til høyre på fargefeltet (eske = lager, bok = bibliotek, spole = AMS).
+const SOURCE_ICON = {
+  rfid: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+  library: '<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>',
+  ams: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v6.5M12 14.5V21M3 12h6.5M14.5 12H21"/>',
+};
+const sourceIcon = (kind) => `<span class="source source-${kind}" title="${SOURCE[kind]}" aria-label="${SOURCE[kind]}" role="img">` +
+  `<svg viewBox="0 0 24 24" aria-hidden="true">${SOURCE_ICON[kind]}</svg></span>`;
 
 function libName(x) {
   const official = x.variant && state.colorNames[`GF${x.variant}`];
@@ -816,8 +824,7 @@ function spoolCard(s, showType = true) {
   return `
     <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""}>
       <div class="swatch" style="background:${swatch(s.tag)}">
-        ${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}
-        <span class="swatch-tags"><span class="source source-${s.kind}">${SOURCE[s.kind]}</span></span>
+        <span class="swatch-corner">${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}${sourceIcon(s.kind)}</span>
         ${productionTip(s) ? `<span class="tip">${productionTip(s)}</span>` : ""}
       </div>
       <div class="left-bar${pct === null ? " unknown" : pct < 20 ? " low" : ""}" title="${left ? `${amountText(left.g, left.total)} igjen${left.estimate ? " (ubrukt rull)" : ""}` : "Mengden er ukjent"}"><span style="width:${pct ?? 0}%"></span></div>
