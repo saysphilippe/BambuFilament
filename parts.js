@@ -5,8 +5,8 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009181244";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009181244";
+import { componentHtml, findPart } from "./circuits.js?v=20261009181444";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009181444";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -624,7 +624,8 @@ let shown = PAGE;
 function partCard(p) {
   const left = remaining(p);
   const qty = p.left === null || p.left === p.qty ? `${p.qty} stk` : `${left} av ${p.qty} igjen`;
-  return `<button class="part-card${left === 0 ? " used-up" : ""}" type="button" data-part="${ctx.esc(p.id)}">
+  return `<div class="part-card${left === 0 ? " used-up" : ""}">
+  <button class="part-open" type="button" data-part="${ctx.esc(p.id)}">
     <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
       <span class="part-cat">${ctx.esc(CAT_NAME[p.category])}</span></span>
     <span class="part-body">
@@ -634,7 +635,31 @@ function partCard(p) {
       ${p.pkg ? `<span class="part-pkg" title="${ctx.esc(packageInfo(p.pkg))}">${packageSvg(p.pkg, 22)}${ctx.esc(p.pkg)}</span>` : ""}
       <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(p.orderDate))}</span></span>
     </span>
-  </button>`;
+  </button>
+  ${ctx.token() || ctx.DEMO ? stepper(p) : ""}
+  </div>`;
+}
+
+// − / antall / + under hvert kort: legg varer i handlekurven uten å åpne detaljvinduet.
+const cartQty = (id) => cartDrafts().filter((q) => q.partId === id).reduce((s, q) => s + q.qty, 0);
+function stepper(p) {
+  const n = cartQty(p.id), id = ctx.esc(p.id), max = remaining(p);
+  return `<div class="part-step${n ? " in-cart" : ""}" data-step="${id}">
+    <button type="button" data-cartstep="-1" data-pid="${id}" ${n ? "" : "disabled"} aria-label="Ta én ut av handlekurven">−</button>
+    <span>${n ? `${n} i handlekurven` : "Handlekurv"}</span>
+    <button type="button" data-cartstep="1" data-pid="${id}" ${max && n >= max ? "disabled" : ""} aria-label="Legg én i handlekurven">+</button>
+  </div>`;
+}
+
+async function cartStep(pid, delta) {
+  const p = pstate.parts.find((x) => x.id === pid);
+  if (!p) return;
+  const q = cartDrafts().find((x) => x.partId === pid);
+  if (delta > 0) {
+    if (q) { q.qty += 1; await saveReqs([q]); } else await addToCart(p, 1, "");
+  } else if (q) {
+    if (q.qty > 1) { q.qty -= 1; await saveReqs([q]); } else await removeReq(q);
+  }
 }
 
 function render() {
@@ -871,9 +896,11 @@ export function initParts(context) {
   listenForImport();
   const root = ctx.$("#parts-root");
   root.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-pimport], [data-reqact], [data-sendcart]");
+    const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
     if (!t) return;
-    if (t.dataset.reqact) {
+    if (t.dataset.cartstep) {
+      try { await cartStep(t.dataset.pid, Number(t.dataset.cartstep)); } catch (err) { ctx.setSync(err.message, true); }
+    } else if (t.dataset.reqact) {
       t.disabled = true;
       try { await reqAction(t.dataset.reqact, t.dataset.req); } catch (err) { ctx.setSync(err.message, true); t.disabled = false; }
     } else if (t.hasAttribute("data-sendcart")) {
