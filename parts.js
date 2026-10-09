@@ -303,14 +303,17 @@ function reqRow(q, mode) {
         <span><span class="owner-dot" style="--owner:${ctx.userColor(who)}"></span>${mode === "cart" ? "Eier" : "Ønsket av"}: ${ctx.esc(who || "Ukjent")}</span>
         ${p ? `<span>${left} igjen</span>` : ""}
         ${p?.pkg ? `<span>${ctx.esc(p.pkg)}</span>` : ""}
-        ${pieceMoney(p) ? `<span class="req-price" title="Kjøpt pris per stykk">${ctx.esc(fmtMoney(pieceMoney(p)))} per stk</span>` : p ? `<span class="hint">ingen pris</span>` : ""}
       </span>
       ${q.note ? `<span class="req-note">«${ctx.esc(q.note)}»</span>` : ""}
     </div>
-    <div class="req-qty">${mode === "cart" && q.status === "draft"
-      ? `<label>Antall<input type="number" min="1" max="${Math.max(1, left)}" value="${q.qty}" data-reqqty="${ctx.esc(q.id)}"></label>`
-      : `<b>${q.qty} stk</b>`}
-      ${pieceMoney(p) ? `<span class="req-line-total">${ctx.esc(fmtMoney({ ...pieceMoney(p), unitPrice: pieceMoney(p).unitPrice * q.qty }))}</span>` : ""}
+    <div class="req-qty">
+      <div class="req-calc">${mode === "cart" && q.status === "draft"
+        ? `<input type="number" min="1" max="${Math.max(1, left)}" value="${q.qty}" data-reqqty="${ctx.esc(q.id)}" aria-label="Antall"><span class="req-unit">stk</span>`
+        : `<b>${q.qty} stk</b>`}
+        ${mode === "cart" ? (pieceMoney(p)
+          ? `<span class="req-each">× ${ctx.esc(fmtMoney(pieceMoney(p)))}</span><b class="req-line">${ctx.esc(fmtMoney({ ...pieceMoney(p), unitPrice: pieceMoney(p).unitPrice * q.qty }))}</b>`
+          : `<span class="req-each">ingen pris</span>`) : ""}
+      </div>
       ${mode === "cart" && q.status === "draft" ? "" : `<span class="req-status">${ctx.esc(REQ_STATUS[q.status])}${q.sentAt && q.status === "sent" ? ` ${ctx.esc(fmtDate(q.sentAt.slice(0, 10)))}` : ""}</span>`}
     </div>
     <div class="req-actions">${actions}</div>

@@ -948,7 +948,12 @@ dialog.part-dialog { width: min(1040px, calc(100vw - 32px)); }
 .fp-legend i.silk { border: 1.5px solid currentColor; background: transparent; }
 .fp-legend i.drill { width: 9px; border-radius: 50%; background: var(--surface); border: 1px solid #8a6a1c; box-shadow: 0 0 0 2px #c99a2e; }
 .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
-.req-sum { margin-left: 8px; font-weight: 400; font-size: 0.85em; }
-.req-total { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 12px 0 0; }
-.req-price { font-variant-numeric: tabular-nums; }
-.req-line-total { display: block; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9em; }
+.req-sum { margin-left: auto; font-weight: 400; font-size: 13px; color: var(--muted); }
+.req-sum b { color: var(--text); font-size: 15px; }
+.req-total { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; align-items: baseline; margin: 4px 0 0; padding-top: 12px; border-top: 2px solid var(--border); font-weight: 600; }
+.req-total .req-sum { margin-left: 0; }
+.req-total > .hint { flex-basis: 100%; text-align: right; font-weight: 400; }
+.req-calc { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.req-calc input { width: 64px; text-align: right; }
+.req-unit, .req-each { font-size: 13px; color: var(--muted); }
+.req-line { min-width: 76px; text-align: right; font-size: 15px; }
