@@ -5,7 +5,7 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml } from "./circuits.js?v=20261009174215";
+import { componentHtml } from "./circuits.js?v=20261009174720";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -143,8 +143,15 @@ async function load(force = false) {
     pstate.loaded = true;
     return render();
   }
-  if (!ctx.token() || pstate.loading || (pstate.loaded && !force)) return;
-  pstate.loading = true;
+  if (!ctx.token()) return;
+  // Pågående lasting: gi samme løfte, så importen kan vente på den.
+  if (pstate.loading) return pstate.loading;
+  if (pstate.loaded && !force) return;
+  pstate.loading = loadNow();
+  return pstate.loading;
+}
+
+async function loadNow() {
   pstate.error = "";
   render();
   try {
@@ -216,6 +223,10 @@ function mergeImport(rows, source) {
 async function importRows(rows, source, label, replaceOrders = []) {
   if (!ctx.token() && !ctx.DEMO) throw new Error("Logg inn i Filament og elektronikk universet først.");
   if (!Array.isArray(rows) || !rows.length) throw new Error("Fant ingen varer i dataene.");
+  // Vent til det som alt ligger i databasen er lastet. Ellers ser ikke importen eksisterende
+  // varer, og plassering, notat og antall igjen kunne blitt skrevet over.
+  if (!ctx.DEMO) await load();
+  if (!ctx.DEMO && !pstate.loaded) throw new Error("Kunne ikke hente komponentene fra databasen. Prøv igjen.");
   pstate.importBusy = true;
   const log = (t) => { pstate.importLog.unshift(`${new Date().toLocaleTimeString("nb-NO")} ${t}`); pstate.importLog.length = Math.min(pstate.importLog.length, 30); render(); };
   try {
