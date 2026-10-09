@@ -5,7 +5,7 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml } from "./circuits.js?v=20261009174720";
+import { componentHtml } from "./circuits.js?v=20261009175727";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -20,7 +20,7 @@ const PATCH_CHUNK = 400;
 export const CATEGORIES = [
   ["3dprint", "3D-print", /3d print|\bprinter\b|nozzle|hotend|hot end|extruder|filament|bambu|prusa|\bender\b|\bpei\b|build plate|bowden|\bptfe\b|heat ?bed|bltouch|volcano|\be3d\b/],
   ["house", "Husholdning", /\bfelt\b|furniture|chair leg|table leg|kitchen|bathroom|shower|toilet|towel|refrigerator|\bfridge|curtain|door stop|cleaning|\bmop\b|broom|\bdish|\bmugs?\b|\bcups?\b|water bottle|lunch box|pillow|bed sheet|blanket|laundry|hanger|trash|garbage|vacuum|\bsink\b|faucet|non-slip|anti-slip|carpet|\brugs?\b|household/],
-  ["sensor", "Sensorer", /sensor|\brfid\b|rc522|\bnfc\b|ultrasonic|hc-sr|\bpir\b|thermistor|thermocouple|\bdht\d|\bbme\d|\bbmp\d|accelerometer|gyro|\bmpu\d|hall effect|load cell|hx711|ds18b20|lidar|\btof\b|photoresistor/],
+  ["sensor", "Sensorer", /sensor|\brfid\b|rc522|\bnfc\b|ultrasonic|hc-sr|\bpir\b|thermistor|thermocouple|\bdht\d|\bbme\d|\bbmp\d|accelerometer|gyro|\bmpu\d|hall effect|load cell|hx711|ds18b20|lidar|\btof\b|photoresistor|\bgps\b|\bgnss\b|neo-?6m|neo-?m8|atgm336|beidou|\blora(wan)?\b|\blocator\b|\btracker\b/],
   ["tool", "Verktøy", /\btools?\b|plier|screwdriver|nail gun|staple gun|stapler|airbrush|soldering|\bsolder\b|multimeter|wrench|\bdrill|tweezer|\bknife|\bknives\b|cutter|\bsaws?\b|hacksaw|chain ?saw|caliper|crimping|heat gun|glue gun|file set|sandpaper|\bvise\b|tape measure|spirit level|oscilloscope|\btester\b|hex key|allen key|ratchet|socket set/],
   ["mcu", "Mikrokontrollere", /esp32|esp8266|\besp-|arduino|raspberry|stm32|nodemcu|wemos|\bpico\b|attiny|atmega|development board|dev board|nrf52|rp2040|\bxiao\b|teensy|microcontroller/],
   ["power", "Strøm og batterier", /batter(y|ies)|charger|charging|power supply|power bank|\bbuck\b|\bboost\b|step.?down|step.?up|dc-dc|converter|18650|lipo|li-ion|lithium|\bsolar\b|\badapter\b|transformer|inverter|\bpsu\b|tp4056/],
@@ -418,9 +418,16 @@ export function bookmarkletHref() {
 
 // ---------- Visning ----------
 
+// Kategorier brukeren har skjult under Innstillinger (lagres i denne nettleseren).
+const hiddenCats = () => new Set(String(ctx.store("bf.hiddenCats") || "").split(",").filter((c) => CAT_NAME[c]));
+const visibleParts = () => {
+  const hidden = hiddenCats();
+  return hidden.size ? pstate.parts.filter((p) => !hidden.has(p.category)) : pstate.parts;
+};
+
 function filtered() {
   const q = pstate.q.trim().toLowerCase();
-  const list = pstate.parts.filter((p) =>
+  const list = visibleParts().filter((p) =>
     (!pstate.cat || p.category === pstate.cat) &&
     (!pstate.owner || p.owner === pstate.owner) &&
     (!pstate.source || p.source === pstate.source) &&
@@ -443,7 +450,7 @@ function partCard(p) {
   const left = remaining(p);
   const qty = p.left === null || p.left === p.qty ? `${p.qty} stk` : `${left} av ${p.qty} igjen`;
   return `<button class="part-card${left === 0 ? " used-up" : ""}" type="button" data-part="${ctx.esc(p.id)}">
-    <span class="part-img">${p.image ? `<img src="${ctx.esc(p.image)}_220x220.jpg" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
+    <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
       <span class="part-cat">${ctx.esc(CAT_NAME[p.category])}</span></span>
     <span class="part-body">
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
@@ -462,7 +469,8 @@ function render() {
     box.innerHTML = `<section class="panel"><h2>Komponenter</h2><p class="hint">Logg inn for å se komponentbiblioteket.</p></section>`;
     return;
   }
-  const all = pstate.parts;
+  const all = visibleParts();
+  if (pstate.cat && hiddenCats().has(pstate.cat)) pstate.cat = "";
   const list = filtered();
   const count = (key, val) => all.filter((p) => p[key] === val && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0))).length;
   const owners = [...new Set(all.map((p) => p.owner).filter(Boolean))].sort();
@@ -717,6 +725,26 @@ export function showParts() {
 }
 
 export const refreshParts = () => load(true);
+
+// Under Innstillinger: velg hvilke kategorier som skal vises i komponentbiblioteket.
+export function partsSettingsHtml() {
+  const hidden = hiddenCats();
+  const n = (id) => pstate.parts.filter((p) => p.category === id).length;
+  return `<h3>Komponenter: kategorier som vises</h3>
+    <p class="hint">Skjulte kategorier forsvinner fra listen, filtrene og tellingen i komponentbiblioteket. Valget gjelder bare i denne nettleseren.</p>
+    <div class="cat-toggles">${CATEGORIES.map(([id, name]) => `<label class="cat-toggle"><input type="checkbox" data-showcat="${id}"${hidden.has(id) ? "" : " checked"}> ${ctx.esc(name)}${pstate.loaded ? ` <span class="chip-n">${n(id)}</span>` : ""}</label>`).join("")}</div>`;
+}
+
+export function setCategoryShown(id, shown) {
+  const hidden = hiddenCats();
+  if (shown) hidden.delete(id); else hidden.add(id);
+  ctx.store("bf.hiddenCats", [...hidden].join(","));
+  render();
+}
+
+// Antallene i Innstillinger trenger komponentene; hent dem i bakgrunnen.
+// Gir et løfte bare når noe faktisk må hentes, så kalleren ikke tegner på nytt i en løkke.
+export const loadParts = () => (pstate.loaded || ctx.DEMO ? null : load());
 
 // ---------- Demo ----------
 

@@ -1,7 +1,7 @@
-import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009174720";
-import { toRecords } from "./worker/src/records.js?v=20261009174720";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009174720";
-import { initParts, showParts, refreshParts } from "./parts.js?v=20261009174720";
+import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009175727";
+import { toRecords } from "./worker/src/records.js?v=20261009175727";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009175727";
+import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, loadParts } from "./parts.js?v=20261009175727";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -1825,8 +1825,11 @@ function renderSettings() {
     ${field("postenFeeHigh", "Posten: fortolling over 3000 kr", "Postens gebyr over 3000 kr. Pakken må da ofte hentes.", "kr")}
     ${field("dhlFee", "DHL: fortollingsgebyr", "Anslag hvis DHL leverer selv (utlegg av mva). Sjekk fakturaen fra DHL.", "kr")}
     ${field("eurRate", "Eurokurs (reserve)", `Brukes bare når eurokursen fra Norges Bank mangler. Nå brukes ${state.store?.fx ? `Norges Banks kurs ${String(state.store.fx.eurNok).replace(".", ",")}` : "denne"}.`, "kr per euro")}
+    ${partsSettingsHtml()}
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;
+  // Antall per kategori: hent komponentene og tegn på nytt når de er klare.
+  loadParts()?.then?.(() => state.tab === "settings" && document.body.dataset.section !== "parts" && renderSettings());
 }
 
 async function saveSetting(key, input) {
@@ -3789,7 +3792,10 @@ $("#tab-loans").addEventListener("input", (e) => {
   actFilter.q = e.target.value;
   $("#activity-list").innerHTML = activityItems();
 });
-$("#tab-settings").addEventListener("change", (e) => e.target.dataset.setting && saveSetting(e.target.dataset.setting, e.target));
+$("#tab-settings").addEventListener("change", (e) => {
+  if (e.target.dataset.setting) saveSetting(e.target.dataset.setting, e.target);
+  if (e.target.dataset.showcat) setCategoryShown(e.target.dataset.showcat, e.target.checked);
+});
 $("#tab-cards").addEventListener("change", (e) => {
   const t = e.target;
   if (t.dataset.cardUser !== undefined) cardAction("user", t.dataset.cardUser, t.value, t);
@@ -3808,7 +3814,7 @@ document.querySelector(".sections").addEventListener("click", (e) => {
   const b = e.target.closest(".section-btn");
   if (b) showSection(b.dataset.section);
 });
-initParts({ $, esc, dbCall, token, userName, userColor, setSync, DEMO, showSection });
+initParts({ $, esc, dbCall, token, userName, userColor, setSync, DEMO, showSection, store });
 $("#ams-me").addEventListener("change", (e) => e.target.dataset.ams?.startsWith("share") && amsAction(e.target.dataset.ams, e.target));
 $("#bambu form").addEventListener("submit", bambuSubmit);
 setInterval(() => document.visibilityState === "visible" && bambuToken() && refreshAms(), AMS_REFRESH_MS);
