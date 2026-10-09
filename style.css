@@ -849,3 +849,19 @@ dialog.wide-dialog { width: min(820px, calc(100vw - 32px)); }
 .part-step button:disabled { opacity: .35; cursor: default; }
 .part-step.in-cart { color: var(--accent); font-weight: 700; }
 .part-step.in-cart button[data-cartstep="1"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.cat-owner { margin: 10px 0 16px; }
+.cat-owner h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0 0 6px; font-size: 15px; }
+.cat-owner h4 .owner-dot { align-self: center; }
+.cat-toggle input:disabled + * { opacity: .6; }
+/* Produktvinduet: kryss øverst til venstre som blir stående mens man ruller */
+dialog.part-dialog { overflow-y: auto; }
+.dlg-close {
+  position: sticky; top: -10px; z-index: 3;
+  display: grid; place-items: center;
+  width: 38px; height: 38px; margin: -10px 0 -28px -10px;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+  font: 400 26px/1 system-ui, sans-serif; cursor: pointer;
+}
+.dlg-close:hover { border-color: var(--accent); color: var(--accent); }
+.dlg-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

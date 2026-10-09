@@ -5,9 +5,9 @@
 // ordresiden hos AliExpress. Skriptet laster inn alle ordrene, leser dem fra siden og sender
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
-import { componentHtml, findPart } from "./circuits.js?v=20261009181716";
-import { detectPack } from "./pack.js?v=20261009181716";
-import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009181716";
+import { componentHtml, findPart } from "./circuits.js?v=20261009182423";
+import { detectPack } from "./pack.js?v=20261009182423";
+import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009182423";
 
 const SITE = "https://saysphilippe.github.io/BambuFilament/";
 const ALI_ORIGINS = /^https:\/\/([a-z]+\.)?aliexpress\.(com|us|ru)$/;
@@ -68,7 +68,7 @@ export function classify(title) {
 let ctx = null; // fra app.js: { $, esc, dbCall, token, userName, userColor, users, store, DEMO, setSync }
 const pstate = {
   parts: [], loaded: false, loading: false, error: "",
-  reqs: [],
+  reqs: [], prefs: {},
   q: "", cat: "", owner: "", source: "", pkg: "", sort: "new", show: "have", view: "list",
   importLog: [], importBusy: false,
 };
@@ -172,6 +172,8 @@ async function loadNow() {
     const { parts } = await ctx.dbCall("/db/load", { files: ["parts"] });
     pstate.parts = (parts?.parts || []).map(cleanPart).filter(Boolean);
     pstate.reqs = (parts?.requests || []).map(cleanReq).filter(Boolean);
+    pstate.prefs = Object.fromEntries(Object.entries(parts?.prefs || {})
+      .filter(([o, v]) => o && v && Array.isArray(v.hidden)).map(([o, v]) => [String(o).slice(0, 40), { hidden: v.hidden.map(String).slice(0, 40) }]));
     pstate.loaded = true;
   } catch (err) {
     pstate.error = err.message;
@@ -599,11 +601,12 @@ export function bookmarkletHref() {
 
 // ---------- Visning ----------
 
-// Kategorier brukeren har skjult under Innstillinger (lagres i denne nettleseren).
-const hiddenCats = () => new Set(String(ctx.store("bf.hiddenCats") || "").split(",").filter((c) => CAT_NAME[c]));
+// Kategorier hver eier har skjult (Innstillinger, lagret i databasen): eierens varer i de
+// kategoriene vises ikke for noen. Andres varer i samme kategori vises som vanlig.
+const hiddenFor = (owner) => new Set((pstate.prefs[owner]?.hidden || []).filter((c) => CAT_NAME[c]));
 const visibleParts = () => {
-  const hidden = hiddenCats();
-  return hidden.size ? pstate.parts.filter((p) => !hidden.has(p.category)) : pstate.parts;
+  const hidden = Object.fromEntries(Object.keys(pstate.prefs).map((o) => [o, hiddenFor(o)]));
+  return Object.values(hidden).some((h) => h.size) ? pstate.parts.filter((p) => !hidden[p.owner]?.has(p.category)) : pstate.parts;
 };
 
 function filtered() {
@@ -683,7 +686,7 @@ function render() {
     return;
   }
   const all = visibleParts();
-  if (pstate.cat && hiddenCats().has(pstate.cat)) pstate.cat = "";
+  if (pstate.cat && !all.some((p) => p.category === pstate.cat)) pstate.cat = "";
   const list = filtered();
   const count = (key, val) => all.filter((p) => p[key] === val && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0))).length;
   const owners = [...new Set(all.map((p) => p.owner).filter(Boolean))].sort();
@@ -832,7 +835,8 @@ function openPart(id) {
   }
   const mine = ctx.DEMO || p.owner === ctx.userName() || !p.owner;
   const row = (k, v) => (v ? `<tr><th>${ctx.esc(k)}</th><td>${v}</td></tr>` : "");
-  dlg.innerHTML = `<form method="dialog" class="part-detail">
+  dlg.innerHTML = `<button type="button" class="dlg-close" aria-label="Lukk" title="Lukk (Esc)">×</button>
+  <form method="dialog" class="part-detail">
     <div class="part-detail-img">${p.image ? `<img src="${ctx.esc(p.image)}" alt="" referrerpolicy="no-referrer">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}</div>
     <div class="part-detail-text">
       <h2>${ctx.esc(p.title)}</h2>
@@ -887,6 +891,7 @@ function openPart(id) {
     try { await saveOne(p); ctx.setSync("Lagret"); } catch (err) { ctx.setSync(err.message, true); }
   };
   dlg.onclick = async (e) => {
+    if (e.target.closest(".dlg-close")) { dlg.close(""); return; }
     if (!e.target.closest("[data-addcart]")) return;
     const qty = Math.max(1, Math.round(Number(dlg.querySelector("#pd-cartqty").value) || 1));
     const msg = dlg.querySelector(".cart-msg");
@@ -976,25 +981,41 @@ export function showParts() {
 
 export const refreshParts = () => load(true);
 
-// Under Innstillinger: velg hvilke kategorier som skal vises i komponentbiblioteket.
+// Under Innstillinger: én blokk per bruker som har lest inn varer. Hver eier velger hvilke av
+// sine kategorier som vises for alle; administrator kan endre for alle.
 export function partsSettingsHtml() {
-  const hidden = hiddenCats();
-  const n = (id) => pstate.parts.filter((p) => p.category === id).length;
-  return `<h3>Komponenter: kategorier som vises</h3>
-    <p class="hint">Skjulte kategorier forsvinner fra listen, filtrene og tellingen i komponentbiblioteket. Valget gjelder bare i denne nettleseren.</p>
-    <div class="cat-toggles">${CATEGORIES.map(([id, name]) => `<label class="cat-toggle"><input type="checkbox" data-showcat="${id}"${hidden.has(id) ? "" : " checked"}> ${ctx.esc(name)}${pstate.loaded ? ` <span class="chip-n">${n(id)}</span>` : ""}</label>`).join("")}</div>`;
+  const me = meName();
+  const owners = [...new Set(pstate.parts.map((p) => p.owner).filter(Boolean))]
+    .sort((a, b) => (a === me ? -1 : b === me ? 1 : a.localeCompare(b, "nb")));
+  const intro = `<h3>Komponenter: kategorier som vises</h3>
+    <p class="hint">Hver bruker velger hvilke av sine egne kategorier som vises i komponentbiblioteket. Skjulte kategorier forsvinner fra listen, filtrene og tellingen for alle. Valget lagres i databasen.</p>`;
+  if (!pstate.loaded) return intro + `<p class="hint">Henter komponentene…</p>`;
+  if (!owners.length) return intro + `<p class="hint">Ingen har lest inn komponenter ennå.</p>`;
+  return intro + owners.map((owner) => {
+    const hidden = hiddenFor(owner);
+    const canEdit = ctx.DEMO || owner === me || ctx.isAdmin?.();
+    const mine = pstate.parts.filter((p) => p.owner === owner);
+    const cats = CATEGORIES.map(([id, name]) => [id, name, mine.filter((p) => p.category === id).length]).filter(([, , n]) => n);
+    return `<div class="cat-owner">
+      <h4><span class="owner-dot" style="--owner:${ctx.userColor(owner)}"></span> ${ctx.esc(owner)} <span class="hint">${mine.length.toLocaleString("nb-NO")} varer${hidden.size ? `, ${hidden.size} ${hidden.size === 1 ? "kategori" : "kategorier"} skjult` : ""}${canEdit ? "" : " · bare " + ctx.esc(owner) + " kan endre"}</span></h4>
+      <div class="cat-toggles">${cats.map(([id, name, n]) => `<label class="cat-toggle"><input type="checkbox" data-showcat="${id}" data-owner="${ctx.esc(owner)}"${hidden.has(id) ? "" : " checked"}${canEdit ? "" : " disabled"}> ${ctx.esc(name)} <span class="chip-n">${n}</span></label>`).join("")}</div>
+    </div>`;
+  }).join("");
 }
 
-export function setCategoryShown(id, shown) {
-  const hidden = hiddenCats();
+export async function setCategoryShown(owner, id, shown) {
+  if (!owner || !CAT_NAME[id]) return;
+  const hidden = hiddenFor(owner);
   if (shown) hidden.delete(id); else hidden.add(id);
-  ctx.store("bf.hiddenCats", [...hidden].join(","));
+  const pref = { hidden: [...hidden], updated: new Date().toISOString(), by: meName() };
+  pstate.prefs[owner] = pref;
   render();
+  if (!ctx.DEMO) await savePatch([{ coll: "partprefs", id: owner, data: pref }]);
 }
 
 // Antallene i Innstillinger trenger komponentene; hent dem i bakgrunnen.
 // Gir et løfte bare når noe faktisk må hentes, så kalleren ikke tegner på nytt i en løkke.
-export const loadParts = () => (pstate.loaded || ctx.DEMO ? null : load());
+export const loadParts = () => (pstate.loaded ? null : load());
 
 // ---------- Demo ----------
 
