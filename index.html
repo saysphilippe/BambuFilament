@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Ekstra lag mot XSS: bare egne skript, og data bare til GitHub, proxyen og Bambu-bildene.
        style-src trenger 'unsafe-inline' for fargefeltene (style-attributter med kontrollerte farger). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://store.bblcdn.eu https://store.bblcdn.com https://*.alicdn.com https://*.aliexpress-media.com https://*.mouser.com https://*.lcsc.com; connect-src 'self' http://127.0.0.1:8787 https://api.github.com https://raw.githubusercontent.com https://bambufilament-proxy.saysphilippe.workers.dev; base-uri 'none'; form-action 'self'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://store.bblcdn.eu https://store.bblcdn.com https://*.alicdn.com https://*.aliexpress-media.com https://*.mouser.com https://*.lcsc.com https://jlc-prod-smt.oss-eu-central-1.aliyuncs.com; connect-src 'self' http://127.0.0.1:8787 https://api.github.com https://raw.githubusercontent.com https://bambufilament-proxy.saysphilippe.workers.dev; base-uri 'none'; form-action 'self'; object-src 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Filament og elektronikk universet</title>
   <meta name="description" content="Felles oversikt over Bambu Lab-filament og elektronikkomponenter, skannet inn med RFID og importert fra AliExpress og Mouser.">
