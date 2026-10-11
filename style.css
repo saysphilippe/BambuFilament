@@ -960,3 +960,5 @@ dialog.part-dialog { width: min(1040px, calc(100vw - 32px)); }
 input[type="number"] { display: block; width: calc(4ch + 30px); max-width: 100%; padding-inline: 8px; text-align: center; font-variant-numeric: tabular-nums; }
 .req-calc input[type="number"], .setting-input input[type="number"], .vipps-amount input[type="number"] { display: inline-block; }
 #pd-pack, #pd-left { width: calc(7ch + 30px); }
+.buy-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; font-size: 13px; }
+.buy-list .current { font-weight: 700; text-decoration: none; color: var(--text); }

@@ -722,14 +722,31 @@ function filtered() {
   return list.sort(by);
 }
 
+// Samme produkt kjøpt i flere ordre vises som ett kort med samlet antall.
+// Nøkkel: eier + butikk + produkt (AliExpress-varenummer, ellers delenummer eller tittel) + variant.
+const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+const groupKey = (p) => [p.owner, p.source, p.itemId || norm(p.mpn) || norm(p.title), norm(p.variant)].join("|");
+const siblings = (p) => { const k = groupKey(p); return visibleParts().filter((x) => groupKey(x) === k); };
+function groupParts(list) {
+  const g = new Map();
+  for (const p of list) { const k = groupKey(p); (g.get(k) || g.set(k, []).get(k)).push(p); }
+  return [...g.values()];
+}
+// Kortet viser og handler på kjøpet med mest igjen (ved likt: det nyeste).
+const pickRep = (items) => [...items].sort((a, b) => remaining(b) - remaining(a) || b.orderDate.localeCompare(a.orderDate))[0];
+
 const PAGE = 120;
 let shown = PAGE;
 
-function partCard(p) {
-  const left = remaining(p);
-  const total = units(p);
-  const bought = p.pack > 1 ? `${p.qty} × ${p.pack} = ${total} stk` : `${total} stk`;
-  const qty = p.left === null || p.left === total ? bought : `${left} av ${total} stk igjen`;
+function partCard(group) {
+  const all = siblings(group[0]);
+  const p = pickRep(all);
+  const many = all.length > 1;
+  const left = all.reduce((n, x) => n + remaining(x), 0);
+  const total = all.reduce((n, x) => n + units(x), 0);
+  const bought = !many && p.pack > 1 ? `${p.qty} × ${p.pack} = ${total} stk` : `${total} stk`;
+  const qty = (left === total ? bought : `${left} av ${total} stk igjen`) + (many ? ` · ${all.length} kjøp` : "");
+  const newest = all.reduce((d, x) => (x.orderDate > d ? x.orderDate : d), "");
   return `<div class="part-card${left === 0 ? " used-up" : ""}">
   <button class="part-open" type="button" data-part="${ctx.esc(p.id)}">
     <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
@@ -740,7 +757,7 @@ function partCard(p) {
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
       <span class="part-meta"><b>${ctx.esc(qty)}</b>${fmtMoney(p) ? ` · ${ctx.esc(fmtMoney(p))}/stk` : ""}</span>
       ${p.pkg ? `<span class="part-pkg" title="${ctx.esc(packageInfo(p.pkg))}">${footprintSvg(p.pkg, 24) || packageSvg(p.pkg, 22)}${ctx.esc(p.pkg)}</span>` : ""}
-      <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(p.orderDate))}</span></span>
+      <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(newest))}</span></span>
     </span>
   </button>
   ${ctx.token() || ctx.DEMO ? stepper(p) : ""}
@@ -783,6 +800,7 @@ function render() {
   const all = visibleParts();
   if (pstate.cat && !all.some((p) => p.category === pstate.cat)) pstate.cat = "";
   const list = filtered();
+  const groups = groupParts(list);
   const count = (key, val) => all.filter((p) => p[key] === val && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0))).length;
   const owners = [...new Set(all.map((p) => p.owner).filter(Boolean))].sort();
   const pkgCount = {};
@@ -812,8 +830,7 @@ function render() {
     <div class="parts-layout">
       <aside class="parts-rail">
         <div class="stats stats-side">
-          <div class="stat"><b>${all.length.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
-          <div class="stat"><b>${all.filter((p) => remaining(p) > 0).length.toLocaleString("nb-NO")}</b><span>har igjen</span></div>
+          <div class="stat"><b>${groupParts(all).length.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
           ${totalNok && (ctx.DEMO || (ctx.isAdmin?.() && !pstate.prefs[meName()]?.hideSpent)) ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.${noTotal.size ? ` For ${noTotal.size} ordre finnes ikke totalen lenger hos butikken (gamle AliExpress-ordre), så der er bare varene med, uten frakt.` : ""}`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca. (${allOrders.size.toLocaleString("nb-NO")} ordre${noTotal.size ? `, frakt mangler for ${noTotal.size}` : ", inkl. frakt"})</span></div>` : ""}
         </div>
         <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori</span><div class="chips">
@@ -845,9 +862,9 @@ function render() {
         </section>
         ${pstate.loading ? `<p class="count">Henter komponenter…</p>` : pstate.error ? `<p class="notice">${ctx.esc(pstate.error)}</p>` : ""}
         ${!pstate.loading && !all.length ? `<section class="panel empty-parts"><h2>Ingen komponenter ennå</h2><p class="hint">Importer det du har kjøpt hos AliExpress eller Mouser, så havner alt her, sortert i kategorier.</p><button class="btn btn-primary" type="button" data-pview="import">Importer</button></section>` : ""}
-        ${all.length ? `<p class="count">${list.length.toLocaleString("nb-NO")} varer${list.length > shown ? `, viser ${shown}` : ""}${hiddenMatches(list.length) > 0 ? ` · <button class="linkbtn" type="button" data-pclear>${hiddenMatches(list.length).toLocaleString("nb-NO")} treff til skjules av filtrene, vis alle</button>` : ""}</p>` : ""}
-        <section class="parts-grid">${list.slice(0, shown).map(partCard).join("")}</section>
-        ${list.length > shown ? `<button class="btn parts-more" type="button" data-pmore>Vis flere (${(list.length - shown).toLocaleString("nb-NO")} til)</button>` : ""}
+        ${all.length ? `<p class="count">${groups.length.toLocaleString("nb-NO")} varer${groups.length < list.length ? ` (${list.length.toLocaleString("nb-NO")} kjøp)` : ""}${groups.length > shown ? `, viser ${shown}` : ""}${hiddenMatches(list.length) > 0 ? ` · <button class="linkbtn" type="button" data-pclear>${hiddenMatches(list.length).toLocaleString("nb-NO")} treff til skjules av filtrene, vis alle</button>` : ""}</p>` : ""}
+        <section class="parts-grid">${groups.slice(0, shown).map(partCard).join("")}</section>
+        ${groups.length > shown ? `<button class="btn parts-more" type="button" data-pmore>Vis flere (${(groups.length - shown).toLocaleString("nb-NO")} til)</button>` : ""}
       </div>
     </div>`;
 }
@@ -952,6 +969,12 @@ function openPart(id) {
         ${row("Eier", `<span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span> ${ctx.esc(p.owner || "Ukjent")}`)}
         ${row("Kjøpt", `${p.pack > 1 ? `${ctx.esc(p.qty)} × ${ctx.esc(p.pack)} stk = <b>${units(p)} stk</b>` : `<b>${units(p)} stk</b>`}${fmtMoney(p) ? ` à ${ctx.esc(fmtMoney(p))}${p.pack > 1 ? ` (${ctx.esc(fmtMoney({ ...p, unitPrice: p.unitPrice / p.pack }))} per stk)` : ""}` : ""}${p.orderTotal ? ` · ordre totalt ${ctx.esc(p.orderTotal)}` : ""}`)}
         ${row("Dato", ctx.esc(fmtDate(p.orderDate)))}
+        ${(() => {
+          const sib = siblings(p).sort((a, b) => b.orderDate.localeCompare(a.orderDate));
+          if (sib.length < 2) return "";
+          const left = sib.reduce((n, x) => n + remaining(x), 0), total = sib.reduce((n, x) => n + units(x), 0);
+          return row("Alle kjøp", `<b>${total} stk</b> i ${sib.length} kjøp, ${left} igjen<ul class="buy-list">${sib.map((x) => `<li><button type="button" class="linkbtn${x.id === p.id ? " current" : ""}" data-sibling="${ctx.esc(x.id)}">${ctx.esc(fmtDate(x.orderDate) || "uten dato")} · ${units(x)} stk${fmtMoney(x) ? ` à ${ctx.esc(fmtMoney(x))}` : ""}${x.orderId ? ` · ordre ${ctx.esc(x.orderId)}` : ""}</button> <span class="hint">${remaining(x)} igjen</span></li>`).join("")}</ul>`);
+        })()}
         ${row("Butikk", `${ctx.esc(SOURCE_LABEL[p.source])}${p.store && p.store !== "Mouser" ? ` · ${p.storeUrl ? `<a href="${ctx.esc(p.storeUrl)}" target="_blank" rel="noopener">${ctx.esc(p.store)}</a>` : ctx.esc(p.store)}` : ""}`)}
         ${row("Ordrenummer", ctx.esc(p.orderId))}
         ${row("Status", ctx.esc(p.status))}
@@ -1005,6 +1028,8 @@ function openPart(id) {
   };
   dlg.onclick = async (e) => {
     if (e.target.closest(".dlg-close")) { dlg.close(""); return; }
+    const sib = e.target.closest("[data-sibling]");
+    if (sib) { dlg.close(""); openPart(sib.dataset.sibling); return; }
     if (!e.target.closest("[data-addcart]")) return;
     const qty = Math.max(1, Math.round(Number(dlg.querySelector("#pd-cartqty").value) || 1));
     const msg = dlg.querySelector(".cart-msg");
@@ -1175,6 +1200,9 @@ function demoParts() {
     ["20PCS NE555 Timer IC DIP-8", "", 1, 22.0, "2025-12-02"],
     ["AMS1117-3.3 Voltage Regulator SOT-223 50pcs", "", 1, 18.0, "2025-11-11"],
     ["GY-BME280 Temperature Humidity Pressure Sensor Module I2C", "3.3V", 2, 39.0, "2025-10-05"],
+    // Samme vare kjøpt flere ganger (samme eier) – vises som ett kort med samlet antall.
+    ["RC522 RFID Reader Module 13.56MHz with Cards", "", 3, 17.5, "2025-09-14"],
+    ["0.96 inch OLED Display Module SSD1306 I2C 128x64", "White", 2, 22.9, "2025-08-30"],
   ];
   return rows.map(([title, variant, qty, price, date], i) => cleanPart({
     id: `demo:${i}`, source: "aliexpress", owner: ["Philippe", "Niklas", "Peter"][i % 3], title, variant, qty,
