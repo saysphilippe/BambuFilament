@@ -70,6 +70,8 @@ const safeImg = (u) => {
   u = String(u || "").trim();
   if (ALI_PLACEHOLDER.test(u)) return "";
   if (u.startsWith("//")) u = "https:" + u;
+  // Egne bilder i repoet (img/parts/C233265.png) for deler butikken ikke har bilde av lenger.
+  if (/^img\/parts\/[A-Za-z0-9_-]+\.(png|jpe?g|webp)$/.test(u)) return u;
   return IMG_HOSTS.test(u) ? u.split(/[?#]/)[0] : "";
 };
 const safeUrl = (u) => {
