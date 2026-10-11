@@ -571,6 +571,8 @@ function cleanProject(x) {
     qty: Math.max(1, Math.min(100000, Math.round(num(l?.qty) ?? 1))),
     label: clip(l?.label, 120), note: clip(l?.note, 200), url: safeUrl(l?.url),
     price: num(l?.price), bought: !!l?.bought,
+    // Trukket fra lageret da prosjektet ble ferdig: [{ id, n }], så det kan legges tilbake.
+    used: (Array.isArray(l?.used) ? l.used : []).slice(0, 20).map((u) => ({ id: clip(u?.id, 200), n: Math.max(0, Math.round(num(u?.n) ?? 0)) })).filter((u) => u.id && u.n),
   })).filter((l) => l.kind === "buy" ? l.label : l.partId);
   return {
     id: clip(x.id, 60), name: clip(x.name, 80) || "Uten navn", desc: clip(x.desc, 1000), owner: clip(x.owner, 40),
@@ -594,6 +596,7 @@ function lineState(x, l) {
   const p = pstate.parts.find((y) => y.id === l.partId);
   if (!p) return ["bad", "Varen er slettet"];
   if (p.owner === x.owner) {
+    if (l.used?.length) return ["ok", `Brukt (${l.used.reduce((a, u) => a + u.n, 0)} stk trukket fra)`];
     const others = reservedElsewhere(p.id, x.id);
     if (remaining(p) < l.qty) return ["bad", `Bare ${remaining(p)} igjen`];
     if (remaining(p) < l.qty + others) return ["warn", `Reservert ${others} stk i andre prosjekter også`];
@@ -630,6 +633,36 @@ function projectCost(x) {
 }
 
 // Legg en vare til et prosjekt: egen vare reserveres, en venns vare blir en forespørsel.
+async function setProjectStatus(x, status) {
+  const was = x.status;
+  x.status = status;
+  const parts = [], reqs = [], short = [];
+  if (status === "done" && was !== "done") {
+    for (const l of x.lines) {
+      if (l.kind !== "stock" || l.used?.length) continue;
+      const p = pstate.parts.find((y) => y.id === l.partId);
+      if (p && p.owner === x.owner) {
+        try {
+          const r = await useParts(p, l.qty, false);
+          l.used = r.taken;
+          parts.push(...r.changed);
+          if (r.short) short.push(`${p.title.slice(0, 40)} (mangler ${r.short})`);
+        } catch { short.push(`${p.title.slice(0, 40)} (ingen igjen)`); }
+      } else {
+        const q = pstate.reqs.find((y) => y.id === l.reqId);
+        if (q && q.status === "sent") { q.status = "received"; reqs.push(q); }
+      }
+    }
+  } else if (was === "done" && status !== "done") {
+    for (const l of x.lines) if (l.used?.length) { parts.push(...unuseParts(l.used)); l.used = []; }
+  }
+  x.updated = new Date().toISOString();
+  if (!ctx.DEMO) await savePatch([{ coll: "projects", id: x.id, data: x }, ...reqs.map((q) => ({ coll: "partreqs", id: q.id, data: q })), ...parts.map((p) => ({ id: p.id, data: p }))]);
+  render();
+  const n = parts.length ? x.lines.reduce((sum, l) => sum + (l.used || []).reduce((a, u) => a + u.n, 0), 0) : 0;
+  return status === "done" ? `Ferdig: ${n} stk trukket fra lageret${reqs.length ? `, ${reqs.length} lån markert som mottatt` : ""}.${short.length ? ` Fantes ikke nok av: ${short.join(", ")}.` : ""}` : was === "done" ? "Delene er lagt tilbake i lageret." : "Lagret";
+}
+
 async function addPartToProject(x, p, qty, note) {
   if (!canEditProject(x)) throw new Error("Bare eieren av prosjektet kan endre det.");
   const reqs = [];
@@ -1201,7 +1234,7 @@ const pickRep = (items) => [...items].sort((a, b) => remaining(b) - remaining(a)
 // Bildefilteret: én test per valg (pstate.imgf).
 const IMG_FILTERS = [
   ["none", "Mangler bilde", (p) => !p.image],
-  ["similar", "Lånt fra lignende vare", (p) => !!p.image && p.imgSearch],
+  ["similar", "Lånt bilde, ikke godkjent", (p) => !!p.image && p.imgSearch && !p.imgManual],
   ["search", "Funnet av bildesøk", (p) => p.imgBy === "bildesøk" && !!p.image],
   ["locked", "Låst (satt for hånd)", (p) => p.imgManual],
   ["wrong", "Feil bilde", (p) => p.imgWrong && !imgFixed(p)],
@@ -1241,9 +1274,49 @@ function partCard(group) {
   </div>`;
 }
 
+// ---------- Brukt ----------
+async function useParts(p, n, save = true) {
+  const taken = [], changed = [];
+  let need = n;
+  // siblings() følger filtrene på siden; varen selv er alltid med.
+  const pool = siblings(p).filter((y) => y.owner === p.owner);
+  if (!pool.includes(p)) pool.push(p);
+  for (const x of pool.sort((a, b) => remaining(b) - remaining(a))) {
+    if (need <= 0) break;
+    const t = Math.min(need, remaining(x));
+    if (!t) continue;
+    const left = remaining(x) - t;
+    x.left = left === units(x) ? null : left;
+    x.updated = new Date().toISOString();
+    taken.push({ id: x.id, n: t });
+    changed.push(x);
+    need -= t;
+  }
+  if (need > 0 && !taken.length) throw new Error("Det er ingen igjen å trekke fra.");
+  if (save && changed.length && !ctx.DEMO) await savePatch(changed.map((x) => ({ id: x.id, data: x })));
+  return { taken, changed, short: need };
+}
+// Legg tilbake det som ble trukket fra (f.eks. når et ferdig prosjekt åpnes igjen).
+function unuseParts(taken) {
+  const changed = [];
+  for (const { id, n } of taken || []) {
+    const x = pstate.parts.find((y) => y.id === id);
+    if (!x) continue;
+    const left = Math.min(units(x), remaining(x) + n);
+    x.left = left === units(x) ? null : left;
+    x.updated = new Date().toISOString();
+    changed.push(x);
+  }
+  return changed;
+}
+
 // − / antall / + under hvert kort: legg varer i handlekurven uten å åpne detaljvinduet.
 const cartQty = (id) => cartDrafts().filter((q) => q.partId === id).reduce((s, q) => s + q.qty, 0);
 function stepper(p) {
+  if (p.owner && p.owner === meName()) {
+    const left = siblings(p).filter((y) => y.owner === p.owner).reduce((sum, y) => sum + remaining(y), 0);
+    return `<div class="part-step part-used-step"><span>${left} igjen</span><button type="button" class="part-used" data-usedone="${ctx.esc(p.id)}" ${left ? "" : "disabled"} title="Brukt én: trekk fra lageret">Brukt −1</button></div>`;
+  }
   const n = cartQty(p.id), id = ctx.esc(p.id), max = remaining(p);
   return `<div class="part-step${n ? " in-cart" : ""}" data-step="${id}">
     <button type="button" data-cartstep="-1" data-pid="${id}" ${n ? "" : "disabled"} aria-label="Ta én ut av handlekurven">−</button>
@@ -1486,6 +1559,7 @@ function openPart(id) {
         <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${sortedCats().map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
         <label>Stk per pakke<input id="pd-pack" type="number" min="1" max="100000" value="${p.pack}" ${mine ? "" : "disabled"}></label>
         <label>Antall igjen (stk)<input id="pd-left" type="number" min="0" max="10000000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
+        ${mine && (ctx.token() || ctx.DEMO) ? `<div class="used-row"><label>Brukt nå (stk)<input id="pd-used" type="number" min="1" max="${Math.max(1, remaining(p))}" value="1"></label><button type="button" class="btn" data-useparts ${remaining(p) ? "" : "disabled"}>Trekk fra lageret</button><span class="hint used-msg" role="status"></span></div>` : ""}
         <label>Plassering<input id="pd-loc" type="text" maxlength="80" value="${ctx.esc(p.location)}" placeholder="F.eks. Skuff 3, verkstedet" ${mine ? "" : "disabled"}></label>
         <label class="pd-note">Notat<textarea id="pd-note" rows="2" maxlength="400" ${mine ? "" : "disabled"}>${ctx.esc(p.note)}</textarea></label>
         ${p.imgWeb ? `<div class="img-web-box"><b>Bildet er funnet på nettet</b>, ikke hos AliExpress${p.imgWebSrc ? ` (<a href="${ctx.esc(p.imgWebSrc)}" target="_blank" rel="noopener">kilde ↗</a>)` : ""}. Stemmer det?
@@ -1591,6 +1665,17 @@ function openPart(id) {
     }
     const sib = e.target.closest("[data-sibling]");
     if (sib) { dlg.close(""); openPart(sib.dataset.sibling); return; }
+    if (e.target.closest("[data-useparts]")) {
+      const n = Math.max(1, Math.round(Number(dlg.querySelector("#pd-used").value) || 1));
+      const out = dlg.querySelector(".used-msg");
+      try {
+        const { short } = await useParts(p, n);
+        dlg.querySelector("#pd-left").value = remaining(p);
+        out.textContent = short ? `Trakk fra ${n - short} stk (det var ikke flere).` : `Trakk fra ${n} stk. ${remaining(p)} igjen i dette kjøpet.`;
+        render();
+      } catch (err) { out.textContent = err.message; }
+      return;
+    }
     if (e.target.closest("[data-addproj]")) {
       const qty = Math.max(1, Math.round(Number(dlg.querySelector("#pd-cartqty").value) || 1));
       const msg = dlg.querySelector(".cart-msg");
@@ -1640,6 +1725,12 @@ export function initParts(context) {
       if (pj.dataset.projopen !== undefined) { pstate.project = pj.dataset.projopen; pstate.bomPreview = null; render(); window.scrollTo({ top: 0 }); return; }
       if (pj.dataset.projshow) { pstate.projShow = pj.dataset.projshow; return render(); }
       try { await projectAction(pj.dataset.projact, pj); } catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
+    const u1 = e.target.closest("[data-usedone]");
+    if (u1) {
+      const p = pstate.parts.find((x) => x.id === u1.dataset.usedone);
+      try { await useParts(p, 1); render(); ctx.setSync(`Brukt 1 stk – ${siblings(p).filter((y) => y.owner === p.owner).reduce((sum, y) => sum + remaining(y), 0)} igjen`); } catch (err) { ctx.setSync(err.message, true); }
       return;
     }
     const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-psettings], [data-pclear], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
@@ -1742,7 +1833,11 @@ export function initParts(context) {
     const px = ["proj-title", "proj-status", "proj-desc"].includes(e.target.id) || e.target.dataset.projbought ? projectById(pstate.project) : null;
     if (px && canEditProject(px)) {
       if (e.target.id === "proj-title") px.name = clip(e.target.value, 80) || px.name;
-      else if (e.target.id === "proj-status") px.status = PROJ_STATUS[e.target.value] ? e.target.value : px.status;
+      else if (e.target.id === "proj-status") {
+        if (!PROJ_STATUS[e.target.value]) return;
+        try { ctx.setSync(await setProjectStatus(px, e.target.value)); } catch (err) { ctx.setSync(err.message, true); }
+        return;
+      }
       else if (e.target.id === "proj-desc") px.desc = clip(e.target.value, 1000);
       else { const l = px.lines.find((y) => y.id === e.target.dataset.projbought); if (l) l.bought = e.target.checked; }
       try { await saveProject(px); ctx.setSync("Lagret"); } catch (err) { ctx.setSync(err.message, true); }
