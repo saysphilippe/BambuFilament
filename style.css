@@ -1095,3 +1095,8 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .typical-fig img { display: block; width: 100%; max-width: 620px; height: auto; margin: 0 auto; }
 .typical-fig figcaption a { white-space: nowrap; }
 .fpz-stage img { display: block; margin: 0 auto; width: calc(var(--fpz, 1) * 100%); max-width: none; height: auto; background: #fff; }
+
+/* Underfaner i Innstillinger */
+.settings-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.settings-body > h3:first-child { margin-top: 0; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }

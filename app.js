@@ -1853,8 +1853,13 @@ async function cardAction(kind, uid, value, el) {
 
 const fmtMinutes = (m) => (m < 1 ? `${Math.round(m * 60)} sekunder` : m === 1 ? "1 minutt" : `${String(m).replace(".", ",")} minutter`);
 
+// Underfaner i Innstillinger; valget huskes i nettleseren.
+const SETTING_TABS = [["rfid", "RFID-leser"], ["loans", "Lån"], ["cart", "Handlekurv"], ["parts", "Komponenter"], ["account", "Konto og varsler"]];
+const settingsTab = () => (SETTING_TABS.some(([id]) => id === store("bf.setTab")) ? store("bf.setTab") : "rfid");
+
 function renderSettings() {
   const box = $("#tab-settings");
+  const tab = settingsTab();
   const st = state.doc.settings || cleanSettings({});
   const edit = !!token() && isAdmin() && !DEMO;
   const field = (key, label, help, unit = "minutter") => {
@@ -1865,18 +1870,18 @@ function renderSettings() {
       <span class="hint">${help} ${unit === "minutter" ? `Nå: ${fmtMinutes(st[key])}. Standard: ${fmtMinutes(r.def)}.` : `Standard: ${String(r.def).replace(".", ",")} ${unit}.`}</span>
     </label>`;
   };
-  box.innerHTML = `<section class="panel settings-panel">
-    <h2>Innstillinger</h2>
-    <h3>RFID-leser</h3>
+  const sections = {
+    rfid: `<h3>RFID-leser</h3>
     <p class="hint">Leseren henter innstillingene hver gang et kort eller en spole skannes, så endringer gjelder med en gang. ${edit ? "" : "Bare administrator kan endre dem."}</p>
     <p><a class="btn btn-small" href="https://claude.ai/artifact/4PxCr7dD1bRuCPpwZpn3t3" target="_blank" rel="noopener">Bygg din egen leser ↗</a>
       <span class="hint">Velg ESP32-kort, få koblingsskjema og ferdig config.h.</span></p>
     ${field("cardMinutes", "RFID-kort gjelder i", "Hvor lenge spoler registreres på den som tappet kortet sitt. Hver spole som tappes, starter tiden på nytt.")}
-    ${field("checkoutMinutes", "Utsjekk etter", "En spole som er inne, sjekkes ut når den skannes på nytt etter så lang tid. Skannes den før det, skjer ingenting.")}
-    <h3>Gjøre opp lån</h3>
+    ${field("checkoutMinutes", "Utsjekk etter", "En spole som er inne, sjekkes ut når den skannes på nytt etter så lang tid. Skannes den før det, skjer ingenting.")}`,
+    loans: `<h3>Gjøre opp lån</h3>
+    ${edit ? "" : `<p class="hint">Bare administrator kan endre disse.</p>`}
     ${field("spoolPrice", "Standardpris per spole", "Brukes når prisen ikke finnes i Bambu-butikken.", "kr")}
-    ${field("emptySpoolPrice", "Spoletillegg", "Legges til når hele rullen er brukt opp og spolen ikke er levert tilbake. Hentes fra butikken som forskjellen mellom «med spole» og «refill» når begge finnes.", "kr")}
-    <h3>Handlekurv (simulert kjøp)</h3>
+    ${field("emptySpoolPrice", "Spoletillegg", "Legges til når hele rullen er brukt opp og spolen ikke er levert tilbake. Hentes fra butikken som forskjellen mellom «med spole» og «refill» når begge finnes.", "kr")}`,
+    cart: `<h3>Handlekurv (simulert kjøp)</h3>
     <p class="hint">Bambu tar ikke norsk mva ved levering til Norge. Mva (25 %) og fortollingsgebyret betales ved levering. Sjekk satsene hos Bambu og Posten innimellom.</p>
     ${field("freeShipEur", "Gratis frakt fra", "Bambu: gratis frakt til Norge over €119 (gjelder ikke printere og AMS). Regnes etter rabatt.", "€")}
     ${field("shipEur", "Frakt under grensen", "Anslag. Bambu oppgir ikke fast pris, så sjekk i kassen hos Bambu og juster.", "€")}
@@ -1884,12 +1889,22 @@ function renderSettings() {
     ${field("postenFeeMid", "Posten: fortolling 500–3000 kr", "Postens gebyr når sendingen er verdt 500–3000 kr.", "kr")}
     ${field("postenFeeHigh", "Posten: fortolling over 3000 kr", "Postens gebyr over 3000 kr. Pakken må da ofte hentes.", "kr")}
     ${field("dhlFee", "DHL: fortollingsgebyr", "Anslag hvis DHL leverer selv (utlegg av mva). Sjekk fakturaen fra DHL.", "kr")}
-    ${field("eurRate", "Eurokurs (reserve)", `Brukes bare når eurokursen fra Norges Bank mangler. Nå brukes ${state.store?.fx ? `Norges Banks kurs ${String(state.store.fx.eurNok).replace(".", ",")}` : "denne"}.`, "kr per euro")}
-    <div id="parts-settings">${partsSettingsHtml()}</div>
+    ${field("eurRate", "Eurokurs (reserve)", `Brukes bare når eurokursen fra Norges Bank mangler. Nå brukes ${state.store?.fx ? `Norges Banks kurs ${String(state.store.fx.eurNok).replace(".", ",")}` : "denne"}.`, "kr per euro")}`,
+    parts: `<div id="parts-settings">${partsSettingsHtml()}</div>`,
+    account: `<h3>Konto og varsler</h3>
+    <p class="hint">E-post, mobilnummer, farge, varsler om nye meldinger (e-post eller WhatsApp) og passord ligger på kontoen din.</p>
+    <p class="settings-actions">${DEMO ? `<span class="hint">Ikke tilgjengelig i demoen.</span>` : token()
+      ? `<button type="button" class="btn" data-setaction="account">Åpne kontoen min</button><button type="button" class="btn" data-setaction="notify">Varsler om meldinger</button><button type="button" class="btn" data-setaction="password">Bytt passord</button>`
+      : `<button type="button" class="btn btn-primary" data-setaction="login">Logg inn</button>`}</p>`,
+  };
+  box.innerHTML = `<section class="panel settings-panel">
+    <h2>Innstillinger</h2>
+    <nav class="chips settings-tabs" aria-label="Innstillinger">${SETTING_TABS.map(([id, label]) => `<button type="button" class="chip${id === tab ? " active" : ""}" data-settab="${id}" aria-pressed="${id === tab}">${label}</button>`).join("")}</nav>
+    <div class="settings-body">${sections[tab]}</div>
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;
   // Antall per kategori: hent komponentene og tegn på nytt når de er klare.
-  loadParts()?.then?.(() => state.tab === "settings" && document.body.dataset.section !== "parts" && renderSettings());
+  if (tab === "parts") loadParts()?.then?.(() => state.tab === "settings" && settingsTab() === "parts" && document.body.dataset.section !== "parts" && renderSettings());
 }
 
 async function saveSetting(key, input) {
@@ -3936,10 +3951,20 @@ document.querySelector(".sections").addEventListener("click", (e) => {
 });
 // Innstillinger fra komponentdelen: bytt til fanen Innstillinger og hopp til komponentvalgene.
 const openSettings = () => {
+  store("bf.setTab", "parts");
   state.tab = "settings";
   showSection("filament");
-  requestAnimationFrame(() => $("#parts-settings")?.scrollIntoView({ block: "start" }));
 };
+$("#tab-settings").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-settab], [data-setaction]");
+  if (!t) return;
+  if (t.dataset.settab) { store("bf.setTab", t.dataset.settab); return renderSettings(); }
+  const a = t.dataset.setaction;
+  if (a === "account") openAccount();
+  else if (a === "notify") openNotifySettings();
+  else if (a === "password") openChangePassword(false);
+  else if (a === "login") openLogin();
+});
 initParts({ $, esc, dbCall, token, userName, userColor, setSync, DEMO, showSection, store, isAdmin, openSettings });
 initMessages({
   esc, dbCall, proxy, token, userColor, DEMO,
