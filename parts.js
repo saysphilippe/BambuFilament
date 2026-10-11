@@ -1270,23 +1270,26 @@ function partCard(group) {
       <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(newest))}</span></span>
     </span>
   </button>
-  ${(p.imgWeb || imgFixed(p)) && (ctx.DEMO || p.owner === meName()) ? `<label class="img-ok"><input type="checkbox" data-imgok="${ctx.esc(p.id)}"> Bildet stemmer – godkjenn</label>` : ""}
+  ${needsImgApproval(p) && (ctx.DEMO || p.owner === meName()) ? `<label class="img-ok"><input type="checkbox" data-imgok="${ctx.esc(p.id)}"> Bildet stemmer – godkjenn</label>` : ""}
   ${ctx.token() || ctx.DEMO ? stepper(p) : ""}
   </div>`;
 }
+
+// Bildet venter på at eieren sier at det stemmer: funnet på nettet, byttet etter «Feil bilde»,
+// eller lånt fra en lignende vare (AliExpress-originalen er borte) og ikke godkjent ennå.
+const needsImgApproval = (p) => p.imgWeb || imgFixed(p) || (!!p.image && p.imgSearch && !p.imgManual);
 
 // Godkjenn bildet rett fra kortet: fjerner «Fra nettet – godkjenn» og «Feil bilde», og låser bildet
 // (bildesøket bytter det ikke ut). Gjelder alle kjøp av samme vare med samme bilde.
 async function approveImage(p) {
   const now = new Date().toISOString();
-  const list = siblings(p).filter((x) => x.owner === p.owner && x.image === p.image && (x.imgWeb || imgFixed(x)));
+  const list = siblings(p).filter((x) => x.owner === p.owner && x.image === p.image && needsImgApproval(x));
   if (!list.includes(p)) list.push(p);
   for (const x of list) {
     x.imgWeb = false;
     x.imgWrong = false;
     x.imgWrongAt = "";
     x.imgManual = true;
-    x.imgSearch = false;
     x.updated = now;
   }
   render();
