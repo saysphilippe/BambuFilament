@@ -112,6 +112,8 @@ function cleanPart(p) {
     imgSearch: !!p.imgSearch && !!safeImg(p.image),
     // Bildet er satt eller fjernet for hånd; automatiske bildesøk rører det ikke.
     imgManual: !!p.imgManual,
+    // Merket «Feil bilde» av eieren: bildesøket plukker opp disse og fjerner merket når det finner et nytt.
+    imgWrong: !!p.imgWrong,
     // Pakketype (TO-92, SOT-23, 0805 …) fra tittel, variant og delenummer, ellers fra kjente delenumre.
     // Butikkens egen pakkeangivelse (LCSC) går foran det vi finner i teksten.
     pkgFixed: clip(p.pkgFixed, 30),
@@ -458,7 +460,8 @@ function listenForImport() {
     // AliExpress-fanen spør hvilke av mine varer som trenger nytt bilde (bilde fra søk eller ingen).
     if (msg?.type === "bf-list-noimg" && isAli) {
       await load();
-      const items = pstate.parts.filter((p) => p.source === "aliexpress" && p.owner === ctx.userName() && !p.imgManual && (p.imgSearch || !p.image))
+      const items = pstate.parts.filter((p) => p.owner === ctx.userName() && (msg.only === "wrong" ? p.imgWrong
+        : p.imgWrong || (p.source === "aliexpress" && !p.imgManual && (p.imgSearch || !p.image))))
         .map((p) => ({ id: p.id, t: p.title }));
       e.source?.postMessage({ type: "bf-noimg", items }, e.origin);
       return;
@@ -471,10 +474,10 @@ function listenForImport() {
         const changed = [];
         for (const { id, image } of msg.images.slice(0, 20000)) {
           const p = byId.get(String(id));
-          if (!p || p.owner !== ctx.userName() || p.imgManual) continue;
+          if (!p || p.owner !== ctx.userName() || (p.imgManual && !p.imgWrong)) continue;
           const img = safeImg(image);
-          if (img === p.image) continue;
-          p.image = img; p.imgSearch = !!img; p.updated = new Date().toISOString();
+          if (img === p.image || (p.imgWrong && !img)) continue;
+          p.image = img; p.imgSearch = !!img; p.imgWrong = false; p.updated = new Date().toISOString();
           changed.push(p);
         }
         if (changed.length && !ctx.DEMO) await savePatch(changed.map((p) => ({ id: p.id, data: p })));
@@ -753,7 +756,7 @@ function partCard(group) {
   <button class="part-open" type="button" data-part="${ctx.esc(p.id)}">
     <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
 </span>
-    <span class="part-cat">${ctx.esc(CAT_NAME[p.category])}</span>
+    <span class="part-cat">${p.imgWrong ? `<span class="img-wrong-tag">Feil bilde</span> ` : ""}${ctx.esc(CAT_NAME[p.category])}</span>
     <span class="part-body">
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
@@ -995,6 +998,7 @@ function openPart(id) {
         <label>Antall igjen (stk)<input id="pd-left" type="number" min="0" max="10000000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
         <label>Plassering<input id="pd-loc" type="text" maxlength="80" value="${ctx.esc(p.location)}" placeholder="F.eks. Skuff 3, verkstedet" ${mine ? "" : "disabled"}></label>
         <label class="pd-note">Notat<textarea id="pd-note" rows="2" maxlength="400" ${mine ? "" : "disabled"}>${ctx.esc(p.note)}</textarea></label>
+        <label class="cat-toggle pd-imgwrong"><input type="checkbox" id="pd-imgwrong"${p.imgWrong ? " checked" : ""}${mine ? "" : " disabled"}> Feil bilde – finn riktig bilde ved neste bildesøk</label>
         <label class="pd-note">Bilde (lenke fra AliExpress, LCSC eller Mouser; tom = ingen bilde)<input id="pd-img" type="url" maxlength="400" value="${ctx.esc(p.image)}" placeholder="https://ae-pic-a1.aliexpress-media.com/kf/….jpg" ${mine ? "" : "disabled"}></label>
       </div>
       ${mine ? "" : `<p class="hint">Bare ${ctx.esc(p.owner)} kan endre denne varen.</p>`}
@@ -1024,9 +1028,16 @@ function openPart(id) {
     if (imgIn !== p.image) {
       const img = safeImg(imgIn.replace(/_\d+x\d+\.(jpg|png|webp)$/i, ""));
       if (imgIn && !img) { ctx.setSync("Bildelenken må være fra AliExpress, LCSC eller Mouser.", true); }
-      else { p.image = img; p.imgSearch = false; p.imgManual = true; }
+      else { p.image = img; p.imgSearch = false; p.imgManual = true; p.imgWrong = false; }
     }
     try { await saveOne(p); ctx.setSync("Lagret"); } catch (err) { ctx.setSync(err.message, true); }
+  };
+  dlg.onchange = async (e) => {
+    if (e.target.id !== "pd-imgwrong" || !mine) return;
+    p.imgWrong = e.target.checked;
+    render();
+    try { await saveOne(p); ctx.setSync(p.imgWrong ? "Merket som feil bilde" : "Lagret"); }
+    catch (err) { e.target.checked = !e.target.checked; p.imgWrong = e.target.checked; ctx.setSync(err.message, true); }
   };
   dlg.onclick = async (e) => {
     if (e.target.closest(".dlg-close")) { dlg.close(""); return; }

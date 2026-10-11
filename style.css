@@ -962,3 +962,5 @@ input[type="number"] { display: block; width: calc(4ch + 30px); max-width: 100%;
 #pd-pack, #pd-left { width: calc(7ch + 30px); }
 .buy-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; font-size: 13px; }
 .buy-list .current { font-weight: 700; text-decoration: none; color: var(--text); }
+.img-wrong-tag { display: inline-block; padding: 0 6px; border-radius: 99px; background: #e5484d; color: #fff; font-size: 10.5px; }
+.pd-imgwrong { margin-top: 2px; }
