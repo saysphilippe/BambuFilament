@@ -960,10 +960,13 @@ function render() {
   if (pstate.cat && !all.some((p) => p.category === pstate.cat)) pstate.cat = "";
   const list = filtered();
   const groups = groupParts(list);
-  const count = (key, val) => all.filter((p) => p[key] === val && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0))).length;
+  // Tallene i filtrene teller produkter (flere kjøp av samme vare = én), som «varer totalt» og listen.
+  const products = (list) => new Set(list.map(groupKey)).size;
+  const count = (key, val) => products(all.filter((p) => p[key] === val && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0))));
   const owners = [...new Set(all.map((p) => p.owner).filter(Boolean))].sort();
   const pkgCount = {};
-  for (const p of all) if (p.pkg) pkgCount[p.pkg] = (pkgCount[p.pkg] || 0) + 1;
+  for (const p of all) if (p.pkg) (pkgCount[p.pkg] ||= new Set()).add(groupKey(p));
+  for (const k in pkgCount) pkgCount[k] = pkgCount[k].size;
   const pkgs = Object.entries(pkgCount).sort((a, b) => b[1] - a[1]).slice(0, 18);
   const cats = sortedCats().map(([id, name]) => [id, name, count("category", id)]);
   const chip = (key, val, label, n, dot) => `<button class="chip${pstate[key] === val ? " active" : ""}${key === "cat" && val ? ` cat-drop${!n && !isCustomCat(val) ? " empty" : ""}` : ""}" type="button" data-pf="${key}" data-pv="${ctx.esc(val)}">${dot ? `<span class="owner-dot" style="--owner:${dot}"></span>` : ""}${ctx.esc(label)}${n !== undefined ? ` <span class="chip-n">${n}</span>` : ""}</button>`;
@@ -1003,7 +1006,8 @@ function render() {
         ${pstate.cat === "semi" ? (() => {
           const semis = all.filter((p) => p.category === "semi" && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0)));
           const n = {};
-          for (const p of semis) n[semiType(p)] = (n[semiType(p)] || 0) + 1;
+          for (const p of semis) (n[semiType(p)] ||= new Set()).add(groupKey(p));
+          for (const k in n) n[k] = n[k].size;
           return `<nav class="parts-cats parts-sub" aria-label="Type halvleder"><span class="rail-label">Type halvleder</span><div class="chips">${chip("sub", "", "Alle", undefined)}${SEMI_TYPES.filter(([id]) => n[id]).map(([id, name]) => chip("sub", id, name, n[id])).join("")}</div></nav>`;
         })() : ""}
       </aside>
@@ -1023,7 +1027,7 @@ function render() {
           ${owners.length ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, count("owner", o), ctx.userColor(o))).join("")}</div></div>` : ""}
           <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "lcsc", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
           ${pkgs.length ? `<div class="chip-row"><span class="chip-label">Pakke</span><div class="chips">${chip("pkg", "", "Alle")}${pkgs.map(([k, n]) => chip("pkg", k, k, n)).join("")}</div></div>` : ""}
-          ${all.some((p) => p.imgWrong || p.imgWeb) ? `<div class="chip-row"><span class="chip-label">Bilde</span><div class="chips">${chip("imgf", "", "Alle")}${chip("imgf", "wrong", "Feil bilde", all.filter((p) => p.imgWrong && !imgFixed(p)).length)}${chip("imgf", "fixed", "Byttet – sjekk", all.filter(imgFixed).length)}${chip("imgf", "web", "Fant ikke på AliExpress, fra nettet – godkjenn", all.filter((p) => p.imgWeb).length)}</div></div>` : ""}
+          ${all.some((p) => p.imgWrong || p.imgWeb) ? `<div class="chip-row"><span class="chip-label">Bilde</span><div class="chips">${chip("imgf", "", "Alle")}${chip("imgf", "wrong", "Feil bilde", products(all.filter((p) => p.imgWrong && !imgFixed(p))))}${chip("imgf", "fixed", "Byttet – sjekk", products(all.filter(imgFixed)))}${chip("imgf", "web", "Fant ikke på AliExpress, fra nettet – godkjenn", products(all.filter((p) => p.imgWeb)))}</div></div>` : ""}
         </section>
         ${pstate.loading ? `<p class="count">Henter komponenter…</p>` : pstate.error ? `<p class="notice">${ctx.esc(pstate.error)}</p>` : ""}
         ${!pstate.loading && !all.length ? `<section class="panel empty-parts"><h2>Ingen komponenter ennå</h2><p class="hint">Importer det du har kjøpt hos AliExpress eller Mouser, så havner alt her, sortert i kategorier.</p><button class="btn btn-primary" type="button" data-pview="import">Importer</button></section>` : ""}
