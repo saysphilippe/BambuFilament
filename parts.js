@@ -268,8 +268,11 @@ async function moveToCat(id, cat) {
   ctx.setSync(`Flyttet til «${CAT_NAME[cat]}»`);
 }
 
+// Bare eieren kan slette sine egne varer.
 async function deleteParts(list) {
   const now = new Date().toISOString(), by = meName();
+  list = list.filter((p) => ctx.DEMO || (p.owner && p.owner === by));
+  if (!list.length) throw new Error("Bare eieren kan slette varen.");
   const ids = new Set(list.map((p) => p.id));
   pstate.parts = pstate.parts.filter((p) => !ids.has(p.id));
   for (const id of ids) pstate.deleted.add(id);
@@ -1101,7 +1104,7 @@ function openPart(id) {
       </div>
       <p class="hint cart-msg" role="status">${(() => { const n = pstate.reqs.filter((q) => q.partId === p.id && ["draft", "open"].includes(q.status)).reduce((s, q) => s + q.qty, 0); return n ? `${n} stk av denne er i en handlekurv eller ønsket.` : ""; })()}</p>` : ""}
       <div class="part-actions">
-        ${mine || ctx.isAdmin?.() ? `<button class="btn btn-danger part-del" type="button" data-delpart>Slett …</button>` : ""}
+        ${ctx.DEMO || (p.owner && p.owner === meName()) ? `<button class="btn btn-danger part-del" type="button" data-delpart>Slett …</button>` : ""}
         ${mine ? `<button class="btn btn-primary" value="save" type="submit">Lagre</button>` : ""}
         <button class="btn" value="cancel" type="submit">Lukk</button>
       </div>
