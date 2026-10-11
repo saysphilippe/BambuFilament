@@ -15,6 +15,12 @@ AliExpress, Mouser og LCSC) for en lukket vennegjeng. Se `CONTRIBUTING.md` for o
 - `firmware/` – ESP32-leser. `docs/leserbygger.html` – byggeveiledning.
 - Data: D1 via Workeren; brukerliste i repoet BambuFilament-auth; e-post/mobil i BambuFilament-data.
 
+## Claude-skill
+
+- `.claude/skills/elektronikk-design/SKILL.md`: designe kretser ut fra lageret (alle eiere). Leser lageret med
+  `node scripts/lager.mjs` via Claude-nøkkel (`BF_INVENTORY_KEY`, Workerens `/inventory`) eller eksportfil
+  (`lager-*.json`, aldri i git). `inventory()` i `worker/src/records.js` lager oversikten.
+
 ## Regler
 
 - All tekst brukerne ser, og kommentarer, skrives på norsk.

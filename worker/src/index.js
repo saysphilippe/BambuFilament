@@ -10,7 +10,7 @@
 // (RESET_KV), lagt inn av siden når administrator er innlogget (/reset-token).
 
 import { connect } from "cloudflare:sockets";
-import { FILE_COLLS, toRecords, fromRecords } from "./records.js";
+import { FILE_COLLS, toRecords, fromRecords, inventory } from "./records.js";
 
 const API = "https://api.bambulab.com";
 const MQTT_HOST = "us.mqtt.bambulab.com";
@@ -66,6 +66,7 @@ const LIMITS = {
   "/ams": "DATA_LIMIT", "/library": "DATA_LIMIT",
   "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
   "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/whois": "AUTH_LIMIT", "/msg-notify": "DATA_LIMIT", "/reset-token": "AUTH_LIMIT", "/approve": "AUTH_LIMIT",
+  "/inventory-key": "AUTH_LIMIT",
   "/db/load": "DB_LIMIT", "/db/patch": "DB_LIMIT", "/store/load": "DB_LIMIT", "/store/history": "DB_LIMIT", "/reader/card": "DB_LIMIT", "/reader/scan": "DB_LIMIT",
 };
 
@@ -84,6 +85,8 @@ export default {
     if (reqPath.startsWith("/reader/")) return readerRequest(request, env, reqPath);
     // Butikkdata fra GitHub Actions (egen nøkkel, ingen Origin).
     if (reqPath === "/store/ingest") return storeIngest(request, env);
+    // Lageroversikt for Claude-skillen: egen lesenøkkel («ik_…»), ingen Origin.
+    if (reqPath === "/inventory") return inventoryRequest(request, env);
     if (request.method !== "POST") return json({ error: "Bruk POST" }, 405, origin);
     if (!allowed.includes(sent)) return json({ error: "Ukjent opprinnelse" }, 403, origin);
 
@@ -133,6 +136,9 @@ export default {
         case "/msg-notify":
           await requireUser(token, env);
           return json(await msgNotify(body, env), 200, origin);
+        case "/inventory-key":
+          await requireUser(token, env);
+          return json(await inventoryKey(body, env), 200, origin);
         case "/db/load":
           await requireUser(token, env);
           return json(await dbLoad(body, env), 200, origin);
@@ -1175,6 +1181,33 @@ async function backupToGitHub(env) {
 // med nøkkelen STORE_INGEST_KEY). Produktene erstattes, og prishistorikken får en ny rad bare
 // for varianter der prisen er endret. Siden henter med /store/load og /store/history.
 // Alt gjøres med få spørringer (json_each), så det holder seg innenfor Workerens grenser.
+
+// ---------- Lesetilgang til lageret (Claude-skillen) ----------
+//
+// En innlogget bruker lager sin egen nøkkel («ik_…») på siden. Bare SHA-256 av nøkkelen lagres i KV
+// (inv:<hash>), og den gjelder i ett år. Nøkkelen gir bare lesetilgang til lageroversikten.
+const INV_TTL_S = 365 * 86400;
+async function inventoryKey({ name }, env) {
+  if (!env.RESET_KV) throw fail("Mangler lagring for nøkler.", 500);
+  const who = String(name || "").replace(/[^\p{L}\p{N} ._-]/gu, "").trim().slice(0, 40) || "ukjent";
+  const key = `ik_${b64url(crypto.getRandomValues(new Uint8Array(24)))}`;
+  const created = new Date().toISOString();
+  await env.RESET_KV.put(`inv:${await sha256Hex(key)}`, JSON.stringify({ name: who, created }), { expirationTtl: INV_TTL_S });
+  return { key, name: who, created, expires: new Date(Date.now() + INV_TTL_S * 1000).toISOString() };
+}
+
+async function inventoryRequest(request, env) {
+  const reply = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+  if (request.method !== "GET" && request.method !== "POST") return reply({ error: "Bruk GET" }, 405);
+  const ip = request.headers.get("CF-Connecting-IP") || "ukjent";
+  if (env.DATA_LIMIT && !(await env.DATA_LIMIT.limit({ key: `/inventory:${ip}` })).success) return reply({ error: "For mange forsøk" }, 429);
+  const tok = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!/^ik_[A-Za-z0-9_-]{20,}$/.test(tok) || !env.RESET_KV) return reply({ error: "Mangler eller ugyldig lesenøkkel" }, 401);
+  const meta = await env.RESET_KV.get(`inv:${await sha256Hex(tok)}`);
+  if (!meta) return reply({ error: "Ukjent eller utløpt lesenøkkel" }, 401);
+  const rows = await loadRows(env, new Set(FILE_COLLS.parts));
+  return reply(inventory(fromRecords("parts", rows)));
+}
 
 async function storeIngest(request, env) {
   const reply = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });

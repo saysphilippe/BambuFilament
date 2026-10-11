@@ -21,6 +21,35 @@ export const FILE_COLLS = {
 
 const MAX_LOGINS = 500;
 
+// Kompakt lageroversikt over komponentene (for Claude-skillen «elektronikk-design»):
+// ett element per produkt og eier (flere kjøp av samme vare slått sammen), med antall igjen i stk.
+// Brukes av «Eksporter lager for Claude» på siden og av /inventory i Workeren.
+export function inventory(partsDoc, extra = () => ({})) {
+  const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const n = (v, d) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Number(v) : d);
+  const groups = new Map();
+  for (const p of partsDoc?.parts || []) {
+    if (!p?.id || p.deleted) continue;
+    const key = [p.owner, p.source, p.itemId || norm(p.mpn) || norm(p.title), norm(p.variant)].join("|");
+    (groups.get(key) || groups.set(key, []).get(key)).push(p);
+  }
+  const items = [];
+  for (const list of groups.values()) {
+    const units = (p) => n(p.qty, 1) * n(p.pack, 1);
+    const have = list.reduce((s, p) => s + n(p.left, units(p)), 0);
+    const bought = list.reduce((s, p) => s + units(p), 0);
+    const p = list.sort((a, b) => String(b.orderDate || "").localeCompare(String(a.orderDate || "")))[0];
+    items.push({
+      owner: p.owner || "", title: String(p.title || "").slice(0, 200), variant: p.variant || "", mpn: p.mpn || "",
+      category: p.category || "", pkg: p.pkg || p.pkgFixed || "", have, bought, purchases: list.length,
+      location: p.location || "", note: String(p.note || "").slice(0, 200), source: p.source || "",
+      url: p.url || "", datasheet: p.datasheet || "", ids: list.map((x) => x.id), ...extra(p),
+    });
+  }
+  items.sort((a, b) => a.category.localeCompare(b.category) || a.owner.localeCompare(b.owner) || a.title.localeCompare(b.title));
+  return { version: 1, exported: new Date().toISOString(), owners: [...new Set(items.map((i) => i.owner).filter(Boolean))].sort(), count: items.length, items };
+}
+
 // Hele dokumentet -> poster { coll, id, data }.
 export function toRecords(file, doc) {
   const out = [];

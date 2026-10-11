@@ -8,6 +8,7 @@
 import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009202254";
 import { componentHtml, findPart, semiType, SEMI_TYPES } from "./circuits.js?v=20261009202254";
 import { detectPack } from "./pack.js?v=20261009202254";
+import { inventory } from "./worker/src/records.js?v=20261009202254";
 import { footprintSvg, footprintCaption, kicadName } from "./footprints.js?v=20261009202254";
 import { findPackage, packageSvg, packageInfo } from "./packages.js?v=20261009202254";
 
@@ -345,6 +346,26 @@ function setZoom(dlg, i) {
   dlg.querySelector('[data-fpz="1"]').disabled = i === FP_ZOOMS.length - 1;
 }
 
+// Alles beholdning som JSON (samme form som /inventory i Workeren), for Claude-skillen.
+async function exportInventory() {
+  try {
+    await load();
+    const data = inventory({ parts: pstate.parts }, (p) => {
+      const f = findPart(p.title, p.mpn);
+      return { categoryName: CAT_NAME[p.category] || p.category, part: f?.mpn || "", kind: f?.kind || "", type: p.category === "semi" ? semiType(p) : "" };
+    });
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `lager-${new Date().toISOString().slice(0, 10)}.json` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    ctx.setSync(`Eksporterte ${data.count} varer`);
+  } catch (err) {
+    ctx.setSync(err.message, true);
+  }
+}
+
 async function savePatch(ops, onProgress) {
   for (let i = 0; i < ops.length; i += PATCH_CHUNK) {
     await ctx.dbCall("/db/patch", { ops: ops.slice(i, i + PATCH_CHUNK).map((o) => ({ coll: o.coll || "parts", id: o.id, data: o.data })) });
@@ -428,6 +449,7 @@ function subnav() {
     ${b("requests", `Ønsket fra meg${m ? ` <span class="nav-n alert">${m}</span>` : ""}`)}
     ${b("import", "Importer")}
     <button type="button" class="parts-tab" data-psettings>Innstillinger</button>
+    <button type="button" class="parts-tab" data-pexport title="Last ned alles beholdning som JSON, for Claude-skillen «elektronikk-design»">Eksporter lager for Claude</button>
   </nav>`;
 }
 
@@ -1306,6 +1328,7 @@ export function initParts(context) {
       if (ed.hasAttribute("data-addcat")) ctx.$("#newcat-name")?.focus();
       return;
     }
+    if (e.target.closest("[data-pexport]")) { exportInventory(); return; }
     const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-psettings], [data-pclear], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
     if (!t) return;
     if (t.dataset.cartstep) {

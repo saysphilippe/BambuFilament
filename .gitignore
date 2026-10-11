@@ -6,3 +6,6 @@ node_modules/
 worker/sett-gmail-passord.cmd
 worker/sett-callmebot-nokkel.cmd
 data/store.json
+
+# Lagereksport for Claude-skillen (privat)
+lager-*.json

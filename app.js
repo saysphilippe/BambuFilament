@@ -1435,6 +1435,23 @@ async function copyValue(id, btn) {
   }
 }
 
+async function makeInventoryKey(btn) {
+  const out = $("#invkey-out");
+  btn.disabled = true;
+  out.innerHTML = `<p class="hint">Lager nøkkel…</p>`;
+  try {
+    const { key, expires } = await proxy("/inventory-key", { name: userName() }, token());
+    out.innerHTML = `<div class="invkey">
+      <p><b>Din nye Claude-nøkkel</b> (vises bare nå):</p>
+      <p><code id="invkey-value" class="kicad-name">${esc(key)}</code> <button type="button" class="btn btn-small" data-setaction="copykey">Kopier</button></p>
+      <p class="hint">Lagre den som miljøvariabelen <code>BF_INVENTORY_KEY</code> på PC-en der du bruker Claude Code. I PowerShell: <code>setx BF_INVENTORY_KEY "nøkkelen"</code>, og start terminalen på nytt. Ikke lim den inn i chatten med Claude. Gjelder til ${esc(new Date(expires).toLocaleDateString("nb-NO"))}.</p>
+    </div>`;
+  } catch (err) {
+    out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  }
+  btn.disabled = false;
+}
+
 function notifyStatus() {
   const me = userName();
   const pref = state.contacts.notify?.[me] || {};
@@ -1895,7 +1912,11 @@ function renderSettings() {
     <p class="hint">E-post, mobilnummer, farge, varsler om nye meldinger (e-post eller WhatsApp) og passord ligger på kontoen din.</p>
     <p class="settings-actions">${DEMO ? `<span class="hint">Ikke tilgjengelig i demoen.</span>` : token()
       ? `<button type="button" class="btn" data-setaction="account">Åpne kontoen min</button><button type="button" class="btn" data-setaction="notify">Varsler om meldinger</button><button type="button" class="btn" data-setaction="password">Bytt passord</button>`
-      : `<button type="button" class="btn btn-primary" data-setaction="login">Logg inn</button>`}</p>`,
+      : `<button type="button" class="btn btn-primary" data-setaction="login">Logg inn</button>`}</p>
+    ${token() && !DEMO ? `<h3>Claude-nøkkel (lesetilgang til lageret)</h3>
+    <p class="hint">Med en Claude-nøkkel kan Claude Code (skillen «elektronikk-design» i repoet) lese hvilke komponenter alle har, når du designer en ny krets. Nøkkelen gir bare lesetilgang til komponentlageret, ingenting annet, og gjelder i ett år. Del den ikke med andre.</p>
+    <p class="settings-actions"><button type="button" class="btn" data-setaction="invkey">Lag ny Claude-nøkkel</button></p>
+    <div id="invkey-out"></div>` : ""}`,
   };
   box.innerHTML = `<section class="panel settings-panel">
     <h2>Innstillinger</h2>
@@ -3964,6 +3985,8 @@ $("#tab-settings").addEventListener("click", (e) => {
   else if (a === "notify") openNotifySettings();
   else if (a === "password") openChangePassword(false);
   else if (a === "login") openLogin();
+  else if (a === "invkey") makeInventoryKey(t);
+  else if (a === "copykey") navigator.clipboard?.writeText($("#invkey-value")?.textContent || "").then(() => (t.textContent = "Kopiert"), () => {});
 });
 initParts({ $, esc, dbCall, token, userName, userColor, setSync, DEMO, showSection, store, isAdmin, openSettings });
 initMessages({
