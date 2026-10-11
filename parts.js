@@ -59,7 +59,7 @@ let ctx = null; // fra app.js: { $, esc, dbCall, token, userName, userColor, use
 const pstate = {
   parts: [], deleted: new Set(), loaded: false, loading: false, error: "",
   reqs: [], prefs: {},
-  q: "", cat: "", sub: "", owner: "", source: "", pkg: "", imgf: "", editCats: false, sort: "new", show: "have", view: "list",
+  q: "", cat: "", sub: "", owner: "", source: "", pkg: "", imgf: "", editCats: false, projects: [], project: "", projShow: "mine", bomPreview: null, bomText: "", sort: "new", show: "have", view: "list",
   importLog: [], importBusy: false,
 };
 
@@ -183,7 +183,7 @@ const SOURCE_LABEL = { aliexpress: "AliExpress", mouser: "Mouser", lcsc: "LCSC",
 
 async function load(force = false) {
   if (ctx.DEMO) {
-    if (!pstate.loaded) { pstate.parts = demoParts(); pstate.reqs = demoReqs(); }
+    if (!pstate.loaded) { pstate.parts = demoParts(); pstate.reqs = demoReqs(); pstate.projects = demoProjects(); }
     pstate.loaded = true;
     return render();
   }
@@ -205,6 +205,7 @@ async function loadNow() {
     pstate.deleted = new Set(raw.filter((p) => p?.deleted && p.id).map((p) => String(p.id)));
     pstate.parts = raw.filter((p) => !p?.deleted).map(cleanPart).filter(Boolean);
     pstate.reqs = (parts?.requests || []).map(cleanReq).filter(Boolean);
+    pstate.projects = (parts?.projects || []).map(cleanProject).filter(Boolean);
     pstate.prefs = Object.fromEntries(Object.entries(parts?.prefs || {})
       .filter(([o, v]) => o && v && Array.isArray(v.hidden)).map(([o, v]) => [String(o).slice(0, 40), { hidden: v.hidden.map(String).slice(0, 40), hideSpent: !!v.hideSpent }]));
     pstate.loaded = true;
@@ -395,6 +396,7 @@ function cleanReq(q) {
     qty: Math.max(1, Math.min(100000, Math.round(num(q.qty) ?? 1))), note: clip(q.note, 200), reply: clip(q.reply, 200),
     status: REQ_STATUS[q.status] ? q.status : "draft",
     at: clip(q.at, 30), sentAt: clip(q.sentAt, 30), updated: clip(q.updated, 30),
+    projectId: clip(q.projectId, 60),
   };
 }
 
@@ -447,6 +449,7 @@ function subnav() {
     ${b("list", "Alle komponenter")}
     ${b("cart", `Handlekurv${n ? ` <span class="nav-n">${n}</span>` : ""}`)}
     ${b("requests", `Ønsket fra meg${m ? ` <span class="nav-n alert">${m}</span>` : ""}`)}
+    ${b("projects", `Prosjekter${myProjects().length ? ` <span class="nav-n">${myProjects().length}</span>` : ""}`)}
     ${b("import", "Importer")}
     <button type="button" class="parts-tab" data-psettings>Innstillinger</button>
     <button type="button" class="parts-tab" data-pexport title="Last ned alles beholdning som JSON, for Claude-skillen «elektronikk-design»">Eksporter lager for Claude</button>
@@ -546,6 +549,289 @@ async function reqAction(action, id) {
       return saveReqs([q], [p]);
     }
     return saveReqs([q]);
+  }
+}
+
+// ---------- Prosjekter ----------
+//
+// Et prosjekt samler delene til én bygging. Hver linje har én kilde:
+//   eget lager  (kind "stock", delen eies av prosjekteieren): reservert, ingen forespørsel.
+//   fra en venn (kind "stock", annen eier): en forespørsel i handlekurven, merket med prosjektet
+//                (partreqs.projectId), så et prosjekt kan ha én handlekurv per venn.
+//   må kjøpes   (kind "buy"): navn, antall, lenke og pris; krysses av når den er kjøpt.
+// D1: projects { id, name, desc, owner, status, created, updated, lines: [...] }.
+
+const PROJ_STATUS = { plan: "Planlegges", collect: "Samler deler", build: "Bygges", done: "Ferdig" };
+
+function cleanProject(x) {
+  if (!x || typeof x !== "object" || !x.id) return null;
+  const lines = (Array.isArray(x.lines) ? x.lines : []).slice(0, 300).map((l) => ({
+    id: clip(l?.id, 40) || newId(), kind: l?.kind === "buy" ? "buy" : "stock",
+    partId: clip(l?.partId, 200), reqId: clip(l?.reqId, 60),
+    qty: Math.max(1, Math.min(100000, Math.round(num(l?.qty) ?? 1))),
+    label: clip(l?.label, 120), note: clip(l?.note, 200), url: safeUrl(l?.url),
+    price: num(l?.price), bought: !!l?.bought,
+  })).filter((l) => l.kind === "buy" ? l.label : l.partId);
+  return {
+    id: clip(x.id, 60), name: clip(x.name, 80) || "Uten navn", desc: clip(x.desc, 1000), owner: clip(x.owner, 40),
+    status: PROJ_STATUS[x.status] ? x.status : "plan", created: clip(x.created, 30), updated: clip(x.updated, 30), lines,
+  };
+}
+
+const projectById = (id) => pstate.projects.find((x) => x.id === id);
+const myProjects = () => pstate.projects.filter((x) => x.owner === meName() && x.status !== "done");
+const canEditProject = (x) => ctx.DEMO || x.owner === meName();
+
+async function saveProject(x, reqs = []) {
+  x.updated = new Date().toISOString();
+  if (!ctx.DEMO) await savePatch([{ coll: "projects", id: x.id, data: x }, ...reqs.map((q) => ({ coll: "partreqs", id: q.id, data: q }))]);
+  render();
+}
+
+// Linjens tilstand: klar, venter eller problem, med en kort tekst.
+function lineState(x, l) {
+  if (l.kind === "buy") return l.bought ? ["ok", "Kjøpt"] : ["wait", "Må kjøpes"];
+  const p = pstate.parts.find((y) => y.id === l.partId);
+  if (!p) return ["bad", "Varen er slettet"];
+  if (p.owner === x.owner) {
+    const others = reservedElsewhere(p.id, x.id);
+    if (remaining(p) < l.qty) return ["bad", `Bare ${remaining(p)} igjen`];
+    if (remaining(p) < l.qty + others) return ["warn", `Reservert ${others} stk i andre prosjekter også`];
+    return ["ok", "Reservert fra eget lager"];
+  }
+  const q = pstate.reqs.find((y) => y.id === l.reqId);
+  if (!q) return ["bad", "Forespørselen er fjernet"];
+  return { draft: ["wait", "I handlekurven, ikke sendt"], open: ["wait", `Venter på ${p.owner}`], sent: ["ok", "Sendt fra eier"], received: ["ok", "Mottatt"], declined: ["bad", `${p.owner} kan ikke`] }[q.status] || ["wait", q.status];
+}
+
+// Hvor mange stk av en egen vare som er reservert i andre åpne prosjekter.
+function reservedElsewhere(partId, exceptId) {
+  let n = 0;
+  for (const x of pstate.projects) {
+    if (x.id === exceptId || x.status === "done") continue;
+    for (const l of x.lines) if (l.kind === "stock" && l.partId === partId && pstate.parts.find((p) => p.id === partId)?.owner === x.owner) n += l.qty;
+  }
+  return n;
+}
+
+function projectProgress(x) {
+  const st = x.lines.map((l) => lineState(x, l)[0]);
+  return { ok: st.filter((s) => s === "ok" || s === "warn").length, bad: st.filter((s) => s === "bad").length, total: st.length };
+}
+
+function projectCost(x) {
+  let nokSum = 0;
+  for (const l of x.lines) {
+    if (l.kind === "buy") { if (l.price) nokSum += l.price * l.qty; continue; }
+    const m = pieceMoney(pstate.parts.find((p) => p.id === l.partId));
+    if (m) nokSum += m.unitPrice * l.qty * (FX_NOK[m.currency] || 1);
+  }
+  return nokSum;
+}
+
+// Legg en vare til et prosjekt: egen vare reserveres, en venns vare blir en forespørsel.
+async function addPartToProject(x, p, qty, note) {
+  if (!canEditProject(x)) throw new Error("Bare eieren av prosjektet kan endre det.");
+  const reqs = [];
+  const line = x.lines.find((l) => l.kind === "stock" && l.partId === p.id);
+  if (p.owner === x.owner) {
+    if (line) line.qty += qty; else x.lines.push({ id: newId(), kind: "stock", partId: p.id, reqId: "", qty, label: "", note: clip(note, 200), url: "", price: null, bought: false });
+  } else {
+    let q = line && pstate.reqs.find((y) => y.id === line.reqId && y.status === "draft");
+    if (q) q.qty += qty;
+    else {
+      q = cleanReq({ id: newId(), partId: p.id, owner: p.owner, by: x.owner, qty, note: note || `Til prosjektet «${x.name}»`, status: "draft", at: new Date().toISOString(), projectId: x.id });
+      pstate.reqs.push(q);
+    }
+    reqs.push(q);
+    if (line) { line.qty += qty; line.reqId = q.id; } else x.lines.push({ id: newId(), kind: "stock", partId: p.id, reqId: q.id, qty, label: "", note: clip(note, 200), url: "", price: null, bought: false });
+  }
+  await saveProject(x, reqs);
+}
+
+async function createProject(name, desc = "", lines = []) {
+  const me = meName();
+  if (!me) throw new Error("Logg inn først.");
+  const x = cleanProject({ id: newId(), name, desc, owner: me, status: "plan", created: new Date().toISOString(), lines });
+  pstate.projects.push(x);
+  pstate.project = x.id;
+  await saveProject(x);
+  return x;
+}
+
+// Stykkliste fra Claude-skillen «elektronikk-design» (JSON): { name, desc, lines: [ { ids: [...], qty, label, note }
+// | { buy: true, label, qty, url, price } ] }. Lager-linjer bruker kjøpet med mest igjen blant ids.
+function parseBom(text) {
+  let d;
+  try { d = JSON.parse(String(text).trim().replace(/^```(json)?|```$/g, "")); } catch { throw new Error("Det er ikke gyldig JSON. Lim inn hele blokken fra Claude."); }
+  d = d.project || d;
+  if (!Array.isArray(d.lines)) throw new Error("Mangler «lines» i stykklisten.");
+  const out = [], problems = [];
+  for (const l of d.lines.slice(0, 300)) {
+    const qty = Math.max(1, Math.round(num(l?.qty) ?? 1));
+    if (l?.buy || !(l?.ids || l?.partId)) {
+      if (l?.label) out.push({ kind: "buy", label: clip(l.label, 120), qty, url: safeUrl(l.url), price: num(l.price), note: clip(l.note, 200) });
+      continue;
+    }
+    const ids = [].concat(l.ids || l.partId).map(String);
+    const p = pstate.parts.filter((y) => ids.includes(y.id)).sort((a, b) => remaining(b) - remaining(a))[0];
+    if (!p) { problems.push(`${l.label || ids[0]}: finnes ikke i lageret`); continue; }
+    out.push({ kind: "stock", part: p, qty, note: clip(l.note || l.label, 200) });
+  }
+  return { name: clip(d.name, 80) || "Prosjekt fra Claude", desc: clip(d.desc, 1000), lines: out, problems };
+}
+
+function projectLineRow(x, l, edit) {
+  const [st, txt] = lineState(x, l);
+  const del = edit ? `<button type="button" class="btn btn-small" data-projact="delline" data-line="${ctx.esc(l.id)}">Fjern</button>` : "";
+  if (l.kind === "buy") {
+    return `<li class="req-row proj-line st-${st}">
+      <span class="req-img"><span class="part-noimg">Kjøp</span></span>
+      <div class="req-text"><b>${ctx.esc(l.label)}</b>${l.note ? `<span class="req-note">${ctx.esc(l.note)}</span>` : ""}
+        <span class="req-meta">${l.url ? `<a href="${ctx.esc(l.url)}" target="_blank" rel="noopener">Lenke ↗</a>` : ""}${l.price ? `<span>ca. ${ctx.esc(nok(l.price))} per stk</span>` : ""}</span></div>
+      <div class="req-qty"><b>${l.qty} stk</b><span class="proj-state">${ctx.esc(txt)}</span></div>
+      <div class="req-actions">${edit ? `<label class="cat-toggle"><input type="checkbox" data-projbought="${ctx.esc(l.id)}"${l.bought ? " checked" : ""}> Kjøpt</label>` : ""}${del}</div>
+    </li>`;
+  }
+  const p = pstate.parts.find((y) => y.id === l.partId);
+  const img = p?.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="part-noimg">${ctx.esc(p ? CAT_NAME[p.category] : "Slettet")}</span>`;
+  return `<li class="req-row proj-line st-${st}">
+    <button type="button" class="req-img" data-part="${ctx.esc(l.partId)}" ${p ? "" : "disabled"}>${img}</button>
+    <div class="req-text"><b>${ctx.esc(p?.title || "Varen er slettet")}</b>
+      <span class="req-meta">${p?.pkg ? `<span>${ctx.esc(p.pkg)}</span>` : ""}${p ? `<span>${remaining(p)} igjen</span>` : ""}${p?.location ? `<span>Ligger: ${ctx.esc(p.location)}</span>` : ""}</span>
+      ${l.note ? `<span class="req-note">${ctx.esc(l.note)}</span>` : ""}</div>
+    <div class="req-qty"><b>${l.qty} stk</b><span class="proj-state">${ctx.esc(txt)}</span></div>
+    <div class="req-actions">${del}</div>
+  </li>`;
+}
+
+function renderProjects(box) {
+  const me = meName();
+  const x = projectById(pstate.project);
+  if (!x) {
+    const list = pstate.projects.filter((y) => pstate.projShow === "all" || y.owner === me).sort((a, b) => (a.status === "done") - (b.status === "done") || String(b.updated).localeCompare(String(a.updated)));
+    box.innerHTML = subnav() + `<section class="panel req-panel">
+      <h2>Prosjekter</h2>
+      <p class="hint">Et prosjekt samler delene til én bygging: fra eget lager (reserveres), fra venner (blir ønsker i handlekurven) og det som må kjøpes. Du kan også lime inn en stykkliste fra Claude-skillen «elektronikk-design».</p>
+      <form class="proj-new" data-projform="new"><input type="text" id="proj-name" maxlength="80" placeholder="Navn på nytt prosjekt, f.eks. «Værstasjon»" required><button type="submit" class="btn btn-primary">Nytt prosjekt</button></form>
+      <div class="chips proj-filter"><button type="button" class="chip${pstate.projShow !== "all" ? " active" : ""}" data-projshow="mine">Mine</button><button type="button" class="chip${pstate.projShow === "all" ? " active" : ""}" data-projshow="all">Alle</button></div>
+      ${list.length ? `<ul class="proj-list">${list.map((y) => { const pr = projectProgress(y); return `<li><button type="button" class="proj-card status-${y.status}" data-projopen="${ctx.esc(y.id)}">
+        <b>${ctx.esc(y.name)}</b>
+        <span class="proj-meta"><span class="owner-dot" style="--owner:${ctx.userColor(y.owner)}"></span>${ctx.esc(y.owner)} · ${ctx.esc(PROJ_STATUS[y.status])}</span>
+        <span class="proj-bar"><i style="width:${pr.total ? Math.round(pr.ok / pr.total * 100) : 0}%"></i></span>
+        <span class="hint">${pr.ok} av ${pr.total} deler klare${pr.bad ? ` · ${pr.bad} problem` : ""}</span>
+      </button></li>`; }).join("")}</ul>` : `<p class="empty-msg">Ingen prosjekter ennå.</p>`}
+    </section>`;
+    return;
+  }
+  const edit = canEditProject(x);
+  const pr = projectProgress(x);
+  const own = x.lines.filter((l) => l.kind === "stock" && pstate.parts.find((p) => p.id === l.partId)?.owner === x.owner);
+  const friends = x.lines.filter((l) => l.kind === "stock" && !own.includes(l));
+  const buy = x.lines.filter((l) => l.kind === "buy");
+  const byOwner = groupBy(friends.map((l) => ({ l, owner: pstate.parts.find((p) => p.id === l.partId)?.owner || "ukjent" })), "owner");
+  const drafts = friends.map((l) => pstate.reqs.find((q) => q.id === l.reqId)).filter((q) => q?.status === "draft");
+  const loose = edit ? pstate.reqs.filter((q) => q.by === x.owner && !q.projectId && ["draft", "open", "sent"].includes(q.status)) : [];
+  const cost = projectCost(x);
+  box.innerHTML = subnav() + `<section class="panel req-panel proj-panel">
+    <p><button type="button" class="linkbtn" data-projopen="">← Alle prosjekter</button></p>
+    ${edit ? `<div class="proj-head">
+        <input type="text" class="proj-title" id="proj-title" maxlength="80" value="${ctx.esc(x.name)}" aria-label="Navn på prosjektet">
+        <select id="proj-status" aria-label="Status">${Object.entries(PROJ_STATUS).map(([k, v]) => `<option value="${k}"${k === x.status ? " selected" : ""}>${v}</option>`).join("")}</select>
+      </div>
+      <textarea id="proj-desc" rows="2" maxlength="1000" placeholder="Hva skal bygges? (valgfritt)">${ctx.esc(x.desc)}</textarea>`
+      : `<h2>${ctx.esc(x.name)}</h2><p class="hint">${ctx.esc(x.owner)} · ${ctx.esc(PROJ_STATUS[x.status])}</p>${x.desc ? `<p>${ctx.esc(x.desc)}</p>` : ""}`}
+    <div class="proj-summary">
+      <span class="proj-bar big"><i style="width:${pr.total ? Math.round(pr.ok / pr.total * 100) : 0}%"></i></span>
+      <span><b>${pr.ok} av ${pr.total}</b> deler klare${pr.bad ? ` · <span class="error">${pr.bad} problem</span>` : ""}${cost ? ` · verdi ca. ${ctx.esc(nok(cost))}` : ""}</span>
+    </div>
+    <h3>Fra eget lager <span class="hint">(reservert)</span></h3>
+    ${own.length ? `<ul class="req-list">${own.map((l) => projectLineRow(x, l, edit)).join("")}</ul>` : `<p class="hint">Ingen ennå. Åpne en av dine komponenter og trykk «Legg til i prosjekt».</p>`}
+    ${byOwner.map(([owner, list]) => `<h3><span class="owner-dot" style="--owner:${ctx.userColor(owner)}"></span> Fra ${ctx.esc(owner)}</h3><ul class="req-list">${list.map(({ l }) => projectLineRow(x, l, edit)).join("")}</ul>`).join("")}
+    ${drafts.length && edit ? `<div class="req-send"><span class="hint">${drafts.length} ${drafts.length === 1 ? "ønske" : "ønsker"} i prosjektet er ikke sendt.</span><button type="button" class="btn btn-primary" data-projact="send">Send prosjektets ønsker</button></div>` : ""}
+    <h3>Må kjøpes</h3>
+    ${buy.length ? `<ul class="req-list">${buy.map((l) => projectLineRow(x, l, edit)).join("")}</ul>` : `<p class="hint">Ingenting å kjøpe.</p>`}
+    ${edit ? `<form class="proj-buy" data-projform="buy">
+        <input type="text" name="label" maxlength="120" placeholder="Hva må kjøpes? F.eks. «BME280-modul»" required>
+        <input type="number" name="qty" min="1" value="1" aria-label="Antall">
+        <input type="url" name="url" maxlength="400" placeholder="Lenke (valgfritt)">
+        <input type="number" name="price" min="0" step="0.01" placeholder="kr/stk" aria-label="Pris per stk">
+        <button type="submit" class="btn">Legg til</button>
+      </form>` : ""}
+    ${loose.length ? `<details class="proj-more"><summary>Hent fra handlekurven (${loose.length})</summary>
+        <ul class="proj-pick">${loose.map((q) => { const p = pstate.parts.find((y) => y.id === q.partId); return `<li><label class="cat-toggle"><input type="checkbox" data-projpick="${ctx.esc(q.id)}"> ${q.qty} stk ${ctx.esc(p?.title?.slice(0, 80) || "slettet vare")} <span class="hint">(${ctx.esc(q.owner)}, ${ctx.esc(REQ_STATUS[q.status])})</span></label></li>`; }).join("")}</ul>
+        <button type="button" class="btn btn-small" data-projact="pick">Legg valgte i prosjektet</button>
+      </details>` : ""}
+    ${edit ? `<details class="proj-more"${pstate.bomPreview ? " open" : ""}><summary>Importer stykkliste fra Claude</summary>
+        <p class="hint">Be Claude (skillen «elektronikk-design») om stykklisten som JSON for import, og lim den inn her. Du ser hva som blir lagt til før noe lagres.</p>
+        <textarea id="proj-bom" rows="5" placeholder='{"name": "...", "lines": [{"ids": ["..."], "qty": 1, "label": "AMS1117-3.3"}, {"buy": true, "label": "BME280-modul", "qty": 1}]}'>${ctx.esc(pstate.bomText || "")}</textarea>
+        <p><button type="button" class="btn btn-small" data-projact="bompreview">Vis hva som legges til</button></p>
+        ${pstate.bomPreview ? `<div class="bom-preview">
+          <ul>${pstate.bomPreview.lines.map((l) => `<li>${l.kind === "buy" ? `<b>Kjøp:</b> ${l.qty} × ${ctx.esc(l.label)}` : `<b>${l.part.owner === x.owner ? "Eget lager" : `Fra ${ctx.esc(l.part.owner)}`}:</b> ${l.qty} × ${ctx.esc(l.part.title.slice(0, 90))} <span class="hint">(${remaining(l.part)} igjen)</span>`}</li>`).join("")}</ul>
+          ${pstate.bomPreview.problems.length ? `<p class="error">${pstate.bomPreview.problems.map(ctx.esc).join("<br>")}</p>` : ""}
+          <button type="button" class="btn btn-primary btn-small" data-projact="bomadd">Legg til ${pstate.bomPreview.lines.length} linjer</button>
+          <button type="button" class="btn btn-small" data-projact="bomcancel">Avbryt</button>
+        </div>` : ""}
+      </details>
+      <p class="proj-danger"><button type="button" class="btn btn-danger btn-small" data-projact="delete">Slett prosjektet …</button></p>` : ""}
+  </section>`;
+}
+
+async function projectAction(a, el) {
+  const x = projectById(pstate.project);
+  if (!x || !canEditProject(x)) return;
+  if (a === "delline") {
+    const l = x.lines.find((y) => y.id === el.dataset.line);
+    x.lines = x.lines.filter((y) => y !== l);
+    const q = l?.reqId && pstate.reqs.find((y) => y.id === l.reqId);
+    // Et usendt ønske laget for prosjektet fjernes; et sendt beholdes, men kobles fra prosjektet.
+    if (q && q.status === "draft") { pstate.reqs = pstate.reqs.filter((y) => y !== q); if (!ctx.DEMO) await savePatch([{ coll: "partreqs", id: q.id, data: null }]); return saveProject(x); }
+    if (q) { q.projectId = ""; return saveProject(x, [q]); }
+    return saveProject(x);
+  }
+  if (a === "send") {
+    const reqs = x.lines.map((l) => pstate.reqs.find((q) => q.id === l.reqId)).filter((q) => q?.status === "draft");
+    for (const q of reqs) { q.status = "open"; q.at = new Date().toISOString(); }
+    await saveProject(x, reqs);
+    return ctx.setSync(`${reqs.length} ønsker sendt`);
+  }
+  if (a === "pick") {
+    const ids = [...document.querySelectorAll("[data-projpick]:checked")].map((c) => c.dataset.projpick);
+    const reqs = pstate.reqs.filter((q) => ids.includes(q.id));
+    for (const q of reqs) {
+      q.projectId = x.id;
+      const old = x.lines.find((l) => l.kind === "stock" && l.partId === q.partId);
+      if (old && !old.reqId) old.reqId = q.id;
+      else if (!old) x.lines.push({ id: newId(), kind: "stock", partId: q.partId, reqId: q.id, qty: q.qty, label: "", note: q.note, url: "", price: null, bought: false });
+    }
+    return saveProject(x, reqs);
+  }
+  if (a === "bompreview") {
+    pstate.bomText = document.getElementById("proj-bom")?.value || "";
+    try { pstate.bomPreview = parseBom(pstate.bomText); } catch (err) { pstate.bomPreview = null; ctx.setSync(err.message, true); }
+    return render();
+  }
+  if (a === "bomcancel") { pstate.bomPreview = null; pstate.bomText = ""; return render(); }
+  if (a === "bomadd") {
+    const bom = pstate.bomPreview;
+    pstate.bomPreview = null; pstate.bomText = "";
+    if (!x.desc && bom.desc) x.desc = bom.desc;
+    for (const l of bom.lines) {
+      if (l.kind === "buy") x.lines.push({ id: newId(), kind: "buy", partId: "", reqId: "", qty: l.qty, label: l.label, note: l.note, url: l.url, price: l.price, bought: false });
+      else await addPartToProject(x, l.part, l.qty, l.note);
+    }
+    await saveProject(x);
+    return ctx.setSync(`${bom.lines.length} linjer lagt til`);
+  }
+  if (a === "delete") {
+    if (el.dataset.sure !== "1") { el.dataset.sure = "1"; el.textContent = "Slett for godt? Trykk igjen"; return; }
+    const reqs = pstate.reqs.filter((q) => q.projectId === x.id);
+    for (const q of reqs) q.projectId = "";
+    pstate.projects = pstate.projects.filter((y) => y !== x);
+    pstate.project = "";
+    if (!ctx.DEMO) await savePatch([{ coll: "projects", id: x.id, data: null }, ...reqs.map((q) => ({ coll: "partreqs", id: q.id, data: q }))]);
+    render();
+    return ctx.setSync("Prosjektet er slettet (ønskene ligger fortsatt i handlekurven)");
   }
 }
 
@@ -984,6 +1270,7 @@ function render() {
   if (pstate.view === "import") return renderImport(box);
   if (pstate.view === "cart" && (ctx.token() || ctx.DEMO)) return renderCart(box);
   if (pstate.view === "requests" && (ctx.token() || ctx.DEMO)) return renderRequests(box);
+  if (pstate.view === "projects" && (ctx.token() || ctx.DEMO)) return renderProjects(box);
   if (!ctx.token() && !ctx.DEMO) {
     box.innerHTML = `<section class="panel"><h2>Komponenter</h2><p class="hint">Logg inn for å se komponentbiblioteket.</p></section>`;
     return;
@@ -1212,6 +1499,11 @@ function openPart(id) {
         <label class="grow">Hva skal det brukes til? (valgfritt)<input id="pd-cartnote" type="text" maxlength="200" placeholder="F.eks. reservedel til leseren"></label>
         <button type="button" class="btn" data-addcart>${p.owner && p.owner !== meName() ? `Legg i handlekurv (fra ${ctx.esc(p.owner)})` : "Legg i handlekurv"}</button>
       </div>
+      <div class="cart-add proj-add">
+        <label class="grow">Prosjekt<select id="pd-proj">${myProjects().map((x) => `<option value="${ctx.esc(x.id)}">${ctx.esc(x.name)}</option>`).join("")}<option value="__new">+ Nytt prosjekt …</option></select></label>
+        <button type="button" class="btn" data-addproj>${p.owner === meName() ? "Reserver i prosjekt" : "Legg til i prosjekt"}</button>
+      </div>
+      ${(() => { const used = pstate.projects.filter((x) => x.status !== "done" && x.lines.some((l) => l.kind === "stock" && l.partId === p.id)); return used.length ? `<p class="hint">Brukes i: ${used.map((x) => `${ctx.esc(x.name)} (${x.lines.filter((l) => l.partId === p.id).reduce((s, l) => s + l.qty, 0)} stk)`).join(", ")}</p>` : ""; })()}
       <p class="hint cart-msg" role="status">${(() => { const n = pstate.reqs.filter((q) => q.partId === p.id && ["draft", "open"].includes(q.status)).reduce((s, q) => s + q.qty, 0); return n ? `${n} stk av denne er i en handlekurv eller ønsket.` : ""; })()}</p>` : ""}
       <div class="part-actions">
         ${ctx.DEMO || (p.owner && p.owner === meName()) ? `<button class="btn btn-danger part-del" type="button" data-delpart>Slett …</button>` : ""}
@@ -1299,6 +1591,20 @@ function openPart(id) {
     }
     const sib = e.target.closest("[data-sibling]");
     if (sib) { dlg.close(""); openPart(sib.dataset.sibling); return; }
+    if (e.target.closest("[data-addproj]")) {
+      const qty = Math.max(1, Math.round(Number(dlg.querySelector("#pd-cartqty").value) || 1));
+      const msg = dlg.querySelector(".cart-msg");
+      try {
+        let x = projectById(dlg.querySelector("#pd-proj").value);
+        if (!x) {
+          const name = String(dlg.querySelector("#pd-cartnote").value || "").trim() || `Prosjekt ${new Date().toLocaleDateString("nb-NO")}`;
+          x = await createProject(name);
+        }
+        await addPartToProject(x, p, qty, dlg.querySelector("#pd-cartnote").value);
+        if (msg) msg.textContent = p.owner === x.owner ? `${qty} stk reservert i «${x.name}».` : `${qty} stk lagt til i «${x.name}» som ønske til ${p.owner}. Send fra prosjektet eller handlekurven.`;
+      } catch (err) { if (msg) msg.textContent = err.message; }
+      return;
+    }
     if (!e.target.closest("[data-addcart]")) return;
     const qty = Math.max(1, Math.round(Number(dlg.querySelector("#pd-cartqty").value) || 1));
     const msg = dlg.querySelector(".cart-msg");
@@ -1329,6 +1635,13 @@ export function initParts(context) {
       return;
     }
     if (e.target.closest("[data-pexport]")) { exportInventory(); return; }
+    const pj = e.target.closest("[data-projopen], [data-projshow], [data-projact]");
+    if (pj) {
+      if (pj.dataset.projopen !== undefined) { pstate.project = pj.dataset.projopen; pstate.bomPreview = null; render(); window.scrollTo({ top: 0 }); return; }
+      if (pj.dataset.projshow) { pstate.projShow = pj.dataset.projshow; return render(); }
+      try { await projectAction(pj.dataset.projact, pj); } catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
     const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-psettings], [data-pclear], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
     if (!t) return;
     if (t.dataset.cartstep) {
@@ -1379,6 +1692,19 @@ export function initParts(context) {
     }
   });
   root.addEventListener("submit", async (e) => {
+    const pf = e.target.dataset.projform;
+    if (pf) {
+      e.preventDefault();
+      try {
+        if (pf === "new") { await createProject(e.target.querySelector("#proj-name").value); ctx.setSync("Prosjektet er laget"); }
+        else if (pf === "buy") {
+          const x = projectById(pstate.project), f = e.target.elements;
+          x.lines.push({ id: newId(), kind: "buy", partId: "", reqId: "", qty: Math.max(1, Math.round(num(f.qty.value) ?? 1)), label: clip(f.label.value, 120), note: "", url: safeUrl(f.url.value), price: num(f.price.value), bought: false });
+          await saveProject(x);
+        }
+      } catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
     if (!e.target.matches("[data-newcatform]")) return;
     e.preventDefault();
     try { await createCat(e.target.querySelector("#newcat-name").value); ctx.setSync("Kategorien er lagt til"); ctx.$("#newcat-name")?.focus(); }
@@ -1413,6 +1739,15 @@ export function initParts(context) {
     try { await moveToCat(id, c.dataset.pv); } catch (err) { ctx.setSync(err.message, true); }
   });
   root.addEventListener("change", async (e) => {
+    const px = ["proj-title", "proj-status", "proj-desc"].includes(e.target.id) || e.target.dataset.projbought ? projectById(pstate.project) : null;
+    if (px && canEditProject(px)) {
+      if (e.target.id === "proj-title") px.name = clip(e.target.value, 80) || px.name;
+      else if (e.target.id === "proj-status") px.status = PROJ_STATUS[e.target.value] ? e.target.value : px.status;
+      else if (e.target.id === "proj-desc") px.desc = clip(e.target.value, 1000);
+      else { const l = px.lines.find((y) => y.id === e.target.dataset.projbought); if (l) l.bought = e.target.checked; }
+      try { await saveProject(px); ctx.setSync("Lagret"); } catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
     if (e.target.dataset.renamecat) {
       try { await renameCat(e.target.dataset.renamecat, e.target.value); ctx.setSync("Navnet er endret"); } catch (err) { ctx.setSync(err.message, true); }
       return;
@@ -1491,6 +1826,17 @@ export async function setSpentShown(shown) {
 export const loadParts = () => (pstate.loaded ? null : load());
 
 // ---------- Demo ----------
+
+function demoProjects() {
+  const at = new Date(Date.now() - 2 * 864e5).toISOString();
+  const r = { id: "demo-r4", partId: "demo:1", owner: "Niklas", by: "Philippe", qty: 1, note: "Til værstasjonen", status: "open", at, projectId: "demo-p1" };
+  pstate.reqs.push(cleanReq(r));
+  return [cleanProject({ id: "demo-p1", name: "Værstasjon", desc: "ESP32 med temperatur, fukt og lufttrykk, viser på OLED.", owner: "Philippe", status: "collect", created: at, updated: at, lines: [
+    { id: "l1", kind: "stock", partId: "demo:0", qty: 1, note: "Hjernen" },
+    { id: "l2", kind: "stock", partId: "demo:1", reqId: "demo-r4", qty: 1 },
+    { id: "l3", kind: "buy", label: "BME280-modul (3,3 V)", qty: 1, price: 35, url: "https://www.aliexpress.com/" },
+  ] })];
+}
 
 function demoReqs() {
   const at = new Date(Date.now() - 36e5).toISOString();

@@ -86,6 +86,23 @@ Lag et kort svar med:
   deretter sendes handlekurven til eieren. Ikke skriv noe til lageret selv; skillen leser bare.
 - **Antakelser og risiko**: hva du har antatt, og hva som bør måles eller testes først.
 
+**Prosjekt-JSON til import**: Avslutt med stykklisten som én JSON-blokk brukeren kan lime inn på siden
+(**Komponenter → Prosjekter → nytt prosjekt → «Importer stykkliste fra Claude»**). Siden viser hva som
+legges til før noe lagres: egne deler reserveres, venners deler blir ønsker i handlekurven, resten
+havner under «Må kjøpes». Bruk `ids` fra lageret (`--json` viser dem); siden velger kjøpet med mest igjen.
+
+```json
+{
+  "name": "Værstasjon",
+  "desc": "ESP32 med BME280 og OLED, drevet fra USB",
+  "lines": [
+    { "ids": ["ae:…"], "qty": 1, "label": "ESP32 DevKit V1", "note": "hjernen" },
+    { "ids": ["ae:…", "ae:…"], "qty": 1, "label": "AMS1117-3.3" },
+    { "buy": true, "label": "BME280-modul 3,3 V", "qty": 1, "url": "https://…", "price": 35 }
+  ]
+}
+```
+
 ## Regler
 
 - Les bare. Endre aldri lageret, bildene eller databasen fra denne skillen.

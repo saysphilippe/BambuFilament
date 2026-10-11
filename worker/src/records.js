@@ -10,7 +10,8 @@ export const FILE_COLLS = {
   // partreqs: handlekurven – én post per vare noen trenger fra en annens (eller eget) lager.
   // partprefs: per bruker (id = navn) – kategorier eieren har skjult fra komponentbiblioteket.
   // partcats: felles kategorier (id = kategori-id): nye kategorier og nye navn på de innebygde.
-  parts: ["parts", "partreqs", "partprefs", "partcats"],
+  // projects: prosjekter med stykkliste (eget lager, venners deler via partreqs.projectId, innkjøp).
+  parts: ["parts", "partreqs", "partprefs", "partcats", "projects"],
   // Meldinger mellom brukere (teksten er kryptert til mottakerne, se auth.js), og per bruker
   // (id = navn) når innboksen sist ble lest og hvilke meldinger som er skjult. presence (id = navn):
   // når brukeren sist hadde siden åpen (oppdateres hvert 2. minutt), for «pålogget nå».
@@ -72,6 +73,7 @@ export function toRecords(file, doc) {
     for (const q of doc.requests || []) if (q?.id) add("partreqs", q.id, q);
     for (const [owner, pref] of Object.entries(doc.prefs || {})) add("partprefs", owner, pref);
     for (const [id, c] of Object.entries(doc.cats || {})) add("partcats", id, c);
+    for (const x of doc.projects || []) if (x?.id) add("projects", x.id, x);
   } else if (file === "messages") {
     for (const m of doc.messages || []) if (m?.id) add("messages", m.id, m);
     for (const [name, r] of Object.entries(doc.read || {})) add("msgread", name, r);
@@ -100,7 +102,7 @@ export function fromRecords(file, rows) {
     const logins = by("logins").map((r) => r.data).sort((a, b) => String(a.at).localeCompare(String(b.at))).slice(-MAX_LOGINS);
     return { version: 1, logins, seen: map("seen") };
   }
-  if (file === "parts") return { version: 1, parts: by("parts").map((r) => r.data), requests: by("partreqs").map((r) => r.data), prefs: map("partprefs"), cats: map("partcats") };
+  if (file === "parts") return { version: 1, parts: by("parts").map((r) => r.data), requests: by("partreqs").map((r) => r.data), prefs: map("partprefs"), cats: map("partcats"), projects: by("projects").map((r) => r.data) };
   if (file === "messages") return { version: 1, messages: by("messages").map((r) => r.data).sort((a, b) => String(a.at).localeCompare(String(b.at))), read: map("msgread"), presence: map("presence") };
   if (file === "ideas") return { version: 1, ideas: by("ideas").map((r) => r.data) };
   throw new Error(`Ukjent fil: ${file}`);

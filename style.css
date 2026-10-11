@@ -1100,3 +1100,36 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .settings-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .settings-body > h3:first-child { margin-top: 0; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Prosjekter */
+.proj-new { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.proj-new input { flex: 1 1 240px; min-width: 0; }
+.proj-filter { margin: 4px 0 12px; }
+.proj-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.proj-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 12px; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 10px; background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.proj-card.status-done { border-left-color: var(--in); opacity: .75; }
+.proj-card.status-plan { border-left-color: var(--muted); }
+.proj-card b { font-size: 15px; overflow-wrap: anywhere; }
+.proj-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.proj-bar { display: block; height: 6px; border-radius: 99px; background: var(--muted-bg); overflow: hidden; }
+.proj-bar i { display: block; height: 100%; background: var(--accent); }
+.proj-bar.big { height: 10px; flex: 1 1 200px; }
+.proj-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.proj-title { flex: 1 1 240px; min-width: 0; font-size: 20px; font-weight: 700; }
+#proj-desc { width: 100%; box-sizing: border-box; margin: 8px 0; font: inherit; resize: vertical; }
+.proj-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 10px 0 4px; }
+.proj-line .proj-state { display: block; font-size: 12px; color: var(--muted); }
+.proj-line.st-ok .proj-state { color: var(--in); }
+.proj-line.st-warn .proj-state { color: var(--out); }
+.proj-line.st-bad .proj-state { color: var(--danger); font-weight: 600; }
+.proj-buy { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.proj-buy input[name="label"], .proj-buy input[name="url"] { flex: 1 1 200px; min-width: 0; }
+.proj-buy input[type="number"] { width: calc(6ch + 30px); }
+.proj-more { margin: 12px 0; }
+.proj-more summary { cursor: pointer; font-weight: 600; }
+.proj-more textarea { width: 100%; box-sizing: border-box; font: 12.5px ui-monospace, Consolas, monospace; }
+.proj-pick { list-style: none; padding: 0; margin: 8px 0; }
+.bom-preview { margin-top: 8px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 10px; }
+.bom-preview ul { margin: 0 0 8px; padding-left: 18px; }
+.proj-danger { margin-top: 18px; }
+.proj-add select { width: 100%; }
