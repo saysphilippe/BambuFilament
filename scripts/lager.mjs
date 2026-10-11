@@ -11,6 +11,8 @@
 //   node scripts/lager.mjs --summary                 antall per kategori og eier
 //   node scripts/lager.mjs --owner Philippe --cat semi --have mosfet
 //   node scripts/lager.mjs --save lager.json         lagre en lokal kopi (ikke legg den i git)
+//   node scripts/lager.mjs --octopart LM2596S-5.0     slå opp hos Octopart (krever BF_INVENTORY_KEY):
+//                                                    produsent, pakke, datablad, lager og pris hos forhandlerne
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -20,7 +22,27 @@ const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(name); if (i < 0) return null; const v = args[i + 1]; args.splice(i, 2); return v; };
 const flag = (name) => { const i = args.indexOf(name); if (i < 0) return false; args.splice(i, 1); return true; };
 const file = opt("--file"), save = opt("--save"), owner = opt("--owner"), cat = opt("--cat");
+const octo = opt("--octopart");
 const have = flag("--have"), summary = flag("--summary"), json = flag("--json");
+
+if (octo) {
+  if (!process.env.BF_INVENTORY_KEY) { console.error("--octopart krever BF_INVENTORY_KEY (Claude-nøkkel fra siden)."); process.exit(1); }
+  const res = await fetch(`${WORKER}/octopart?mpn=${encodeURIComponent(octo)}&limit=5`, { headers: { Authorization: `Bearer ${process.env.BF_INVENTORY_KEY}` } });
+  const r = await res.json().catch(() => ({}));
+  if (!res.ok) { console.error(`Octopart-oppslaget feilet (${res.status}): ${r.error || "ukjent"}`); process.exit(1); }
+  if (!r.configured) { console.error("Octopart er ikke satt opp i Workeren ennå (mangler Nexar-nøkler)."); process.exit(1); }
+  if (json) { console.log(JSON.stringify(r, null, 1)); process.exit(0); }
+  console.log(`Octopart «${r.mpn}»: ${r.hits} treff${r.cached ? " (mellomlager)" : ""}`);
+  for (const p of r.parts) {
+    console.log(`
+${p.mpn} · ${p.maker}${p.pkg ? ` · ${p.pkg}` : ""}
+  ${p.desc}
+  Datablad: ${p.datasheet || "-"}
+  ${p.url}`);
+    for (const o of p.offers.slice(0, 5)) console.log(`  - ${o.seller}: ${o.price ?? "?"} ${o.currency}${o.qty > 1 ? ` (fra ${o.qty})` : ""}, lager ${o.stock ?? "?"}${o.sku ? `, ${o.sku}` : ""}`);
+  }
+  process.exit(0);
+}
 
 async function loadInventory() {
   if (file) return { data: JSON.parse(readFileSync(file, "utf8")), from: file };

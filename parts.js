@@ -6,7 +6,7 @@
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
 import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009202254";
-import { componentHtml, findPart, semiType, SEMI_TYPES } from "./circuits.js?v=20261009202254";
+import { componentHtml, componentInfo, findPart, semiType, SEMI_TYPES } from "./circuits.js?v=20261009202254";
 import { detectPack } from "./pack.js?v=20261009202254";
 import { inventory } from "./worker/src/records.js?v=20261009202254";
 import { footprintSvg, footprintCaption, kicadName } from "./footprints.js?v=20261009202254";
@@ -112,7 +112,7 @@ function cleanPart(p) {
     unitPrice: num(p.unitPrice), currency: clip(p.currency, 4), orderTotal: clip(p.orderTotal, 40),
     orderId: clip(p.orderId, 40), orderDate: /^\d{4}-\d{2}-\d{2}$/.test(p.orderDate || "") ? p.orderDate : "",
     status: clip(p.status, 60), store: clip(p.store, 100), itemId: clip(p.itemId, 30),
-    url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: p.imgWeb ? safeWebImg(p.image) : safeImg(p.image),
+    url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: safeImg(p.image) || (p.imgWeb || p.imgManual ? safeWebImg(p.image) : ""),
     // Bildet er funnet ved søk på nettet (ikke hos AliExpress) og må godkjennes av eieren.
     imgWeb: !!p.imgWeb && !!safeWebImg(p.image), imgWebSrc: /^https:\/\//.test(String(p.imgWebSrc || "")) ? clip(p.imgWebSrc, 400) : "",
     // Bildet er hentet fra en lignende vare (søk på tittelen), fordi originalen er fjernet hos AliExpress.
@@ -129,7 +129,7 @@ function cleanPart(p) {
     pkgFixed: clip(p.pkgFixed, 30),
     pkg: findPackage(p.pkgFixed) || clip(p.pkgFixed, 30) || findPackage(p.variant, p.title, p.mpn, p.description) || String(findPart(p.title, p.mpn)?.pkg || "").split("/")[0],
     // Datablad (PDF) og butikkens egen kategori (Mouser: «Sensors › Humidity Sensors»).
-    datasheet: /^https:\/\/(([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf|datasheet\.lcsc\.com\/[^\s"'<>]+|www\.lcsc\.com\/datasheet\/C\d+\.pdf)$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
+    datasheet: /^https:\/\/(([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf|datasheet\.lcsc\.com\/[^\s"'<>]+|www\.lcsc\.com\/datasheet\/C\d+\.pdf|datasheet\.octopart\.com\/[^\s"'<>]+|[a-z0-9.-]+\.[a-z]{2,}\/[^\s"'<>?#]+\.pdf)$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
     // Regnes ut på nytt fra butikkens kategoritekst, så nye kategorier (f.eks. Halvledere) slår inn.
     shopCat: clip(p.shopCat, 160), catHint: (p.shopCat && mouserCategory(String(p.shopCat).split(" › "))) || (CAT_NAME[p.catHint] ? p.catHint : ""),
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
@@ -1532,6 +1532,7 @@ function openPart(id) {
     <div class="part-detail-text">
       <h2>${ctx.esc(p.title)}</h2>
       ${p.variant ? `<p class="part-variant">${ctx.esc(p.variant)}</p>` : ""}
+      ${ctx.token() || ctx.DEMO ? `<div class="octo-box"><button type="button" class="btn btn-small" data-octo>Hent fra Octopart</button> <span class="hint">bilde, datablad, produsent og priser på delenummer</span><div class="octo-out"></div></div>` : ""}
       <table class="part-facts${orderOpen ? " order-open" : ""}">
         ${row("Kjøpt", `${p.pack > 1 ? `${ctx.esc(p.qty)} × ${ctx.esc(p.pack)} stk = <b>${units(p)} stk</b>` : `<b>${units(p)} stk</b>`}${fmtMoney(p) ? ` à ${ctx.esc(fmtMoney(p))}${p.pack > 1 ? ` (${ctx.esc(fmtMoney({ ...p, unitPrice: p.unitPrice / p.pack }))} per stk)` : ""}` : ""}${p.orderTotal ? ` · ordre totalt ${ctx.esc(fmtTotal(p.orderTotal))}` : ""}`)}
         ${hasOrder ? `<tr class="order-toggle-row"><th></th><td><button type="button" class="linkbtn order-toggle" data-ordertoggle aria-expanded="${orderOpen}"><span class="order-show">Vis ordredetaljer ▾</span><span class="order-hide">Skjul ordredetaljer ▴</span></button> <span class="hint">eier, dato, butikk, ordrenummer, status</span></td></tr>` : ""}
@@ -1665,6 +1666,45 @@ function openPart(id) {
     }
     const sib = e.target.closest("[data-sibling]");
     if (sib) { dlg.close(""); openPart(sib.dataset.sibling); return; }
+    const oc = e.target.closest("[data-octo], [data-octouse]");
+    if (oc) {
+      const out = dlg.querySelector(".octo-out");
+      if (oc.dataset.octouse) {
+        const r = dlg.__octo;
+        if (!r || !mine) return;
+        const what = oc.dataset.octouse;
+        if (what === "image") { p.image = r.image; p.imgWeb = false; p.imgManual = true; p.imgSearch = false; p.imgWebSrc = r.url; p.imgUpdated = new Date().toISOString(); p.imgBy = "Octopart"; const f = dlg.querySelector("#pd-img"); if (f) f.value = p.image; }
+        if (what === "datasheet") p.datasheet = r.datasheet;
+        if (what === "maker") { p.maker = r.maker; if (!p.mpn) p.mpn = r.mpn; if (!p.description && r.desc) p.description = r.desc; }
+        try { await saveOne(p); oc.disabled = true; oc.textContent = "Lagret"; render(); } catch (err) { ctx.setSync(err.message, true); }
+        return;
+      }
+      const mpn = p.mpn || componentInfo(p)?.mpn || "";
+      if (!mpn) { out.innerHTML = `<p class="hint">Fant ikke noe delenummer i tittelen. Skriv det i feltet «Delenummer» først.</p>`; return; }
+      if (ctx.DEMO) { out.innerHTML = `<p class="hint">Octopart-søk virker ikke i demoen (${ctx.esc(mpn)}).</p>`; return; }
+      out.innerHTML = `<p class="hint">Søker etter ${ctx.esc(mpn)} …</p>`;
+      try {
+        const r = await ctx.dbCall("/octopart", { mpn, limit: 5 });
+        if (!r.configured) { out.innerHTML = `<p class="hint">Octopart er ikke satt opp ennå (mangler Nexar-nøkler i Workeren).</p>`; return; }
+        // Eksakt delenummer først: et annet nummer er en annen del (CD4016 er ikke CD4014).
+        const norm = (t) => String(t).toUpperCase().replace(/[^A-Z0-9]/g, "");
+        const exact = r.parts.find((x) => norm(x.mpn) === norm(mpn)) || r.parts.find((x) => norm(x.mpn).startsWith(norm(mpn)));
+        if (!exact) { out.innerHTML = `<p class="hint">Ingen treff på nøyaktig ${ctx.esc(mpn)} hos Octopart${r.parts.length ? ` (bare ${r.parts.slice(0, 4).map((x) => ctx.esc(x.mpn)).join(", ")})` : ""}.</p>`; return; }
+        dlg.__octo = exact;
+        const o = exact.offers.filter((x) => x.price !== null).slice(0, 5);
+        out.innerHTML = `<div class="octo-hit">
+          ${exact.image ? `<img src="${ctx.esc(exact.image)}" alt="" referrerpolicy="no-referrer">` : ""}
+          <div>
+            <b>${ctx.esc(exact.mpn)}</b> · ${ctx.esc(exact.maker)}${exact.pkg ? ` · ${ctx.esc(exact.pkg)}` : ""}
+            ${exact.desc ? `<p class="hint">${ctx.esc(exact.desc)}</p>` : ""}
+            <p>${exact.datasheet ? `<a href="${ctx.esc(exact.datasheet)}" target="_blank" rel="noopener">Datablad ↗</a> · ` : ""}<a href="${ctx.esc(exact.url)}" target="_blank" rel="noopener">Octopart ↗</a>${r.cached ? ` <span class="hint">(fra mellomlager)</span>` : ""}</p>
+            ${o.length ? `<ul class="octo-offers">${o.map((x) => `<li>${ctx.esc(x.seller)}: ${ctx.esc(String(x.price))} ${ctx.esc(x.currency)}${x.qty > 1 ? ` (fra ${x.qty} stk)` : ""}${x.stock !== null ? ` · ${x.stock} på lager` : ""}</li>`).join("")}</ul>` : ""}
+            ${mine ? `<p class="octo-actions">${exact.image ? `<button type="button" class="btn btn-small" data-octouse="image">Bruk bildet</button>` : ""}${exact.datasheet ? `<button type="button" class="btn btn-small" data-octouse="datasheet">Bruk databladet</button>` : ""}${exact.maker ? `<button type="button" class="btn btn-small" data-octouse="maker">Bruk produsent${p.mpn ? "" : " og delenummer"}</button>` : ""}</p>` : ""}
+          </div>
+        </div>`;
+      } catch (err) { out.innerHTML = `<p class="error">${ctx.esc(err.message)}</p>`; }
+      return;
+    }
     if (e.target.closest("[data-useparts]")) {
       const n = Math.max(1, Math.round(Number(dlg.querySelector("#pd-used").value) || 1));
       const out = dlg.querySelector(".used-msg");
