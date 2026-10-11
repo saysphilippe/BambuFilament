@@ -789,7 +789,7 @@ function render() {
   const pkgs = Object.entries(pkgCount).sort((a, b) => b[1] - a[1]).slice(0, 18);
   const cats = CATEGORIES.map(([id, name]) => [id, name, count("category", id)]).filter(([, , n]) => n);
   const chip = (key, val, label, n, dot) => `<button class="chip${pstate[key] === val ? " active" : ""}" type="button" data-pf="${key}" data-pv="${ctx.esc(val)}">${dot ? `<span class="owner-dot" style="--owner:${dot}"></span>` : ""}${ctx.esc(label)}${n !== undefined ? ` <span class="chip-n">${n}</span>` : ""}</button>`;
-  // Betalt: ordretotalen (inkl. frakt og avgifter) telles én gang per ordre, i alle valutaer.
+  // Betalt (vises bare for administrator): ordretotalen (inkl. frakt og avgifter) telles én gang per ordre, i alle valutaer.
   // Ordre uten total (Mouser, lagt inn for hånd) teller stykkpris × antall.
   // Gamle AliExpress-ordre (2018–2019) har ingen total hos AliExpress lenger; der telles bare varene.
   const spent = {};
@@ -813,7 +813,7 @@ function render() {
         <div class="stats stats-side">
           <div class="stat"><b>${all.length.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
           <div class="stat"><b>${all.filter((p) => remaining(p) > 0).length.toLocaleString("nb-NO")}</b><span>har igjen</span></div>
-          ${totalNok ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.${noTotal.size ? ` For ${noTotal.size} ordre finnes ikke totalen lenger hos butikken (gamle AliExpress-ordre), så der er bare varene med, uten frakt.` : ""}`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca. (${allOrders.size.toLocaleString("nb-NO")} ordre${noTotal.size ? `, frakt mangler for ${noTotal.size}` : ", inkl. frakt"})</span></div>` : ""}
+          ${totalNok && (ctx.DEMO || ctx.isAdmin?.()) ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.${noTotal.size ? ` For ${noTotal.size} ordre finnes ikke totalen lenger hos butikken (gamle AliExpress-ordre), så der er bare varene med, uten frakt.` : ""}`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca. (${allOrders.size.toLocaleString("nb-NO")} ordre${noTotal.size ? `, frakt mangler for ${noTotal.size}` : ", inkl. frakt"})</span></div>` : ""}
         </div>
         <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori</span><div class="chips">
           ${chip("cat", "", "Alle", undefined)}${cats.map(([id, name, n]) => chip("cat", id, name, n)).join("")}
