@@ -2,6 +2,7 @@ import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009202254";
 import { toRecords } from "./worker/src/records.js?v=20261009202254";
 import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken, newKeys, openKeysFull, openPrivate, rewrapKeys } from "./auth.js?v=20261009202254";
 import { initMessages, openMessages, loadMessages, messagesSession, signOff } from "./messages.js?v=20261009202254";
+import { initIdeas, openIdeas, ideasSession } from "./ideas.js?v=20261009202254";
 import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, setSpentShown, loadParts } from "./parts.js?v=20261009202254";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
@@ -2240,7 +2241,7 @@ function setSession(value, remember = !!session?.exp) {
   state.amsError = "";
   renderAccount();
   render();
-  if (changed) messagesSession();
+  if (changed) { messagesSession(); ideasSession(); }
   if (value && state.tab === "ams") refreshAms();
 }
 
@@ -3949,6 +3950,11 @@ initMessages({
   relogin: () => { setSession(null); openLogin(); },
   openNotifySettings,
 });
+initIdeas({
+  esc, dbCall, token, userColor, DEMO, store, isAdmin,
+  userName: () => userName() || (DEMO ? "Deg" : ""),
+  users: () => (DEMO ? users() : state.doc.users),
+});
 for (const id of ["a-n-mail", "a-n-wa", "a-wakey"]) $(`#${id}`).addEventListener("change", saveNotify);
 $("#a-n-test").addEventListener("click", testNotify);
 store("bf.hiddenCats", ""); // skjulte kategorier lå tidligere i nettleseren; nå i databasen per eier
@@ -3973,8 +3979,8 @@ fetch("data/colors.json")
       // Komponenter: valgt sist, eller siden ble åpnet av import-bokmerket (#import).
       // Hent komponentene i bakgrunnen, så Komponenter-knappen viser ønsker som venter.
       setTimeout(() => token() && loadParts(), 2500);
-      if (DEMO) { if (location.hash === "#messages") openMessages("inbox"); }
-      else if (token()) messagesSession();
+      if (DEMO) { if (location.hash === "#messages") openMessages("inbox"); if (location.hash === "#ideas") openIdeas(); }
+      else if (token()) { messagesSession(); ideasSession(); }
       if (location.hash === "#import" || location.hash === "#parts" || (!TABS.includes(location.hash.slice(1)) && store("bf.section") === "parts")) showSection("parts");
       // Hent AMS i bakgrunnen, så et delt øyeblikksbilde holdes oppdatert uansett fane.
       if (bambuToken() && state.tab !== "ams") refreshAms();

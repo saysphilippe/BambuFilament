@@ -15,6 +15,8 @@ export const FILE_COLLS = {
   // (id = navn) når innboksen sist ble lest og hvilke meldinger som er skjult. presence (id = navn):
   // når brukeren sist hadde siden åpen (oppdateres hvert 2. minutt), for «pålogget nå».
   messages: ["messages", "msgread", "presence"],
+  // Forslag til forbedringer (id = tidspunkt + tilfeldig), se ideas.js.
+  ideas: ["ideas"],
 };
 
 const MAX_LOGINS = 500;
@@ -45,6 +47,8 @@ export function toRecords(file, doc) {
     for (const m of doc.messages || []) if (m?.id) add("messages", m.id, m);
     for (const [name, r] of Object.entries(doc.read || {})) add("msgread", name, r);
     for (const [name, r] of Object.entries(doc.presence || {})) add("presence", name, r);
+  } else if (file === "ideas") {
+    for (const i of doc.ideas || []) if (i?.id) add("ideas", i.id, i);
   }
   return out;
 }
@@ -69,5 +73,6 @@ export function fromRecords(file, rows) {
   }
   if (file === "parts") return { version: 1, parts: by("parts").map((r) => r.data), requests: by("partreqs").map((r) => r.data), prefs: map("partprefs"), cats: map("partcats") };
   if (file === "messages") return { version: 1, messages: by("messages").map((r) => r.data).sort((a, b) => String(a.at).localeCompare(String(b.at))), read: map("msgread"), presence: map("presence") };
+  if (file === "ideas") return { version: 1, ideas: by("ideas").map((r) => r.data) };
   throw new Error(`Ukjent fil: ${file}`);
 }

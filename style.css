@@ -1062,3 +1062,30 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .part-facts.order-open .order-row { display: table-row; }
 .order-toggle .order-hide, .part-facts.order-open .order-toggle .order-show { display: none; }
 .part-facts.order-open .order-toggle .order-hide { display: inline; }
+
+/* Forslag til forbedringer */
+.idea-form { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; }
+.idea-form input, .idea-form textarea { width: 100%; box-sizing: border-box; font: inherit; }
+.idea-form textarea { resize: vertical; }
+.idea-tabs { margin: 6px 0 10px; }
+.idea-list { display: flex; flex-direction: column; gap: 10px; }
+.idea { padding: 10px 12px; border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; background: var(--surface); min-width: 0; }
+.idea.status-new { border-left-color: var(--out); }
+.idea.status-approved { border-left-color: var(--accent); }
+.idea.status-done { border-left-color: var(--in); opacity: .85; }
+.idea.status-rejected { border-left-color: var(--danger); opacity: .8; }
+.idea-head { position: static; z-index: auto; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; gap: 4px 10px; padding: 0; background: none; backdrop-filter: none; border: 0; }
+.idea-head h3 { margin: 0; font-size: 15px; text-transform: none; letter-spacing: normal; color: var(--text); overflow-wrap: anywhere; }
+.idea-status { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.idea.status-approved .idea-status { color: var(--accent); }
+.idea.status-rejected .idea-status { color: var(--danger); }
+.idea.status-done .idea-status { color: var(--in); }
+.idea-text { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.idea-meta { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 12px; }
+.idea-reply { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--muted-bg); font-size: 13px; }
+.idea-reply div { margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.idea-actions { position: static; display: flex; align-items: center; gap: 6px; padding: 0; background: none; backdrop-filter: none; border: 0; }
+.idea-actions .spacer { flex: 1; }
+.idea-admin { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.idea-admin textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }
+.idea-admin-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
