@@ -56,7 +56,7 @@ export function mouserCategory(crumbs) {
 
 let ctx = null; // fra app.js: { $, esc, dbCall, token, userName, userColor, users, store, DEMO, setSync }
 const pstate = {
-  parts: [], loaded: false, loading: false, error: "",
+  parts: [], deleted: new Set(), loaded: false, loading: false, error: "",
   reqs: [], prefs: {},
   q: "", cat: "", sub: "", owner: "", source: "", pkg: "", imgf: "", editCats: false, sort: "new", show: "have", view: "list",
   importLog: [], importBusy: false,
@@ -188,7 +188,9 @@ async function loadNow() {
   try {
     const { parts } = await ctx.dbCall("/db/load", { files: ["parts"] });
     applyCats(Object.values(parts?.cats || {}));
-    pstate.parts = (parts?.parts || []).map(cleanPart).filter(Boolean);
+    const raw = parts?.parts || [];
+    pstate.deleted = new Set(raw.filter((p) => p?.deleted && p.id).map((p) => String(p.id)));
+    pstate.parts = raw.filter((p) => !p?.deleted).map(cleanPart).filter(Boolean);
     pstate.reqs = (parts?.requests || []).map(cleanReq).filter(Boolean);
     pstate.prefs = Object.fromEntries(Object.entries(parts?.prefs || {})
       .filter(([o, v]) => o && v && Array.isArray(v.hidden)).map(([o, v]) => [String(o).slice(0, 40), { hidden: v.hidden.map(String).slice(0, 40), hideSpent: !!v.hideSpent }]));
@@ -264,6 +266,15 @@ async function moveToCat(id, cat) {
   render();
   if (!ctx.DEMO) await savePatch(list.map((x) => ({ id: x.id, data: x })));
   ctx.setSync(`Flyttet til «${CAT_NAME[cat]}»`);
+}
+
+async function deleteParts(list) {
+  const now = new Date().toISOString(), by = meName();
+  const ids = new Set(list.map((p) => p.id));
+  pstate.parts = pstate.parts.filter((p) => !ids.has(p.id));
+  for (const id of ids) pstate.deleted.add(id);
+  render();
+  if (!ctx.DEMO) await savePatch(list.map((p) => ({ id: p.id, data: { id: p.id, deleted: true, owner: p.owner, title: p.title.slice(0, 80), deletedAt: now, by } })));
 }
 
 async function savePatch(ops, onProgress) {
@@ -468,6 +479,7 @@ function mergeImport(rows, source) {
     seen[base] = (seen[base] || 0) + 1;
     const id = seen[base] > 1 ? `${base}#${seen[base]}` : base;
     ids.add(id);
+    if (pstate.deleted.has(id)) continue;
     const price = r.priceText ? parsePrice(r.priceText) : { amount: r.unitPrice, currency: r.currency };
     const catHint = r.catHint || (r.shopCat ? mouserCategory(String(r.shopCat).split(" › ")) : "");
     const fresh = cleanPart({ ...r, catHint, unitPrice: price.amount, currency: price.currency || r.currency, id, source, owner, added: now, updated: now });
@@ -1089,8 +1101,17 @@ function openPart(id) {
       </div>
       <p class="hint cart-msg" role="status">${(() => { const n = pstate.reqs.filter((q) => q.partId === p.id && ["draft", "open"].includes(q.status)).reduce((s, q) => s + q.qty, 0); return n ? `${n} stk av denne er i en handlekurv eller ønsket.` : ""; })()}</p>` : ""}
       <div class="part-actions">
+        ${mine || ctx.isAdmin?.() ? `<button class="btn btn-danger part-del" type="button" data-delpart>Slett …</button>` : ""}
         ${mine ? `<button class="btn btn-primary" value="save" type="submit">Lagre</button>` : ""}
         <button class="btn" value="cancel" type="submit">Lukk</button>
+      </div>
+      <div class="part-del-confirm" hidden>
+        <p><b>Slette for godt?</b> Varen forsvinner fra biblioteket og kommer ikke tilbake ved ny import. Dette kan ikke angres.</p>
+        <div class="part-actions">
+          <button class="btn" type="button" data-delcancel>Avbryt</button>
+          ${siblings(p).length > 1 ? `<button class="btn btn-danger" type="button" data-delconfirm="all">Slett alle ${siblings(p).length} kjøp</button>` : ""}
+          <button class="btn btn-danger btn-solid-danger" type="button" data-delconfirm="one">${siblings(p).length > 1 ? "Slett bare dette kjøpet" : "Ja, slett"}</button>
+        </div>
       </div>
     </div>
   </form>`;
@@ -1122,6 +1143,22 @@ function openPart(id) {
   };
   dlg.onclick = async (e) => {
     if (e.target.closest(".dlg-close")) { dlg.close(""); return; }
+    if (e.target.closest("[data-delpart], [data-delcancel]")) {
+      const box = dlg.querySelector(".part-del-confirm");
+      box.hidden = !!e.target.closest("[data-delcancel]");
+      if (!box.hidden) box.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const del = e.target.closest("[data-delconfirm]");
+    if (del) {
+      const list = del.dataset.delconfirm === "all" ? siblings(p) : [p];
+      try {
+        await deleteParts(list);
+        dlg.close("");
+        ctx.setSync(list.length > 1 ? `${list.length} kjøp er slettet` : "Varen er slettet");
+      } catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
     const sib = e.target.closest("[data-sibling]");
     if (sib) { dlg.close(""); openPart(sib.dataset.sibling); return; }
     if (!e.target.closest("[data-addcart]")) return;

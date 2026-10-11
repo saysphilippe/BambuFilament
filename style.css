@@ -975,3 +975,7 @@ body.dragging-part .parts-cats { position: sticky; top: env(safe-area-inset-top,
 .cat-edit { display: grid; gap: 6px; }
 .cat-edit-row { display: flex; gap: 6px; align-items: center; }
 .cat-edit-row input { flex: 1 1 auto; min-width: 0; padding: 5px 8px; font-size: 13px; }
+.part-del { margin-right: auto; }
+.part-del-confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--danger); border-radius: 10px; }
+.part-del-confirm p { margin: 0 0 10px; }
+.btn-solid-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
