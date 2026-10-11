@@ -58,7 +58,7 @@ let ctx = null; // fra app.js: { $, esc, dbCall, token, userName, userColor, use
 const pstate = {
   parts: [], loaded: false, loading: false, error: "",
   reqs: [], prefs: {},
-  q: "", cat: "", sub: "", owner: "", source: "", pkg: "", imgf: "", sort: "new", show: "have", view: "list",
+  q: "", cat: "", sub: "", owner: "", source: "", pkg: "", imgf: "", editCats: false, sort: "new", show: "have", view: "list",
   importLog: [], importBusy: false,
 };
 
@@ -187,6 +187,7 @@ async function loadNow() {
   render();
   try {
     const { parts } = await ctx.dbCall("/db/load", { files: ["parts"] });
+    applyCats(Object.values(parts?.cats || {}));
     pstate.parts = (parts?.parts || []).map(cleanPart).filter(Boolean);
     pstate.reqs = (parts?.requests || []).map(cleanReq).filter(Boolean);
     pstate.prefs = Object.fromEntries(Object.entries(parts?.prefs || {})
@@ -201,6 +202,70 @@ async function loadNow() {
 }
 
 // Lagrer endrede poster (null = slett), i porsjoner så hvert kall holder seg lite.
+// Felles kategorier for alle brukere (D1-samlingen partcats, id = kategori-id):
+// { name } gir en innebygd kategori nytt navn; nye kategorier har id «c_…».
+// Lagt til før «Annet», som alltid står sist.
+const BUILTIN_NAME = { ...CAT_NAME };
+function applyCats(list) {
+  for (const c of list) {
+    const id = String(c?.id || "").slice(0, 40), name = clip(c?.name, 40);
+    if (!/^[a-z0-9_]+$/.test(id)) continue;
+    if (c.deleted) {
+      if (!BUILTIN_NAME[id]) { const i = CATEGORIES.findIndex(([x]) => x === id); if (i >= 0) CATEGORIES.splice(i, 1); delete CAT_NAME[id]; }
+      else { CAT_NAME[id] = BUILTIN_NAME[id]; const e = CATEGORIES.find(([x]) => x === id); if (e) e[1] = BUILTIN_NAME[id]; }
+      continue;
+    }
+    if (!name) continue;
+    const e = CATEGORIES.find(([x]) => x === id);
+    if (e) e[1] = name; else CATEGORIES.splice(CATEGORIES.length - 1, 0, [id, name, []]);
+    CAT_NAME[id] = name;
+  }
+}
+const isCustomCat = (id) => /^c_/.test(id);
+const slug = (t) => String(t).toLowerCase().normalize("NFKD").replace(/[æ]/g, "ae").replace(/[ø]/g, "o").replace(/[å]/g, "a").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 24);
+
+async function saveCat(id, data) {
+  applyCats([{ id, ...(data || { deleted: true }) }]);
+  render();
+  if (!ctx.DEMO) await savePatch([{ coll: "partcats", id, data: data && { id, ...data, updated: new Date().toISOString(), by: meName() } }]);
+}
+async function createCat(name) {
+  name = clip(name, 40);
+  if (!name) return;
+  const taken = Object.entries(CAT_NAME).find(([, n]) => n.toLowerCase() === name.toLowerCase());
+  if (taken) { pstate.cat = taken[0]; render(); throw new Error(`«${name}» finnes allerede.`); }
+  const id = `c_${slug(name) || "kategori"}_${Math.random().toString(36).slice(2, 6)}`;
+  await saveCat(id, { name });
+  pstate.cat = id;
+  render();
+}
+async function renameCat(id, name) {
+  name = clip(name, 40);
+  if (!CAT_NAME[id] || !name || name === CAT_NAME[id]) return;
+  // Tilbake til det opprinnelige navnet på en innebygd kategori: fjern overstyringen.
+  if (BUILTIN_NAME[id] === name) { await saveCat(id, null); return; }
+  await saveCat(id, { name });
+}
+async function deleteCat(id) {
+  if (!isCustomCat(id)) return;
+  if (pstate.parts.some((p) => p.category === id)) throw new Error("Kategorien er ikke tom. Flytt varene først.");
+  if (pstate.cat === id) pstate.cat = "";
+  await saveCat(id, null);
+}
+// Flytt varer (alle kjøp av samme produkt) til en annen kategori.
+async function moveToCat(id, cat) {
+  const p = pstate.parts.find((x) => x.id === id);
+  if (!p || !CAT_NAME[cat]) return;
+  const me = meName();
+  const list = siblings(p).filter((x) => x.category !== cat && (ctx.DEMO || x.owner === me || ctx.isAdmin?.()));
+  if (!list.length) throw new Error(p.category === cat ? "Varen ligger allerede der." : "Du kan bare flytte dine egne varer.");
+  const now = new Date().toISOString();
+  for (const x of list) { x.category = cat; x.catManual = true; x.updated = now; }
+  render();
+  if (!ctx.DEMO) await savePatch(list.map((x) => ({ id: x.id, data: x })));
+  ctx.setSync(`Flyttet til «${CAT_NAME[cat]}»`);
+}
+
 async function savePatch(ops, onProgress) {
   for (let i = 0; i < ops.length; i += PATCH_CHUNK) {
     await ctx.dbCall("/db/patch", { ops: ops.slice(i, i + PATCH_CHUNK).map((o) => ({ coll: o.coll || "parts", id: o.id, data: o.data })) });
@@ -760,7 +825,8 @@ function partCard(group) {
   const bought = !many && p.pack > 1 ? `${p.qty} × ${p.pack} = ${total} stk` : `${total} stk`;
   const qty = (left === total ? bought : `${left} av ${total} stk igjen`) + (many ? ` · ${all.length} kjøp` : "");
   const newest = all.reduce((d, x) => (x.orderDate > d ? x.orderDate : d), "");
-  return `<div class="part-card${left === 0 ? " used-up" : ""}">
+  const canMove = ctx.DEMO || p.owner === meName() || ctx.isAdmin?.();
+  return `<div class="part-card${left === 0 ? " used-up" : ""}"${canMove ? ` draggable="true" data-dragid="${ctx.esc(p.id)}" title="Dra til en kategori for å flytte"` : ""}>
   <button class="part-open" type="button" data-part="${ctx.esc(p.id)}">
     <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
 </span>
@@ -819,8 +885,8 @@ function render() {
   const pkgCount = {};
   for (const p of all) if (p.pkg) pkgCount[p.pkg] = (pkgCount[p.pkg] || 0) + 1;
   const pkgs = Object.entries(pkgCount).sort((a, b) => b[1] - a[1]).slice(0, 18);
-  const cats = CATEGORIES.map(([id, name]) => [id, name, count("category", id)]).filter(([, , n]) => n);
-  const chip = (key, val, label, n, dot) => `<button class="chip${pstate[key] === val ? " active" : ""}" type="button" data-pf="${key}" data-pv="${ctx.esc(val)}">${dot ? `<span class="owner-dot" style="--owner:${dot}"></span>` : ""}${ctx.esc(label)}${n !== undefined ? ` <span class="chip-n">${n}</span>` : ""}</button>`;
+  const cats = CATEGORIES.map(([id, name]) => [id, name, count("category", id)]);
+  const chip = (key, val, label, n, dot) => `<button class="chip${pstate[key] === val ? " active" : ""}${key === "cat" && val ? ` cat-drop${!n && !isCustomCat(val) ? " empty" : ""}` : ""}" type="button" data-pf="${key}" data-pv="${ctx.esc(val)}">${dot ? `<span class="owner-dot" style="--owner:${dot}"></span>` : ""}${ctx.esc(label)}${n !== undefined ? ` <span class="chip-n">${n}</span>` : ""}</button>`;
   // Betalt (vises bare for administrator): ordretotalen (inkl. frakt og avgifter) telles én gang per ordre, i alle valutaer.
   // Ordre uten total (Mouser, lagt inn for hånd) teller stykkpris × antall.
   // Gamle AliExpress-ordre (2018–2019) har ingen total hos AliExpress lenger; der telles bare varene.
@@ -846,9 +912,14 @@ function render() {
           <div class="stat"><b>${groupParts(all).length.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
           ${totalNok && (ctx.DEMO || (ctx.isAdmin?.() && !pstate.prefs[meName()]?.hideSpent)) ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.${noTotal.size ? ` For ${noTotal.size} ordre finnes ikke totalen lenger hos butikken (gamle AliExpress-ordre), så der er bare varene med, uten frakt.` : ""}`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca. (${allOrders.size.toLocaleString("nb-NO")} ordre${noTotal.size ? `, frakt mangler for ${noTotal.size}` : ", inkl. frakt"})</span></div>` : ""}
         </div>
-        <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori</span><div class="chips">
-          ${chip("cat", "", "Alle", undefined)}${cats.map(([id, name, n]) => chip("cat", id, name, n)).join("")}
-        </div></nav>
+        <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori <button type="button" class="linkbtn cat-edit-btn" data-editcats>${pstate.editCats ? "Ferdig" : "Endre"}</button></span>
+        ${pstate.editCats ? `<div class="cat-edit">
+            ${cats.filter(([id]) => id !== "other").map(([id, name, n]) => `<div class="cat-edit-row"><input type="text" maxlength="40" value="${ctx.esc(name)}" data-renamecat="${id}" aria-label="Navn på kategori">${isCustomCat(id) ? `<button type="button" class="btn btn-small" data-delcat="${id}" ${n ? "disabled title=\"Flytt varene først\"" : ""}>Slett</button>` : ""}</div>`).join("")}
+            <form class="cat-edit-row" data-newcatform><input type="text" maxlength="40" id="newcat-name" placeholder="Ny kategori …" aria-label="Ny kategori"><button type="submit" class="btn btn-small btn-primary">Legg til</button></form>
+            <p class="hint">Kategoriene er felles for alle. Endre navnet og trykk Enter eller klikk utenfor. Dra et kort til en kategori for å flytte det.</p>
+          </div>`
+        : `<div class="chips">${chip("cat", "", "Alle", undefined)}${cats.map(([id, name, n]) => chip("cat", id, name, n)).join("")}<button type="button" class="chip chip-add" data-editcats data-addcat>+ Ny</button></div>`}
+        </nav>
         ${pstate.cat === "semi" ? (() => {
           const semis = all.filter((p) => p.category === "semi" && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0)));
           const n = {};
@@ -1074,6 +1145,14 @@ export function initParts(context) {
   listenForImport();
   const root = ctx.$("#parts-root");
   root.addEventListener("click", async (e) => {
+    const ed = e.target.closest("[data-editcats], [data-delcat]");
+    if (ed) {
+      if (ed.dataset.delcat) { try { await deleteCat(ed.dataset.delcat); ctx.setSync("Kategorien er slettet"); } catch (err) { ctx.setSync(err.message, true); } return; }
+      pstate.editCats = !pstate.editCats || ed.hasAttribute("data-addcat");
+      render();
+      if (ed.hasAttribute("data-addcat")) ctx.$("#newcat-name")?.focus();
+      return;
+    }
     const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-psettings], [data-pclear], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
     if (!t) return;
     if (t.dataset.cartstep) {
@@ -1123,7 +1202,45 @@ export function initParts(context) {
       q.setSelectionRange(pos, pos);
     }
   });
-  root.addEventListener("change", (e) => {
+  root.addEventListener("submit", async (e) => {
+    if (!e.target.matches("[data-newcatform]")) return;
+    e.preventDefault();
+    try { await createCat(e.target.querySelector("#newcat-name").value); ctx.setSync("Kategorien er lagt til"); ctx.$("#newcat-name")?.focus(); }
+    catch (err) { ctx.setSync(err.message, true); }
+  });
+  let dragId = "";
+  root.addEventListener("dragstart", (e) => {
+    const card = e.target.closest?.("[data-dragid]");
+    if (!card) return;
+    dragId = card.dataset.dragid;
+    e.dataTransfer.setData("text/plain", dragId);
+    e.dataTransfer.effectAllowed = "move";
+    document.body.classList.add("dragging-part");
+  });
+  root.addEventListener("dragend", () => { dragId = ""; document.body.classList.remove("dragging-part"); root.querySelectorAll(".drop-hover").forEach((x) => x.classList.remove("drop-hover")); });
+  root.addEventListener("dragover", (e) => {
+    const c = dragId && e.target.closest(".cat-drop");
+    if (!c) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    root.querySelectorAll(".drop-hover").forEach((x) => x !== c && x.classList.remove("drop-hover"));
+    c.classList.add("drop-hover");
+  });
+  root.addEventListener("dragleave", (e) => e.target.closest?.(".cat-drop")?.classList.remove("drop-hover"));
+  root.addEventListener("drop", async (e) => {
+    const c = dragId && e.target.closest(".cat-drop");
+    if (!c) return;
+    e.preventDefault();
+    const id = dragId;
+    dragId = "";
+    document.body.classList.remove("dragging-part");
+    try { await moveToCat(id, c.dataset.pv); } catch (err) { ctx.setSync(err.message, true); }
+  });
+  root.addEventListener("change", async (e) => {
+    if (e.target.dataset.renamecat) {
+      try { await renameCat(e.target.dataset.renamecat, e.target.value); ctx.setSync("Navnet er endret"); } catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
     if (e.target.id === "parts-sort") { pstate.sort = e.target.value; render(); }
     if (e.target.id === "parts-show") { pstate.show = e.target.value; shown = PAGE; render(); }
     if (e.target.dataset.reqqty) {

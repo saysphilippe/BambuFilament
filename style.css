@@ -965,3 +965,13 @@ input[type="number"] { display: block; width: calc(4ch + 30px); max-width: 100%;
 .img-wrong-tag { display: inline-block; padding: 0 6px; border-radius: 99px; background: #e5484d; color: #fff; font-size: 10.5px; }
 .pd-imgwrong { margin-top: 2px; }
 .img-wrong-tag.fixed { background: #d98a00; }
+.cat-edit-btn { margin-left: 8px; font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.chip-add { border-style: dashed; color: var(--muted); }
+.chip.empty { display: none; }
+body.dragging-part .chip.empty { display: inline-flex; opacity: .7; }
+.chip.drop-hover { outline: 2px solid var(--accent); outline-offset: 1px; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.part-card[draggable="true"] { cursor: grab; }
+body.dragging-part .parts-cats { position: sticky; top: env(safe-area-inset-top, 0px); }
+.cat-edit { display: grid; gap: 6px; }
+.cat-edit-row { display: flex; gap: 6px; align-items: center; }
+.cat-edit-row input { flex: 1 1 auto; min-width: 0; padding: 5px 8px; font-size: 13px; }
