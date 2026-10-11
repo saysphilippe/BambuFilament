@@ -1142,3 +1142,7 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .used-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; grid-column: 1 / -1; }
 .used-row label { margin: 0; }
 .used-row .hint { flex-basis: 100%; margin: 0; }
+
+/* Godkjenn bilde rett fra kortet */
+.img-ok { display: flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; border-top: 1px solid var(--border); font-size: 12.5px; font-weight: 600; color: var(--text); background: color-mix(in srgb, var(--out) 10%, var(--surface)); cursor: pointer; }
+.img-ok input { width: auto; margin: 0; }

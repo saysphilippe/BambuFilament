@@ -1270,8 +1270,28 @@ function partCard(group) {
       <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(newest))}</span></span>
     </span>
   </button>
+  ${(p.imgWeb || imgFixed(p)) && (ctx.DEMO || p.owner === meName()) ? `<label class="img-ok"><input type="checkbox" data-imgok="${ctx.esc(p.id)}"> Bildet stemmer – godkjenn</label>` : ""}
   ${ctx.token() || ctx.DEMO ? stepper(p) : ""}
   </div>`;
+}
+
+// Godkjenn bildet rett fra kortet: fjerner «Fra nettet – godkjenn» og «Feil bilde», og låser bildet
+// (bildesøket bytter det ikke ut). Gjelder alle kjøp av samme vare med samme bilde.
+async function approveImage(p) {
+  const now = new Date().toISOString();
+  const list = siblings(p).filter((x) => x.owner === p.owner && x.image === p.image && (x.imgWeb || imgFixed(x)));
+  if (!list.includes(p)) list.push(p);
+  for (const x of list) {
+    x.imgWeb = false;
+    x.imgWrong = false;
+    x.imgWrongAt = "";
+    x.imgManual = true;
+    x.imgSearch = false;
+    x.updated = now;
+  }
+  render();
+  if (!ctx.DEMO) await savePatch(list.map((x) => ({ id: x.id, data: x })));
+  ctx.setSync(`Bildet er godkjent${list.length > 1 ? ` (${list.length} kjøp)` : ""}`);
 }
 
 // ---------- Brukt ----------
@@ -1843,6 +1863,11 @@ export function initParts(context) {
     try { await moveToCat(id, c.dataset.pv); } catch (err) { ctx.setSync(err.message, true); }
   });
   root.addEventListener("change", async (e) => {
+    if (e.target.dataset.imgok && e.target.checked) {
+      const p = pstate.parts.find((x) => x.id === e.target.dataset.imgok);
+      if (p) try { await approveImage(p); } catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
     const px = ["proj-title", "proj-status", "proj-desc"].includes(e.target.id) || e.target.dataset.projbought ? projectById(pstate.project) : null;
     if (px && canEditProject(px)) {
       if (e.target.id === "proj-title") px.name = clip(e.target.value, 80) || px.name;
