@@ -96,7 +96,8 @@ function spec(name) {
     return quad(n - (n % 4), 0.5, body, 0.8, 0.25, body / 2 - 0.05, body - 1.6);
   }
   if (/QFP-/.test(name) && n >= 16) {
-    const [pitch, body] = n <= 32 ? [0.8, 7] : n <= 44 ? [0.8, 10] : n <= 48 ? [0.5, 7] : n <= 64 ? [0.5, 10] : n <= 100 ? [0.5, 14] : [0.5, 20];
+    // TQFP-64 er som regel 14×14 mm med 0,8 mm pitch (ATmega64/128-AU); LQFP-64 er 10×10 mm med 0,5 mm.
+    const [pitch, body] = n <= 32 ? [0.8, 7] : n <= 44 ? [0.8, 10] : n <= 48 ? [0.5, 7] : n === 64 && /^TQFP/.test(name) ? [0.8, 14] : n <= 64 ? [0.5, 10] : n <= 100 ? [0.5, 14] : [0.5, 20];
     return quad(n - (n % 4), pitch, body, 1.5, pitch * 0.6, body / 2 + 0.75);
   }
   const led = name.match(/^LED (\d+) mm$/);

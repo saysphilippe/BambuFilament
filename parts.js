@@ -115,7 +115,7 @@ function cleanPart(p) {
     pkgFixed: clip(p.pkgFixed, 30),
     pkg: findPackage(p.pkgFixed) || clip(p.pkgFixed, 30) || findPackage(p.variant, p.title, p.mpn, p.description) || String(findPart(p.title, p.mpn)?.pkg || "").split("/")[0],
     // Datablad (PDF) og butikkens egen kategori (Mouser: «Sensors › Humidity Sensors»).
-    datasheet: /^https:\/\/(([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf|datasheet\.lcsc\.com\/[^\s"'<>]+)$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
+    datasheet: /^https:\/\/(([a-z0-9-]+\.)*mouser\.[a-z.]+\/.+\.pdf|datasheet\.lcsc\.com\/[^\s"'<>]+|www\.lcsc\.com\/datasheet\/C\d+\.pdf)$/i.test(String(p.datasheet || "")) ? String(p.datasheet) : "",
     // Regnes ut på nytt fra butikkens kategoritekst, så nye kategorier (f.eks. Halvledere) slår inn.
     shopCat: clip(p.shopCat, 160), catHint: (p.shopCat && mouserCategory(String(p.shopCat).split(" › "))) || (CAT_NAME[p.catHint] ? p.catHint : ""),
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
