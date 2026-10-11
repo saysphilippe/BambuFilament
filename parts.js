@@ -58,7 +58,7 @@ let ctx = null; // fra app.js: { $, esc, dbCall, token, userName, userColor, use
 const pstate = {
   parts: [], loaded: false, loading: false, error: "",
   reqs: [], prefs: {},
-  q: "", cat: "", sub: "", owner: "", source: "", pkg: "", sort: "new", show: "have", view: "list",
+  q: "", cat: "", sub: "", owner: "", source: "", pkg: "", imgf: "", sort: "new", show: "have", view: "list",
   importLog: [], importBusy: false,
 };
 
@@ -114,6 +114,9 @@ function cleanPart(p) {
     imgManual: !!p.imgManual,
     // Merket «Feil bilde» av eieren: bildesøket plukker opp disse og fjerner merket når det finner et nytt.
     imgWrong: !!p.imgWrong,
+    imgWrongAt: clip(p.imgWrongAt, 30),
+    // Når bildet sist ble byttet, og av hvem («bildesøk» eller et navn).
+    imgUpdated: clip(p.imgUpdated, 30), imgBy: clip(p.imgBy, 40),
     // Pakketype (TO-92, SOT-23, 0805 …) fra tittel, variant og delenummer, ellers fra kjente delenumre.
     // Butikkens egen pakkeangivelse (LCSC) går foran det vi finner i teksten.
     pkgFixed: clip(p.pkgFixed, 30),
@@ -460,8 +463,8 @@ function listenForImport() {
     // AliExpress-fanen spør hvilke av mine varer som trenger nytt bilde (bilde fra søk eller ingen).
     if (msg?.type === "bf-list-noimg" && isAli) {
       await load();
-      const items = pstate.parts.filter((p) => p.owner === ctx.userName() && (msg.only === "wrong" ? p.imgWrong
-        : p.imgWrong || (p.source === "aliexpress" && !p.imgManual && (p.imgSearch || !p.image))))
+      const items = pstate.parts.filter((p) => p.owner === ctx.userName() && (msg.only === "wrong" ? p.imgWrong && !imgFixed(p)
+        : (p.imgWrong && !imgFixed(p)) || (p.source === "aliexpress" && !p.imgManual && (p.imgSearch || !p.image))))
         .map((p) => ({ id: p.id, t: p.title }));
       e.source?.postMessage({ type: "bf-noimg", items }, e.origin);
       return;
@@ -477,7 +480,7 @@ function listenForImport() {
           if (!p || p.owner !== ctx.userName() || (p.imgManual && !p.imgWrong)) continue;
           const img = safeImg(image);
           if (img === p.image || (p.imgWrong && !img)) continue;
-          p.image = img; p.imgSearch = !!img; p.imgWrong = false; p.updated = new Date().toISOString();
+          p.image = img; p.imgSearch = !!img; p.updated = p.imgUpdated = new Date().toISOString(); p.imgBy = "bildesøk";
           changed.push(p);
         }
         if (changed.length && !ctx.DEMO) await savePatch(changed.map((p) => ({ id: p.id, data: p })));
@@ -715,6 +718,7 @@ function filtered() {
     (!pstate.owner || p.owner === pstate.owner) &&
     (!pstate.source || p.source === pstate.source) &&
     (!pstate.pkg || p.pkg === pstate.pkg) &&
+    (!pstate.imgf || (pstate.imgf === "wrong" ? p.imgWrong && !imgFixed(p) : imgFixed(p))) &&
     (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0)) &&
     matchesQ(p, q));
   const by = {
@@ -740,6 +744,10 @@ function groupParts(list) {
 // Kortet viser og handler på kjøpet med mest igjen (ved likt: det nyeste).
 const pickRep = (items) => [...items].sort((a, b) => remaining(b) - remaining(a) || b.orderDate.localeCompare(a.orderDate))[0];
 
+// «Feil bilde»: er bildet byttet etter at det ble merket? Da kan eieren sjekke det og fjerne krysset.
+const imgFixed = (p) => p.imgWrong && !!p.imgUpdated && p.imgUpdated > (p.imgWrongAt || "");
+const fmtStamp = (iso) => (iso ? new Date(iso).toLocaleString("nb-NO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+
 const PAGE = 120;
 let shown = PAGE;
 
@@ -756,7 +764,7 @@ function partCard(group) {
   <button class="part-open" type="button" data-part="${ctx.esc(p.id)}">
     <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
 </span>
-    <span class="part-cat">${p.imgWrong ? `<span class="img-wrong-tag">Feil bilde</span> ` : ""}${ctx.esc(CAT_NAME[p.category])}</span>
+    <span class="part-cat">${p.imgWrong ? (imgFixed(p) ? `<span class="img-wrong-tag fixed" title="Byttet ${ctx.esc(fmtStamp(p.imgUpdated))}">Byttet – sjekk</span> ` : `<span class="img-wrong-tag">Feil bilde</span> `) : ""}${ctx.esc(CAT_NAME[p.category])}</span>
     <span class="part-body">
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
@@ -864,6 +872,7 @@ function render() {
           ${owners.length ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, count("owner", o), ctx.userColor(o))).join("")}</div></div>` : ""}
           <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "lcsc", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
           ${pkgs.length ? `<div class="chip-row"><span class="chip-label">Pakke</span><div class="chips">${chip("pkg", "", "Alle")}${pkgs.map(([k, n]) => chip("pkg", k, k, n)).join("")}</div></div>` : ""}
+          ${all.some((p) => p.imgWrong) ? `<div class="chip-row"><span class="chip-label">Bilde</span><div class="chips">${chip("imgf", "", "Alle")}${chip("imgf", "wrong", "Feil bilde", all.filter((p) => p.imgWrong && !imgFixed(p)).length)}${chip("imgf", "fixed", "Byttet – sjekk", all.filter(imgFixed).length)}</div></div>` : ""}
         </section>
         ${pstate.loading ? `<p class="count">Henter komponenter…</p>` : pstate.error ? `<p class="notice">${ctx.esc(pstate.error)}</p>` : ""}
         ${!pstate.loading && !all.length ? `<section class="panel empty-parts"><h2>Ingen komponenter ennå</h2><p class="hint">Importer det du har kjøpt hos AliExpress eller Mouser, så havner alt her, sortert i kategorier.</p><button class="btn btn-primary" type="button" data-pview="import">Importer</button></section>` : ""}
@@ -988,7 +997,7 @@ function openPart(id) {
         ${row("Pakke", p.pkg ? `<span class="pkg-row">${footprintSvg(p.pkg, 150, { detail: true }) || packageSvg(p.pkg, 64)}<span><b>${ctx.esc(p.pkg)}</b><br><span class="hint">${ctx.esc(packageInfo(p.pkg))}</span>${kicadName(p.pkg, kicadHint(p)) ? `<br><code class="kicad-name" title="Fotavtrykk i KiCads standardbibliotek">${ctx.esc(kicadName(p.pkg, kicadHint(p)))}</code>` : ""}${footprintCaption(p.pkg) ? `<br><span class="hint fp-cap">${ctx.esc(footprintCaption(p.pkg, kicadHint(p)))}</span><span class="fp-legend"><i class="cu"></i>F.Cu <i class="silk"></i>F.SilkS <i class="drill"></i>Drill</span>` : ""}</span></span>` : "")}
         ${row("Beskrivelse", ctx.esc(p.description))}
         ${row("Produktside", p.url ? `<a href="${ctx.esc(p.url)}" target="_blank" rel="noopener">Åpne hos ${ctx.esc(SOURCE_LABEL[p.source])} ↗</a>` : "")}
-        ${row("Bilde", p.imgSearch ? "Fra en lignende vare. Originalen er fjernet hos AliExpress." : "")}
+        ${row("Bilde", [p.imgSearch ? "Fra en lignende vare. Originalen er fjernet hos AliExpress." : "", p.imgUpdated ? `Sist byttet ${ctx.esc(fmtStamp(p.imgUpdated))}${p.imgBy ? ` (${ctx.esc(p.imgBy)})` : ""}.` : ""].filter(Boolean).join(" "))}
         ${row("Kategori hos butikken", ctx.esc(p.shopCat))}
         ${row("Datablad", p.datasheet ? `<a href="${ctx.esc(p.datasheet)}" target="_blank" rel="noopener">Åpne PDF ↗</a>` : "")}
       </table>
@@ -998,7 +1007,7 @@ function openPart(id) {
         <label>Antall igjen (stk)<input id="pd-left" type="number" min="0" max="10000000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
         <label>Plassering<input id="pd-loc" type="text" maxlength="80" value="${ctx.esc(p.location)}" placeholder="F.eks. Skuff 3, verkstedet" ${mine ? "" : "disabled"}></label>
         <label class="pd-note">Notat<textarea id="pd-note" rows="2" maxlength="400" ${mine ? "" : "disabled"}>${ctx.esc(p.note)}</textarea></label>
-        <label class="cat-toggle pd-imgwrong"><input type="checkbox" id="pd-imgwrong"${p.imgWrong ? " checked" : ""}${mine ? "" : " disabled"}> Feil bilde – finn riktig bilde ved neste bildesøk</label>
+        <label class="cat-toggle pd-imgwrong"><input type="checkbox" id="pd-imgwrong"${p.imgWrong ? " checked" : ""}${mine ? "" : " disabled"}> Feil bilde – finn riktig bilde ved neste bildesøk${p.imgWrong ? ` <span class="hint">(merket ${ctx.esc(fmtStamp(p.imgWrongAt))}${imgFixed(p) ? `; bildet ble byttet ${ctx.esc(fmtStamp(p.imgUpdated))}${p.imgBy ? ` av ${ctx.esc(p.imgBy)}` : ""} – fjern krysset hvis det nå er riktig` : "; ikke byttet ennå"})</span>` : ""}</label>
         <label class="pd-note">Bilde (lenke fra AliExpress, LCSC eller Mouser; tom = ingen bilde)<input id="pd-img" type="url" maxlength="400" value="${ctx.esc(p.image)}" placeholder="https://ae-pic-a1.aliexpress-media.com/kf/….jpg" ${mine ? "" : "disabled"}></label>
       </div>
       ${mine ? "" : `<p class="hint">Bare ${ctx.esc(p.owner)} kan endre denne varen.</p>`}
@@ -1028,13 +1037,14 @@ function openPart(id) {
     if (imgIn !== p.image) {
       const img = safeImg(imgIn.replace(/_\d+x\d+\.(jpg|png|webp)$/i, ""));
       if (imgIn && !img) { ctx.setSync("Bildelenken må være fra AliExpress, LCSC eller Mouser.", true); }
-      else { p.image = img; p.imgSearch = false; p.imgManual = true; p.imgWrong = false; }
+      else { p.image = img; p.imgSearch = false; p.imgManual = true; p.imgUpdated = new Date().toISOString(); p.imgBy = meName(); }
     }
     try { await saveOne(p); ctx.setSync("Lagret"); } catch (err) { ctx.setSync(err.message, true); }
   };
   dlg.onchange = async (e) => {
     if (e.target.id !== "pd-imgwrong" || !mine) return;
     p.imgWrong = e.target.checked;
+    p.imgWrongAt = p.imgWrong ? new Date().toISOString() : "";
     render();
     try { await saveOne(p); ctx.setSync(p.imgWrong ? "Merket som feil bilde" : "Lagret"); }
     catch (err) { e.target.checked = !e.target.checked; p.imgWrong = e.target.checked; ctx.setSync(err.message, true); }
@@ -1076,7 +1086,7 @@ export function initParts(context) {
       for (const q of drafts) { q.status = "open"; q.at = new Date().toISOString(); }
       try { await saveReqs(drafts); ctx.setSync(`${drafts.length} ønsker sendt`); } catch (err) { ctx.setSync(err.message, true); }
     } else if (t.dataset.pclear !== undefined) {
-      Object.assign(pstate, { cat: "", sub: "", owner: "", source: "", pkg: "", show: "all" });
+      Object.assign(pstate, { cat: "", sub: "", owner: "", source: "", pkg: "", imgf: "", show: "all" });
       shown = PAGE;
       render();
     } else if (t.dataset.pf) {
