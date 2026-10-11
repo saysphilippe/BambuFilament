@@ -1398,6 +1398,7 @@ function demoParts() {
     ["18650 Battery Charger Module TP4056 USB-C", "", 10, 4.2, "2026-02-17"],
     ["100PCS 2N2222 NPN Transistor TO-92 2N2222A", "", 1, 19.5, "2026-01-20"],
     ["10PCS IRLZ44N Logic Level N-Channel MOSFET TO-220", "", 1, 48.0, "2026-01-20"],
+    ["100PCS 2N7002 SOT-23 N-Channel MOSFET 7002", "", 1, 12.0, "2026-01-20"],
     ["20PCS NE555 Timer IC DIP-8", "", 1, 22.0, "2025-12-02"],
     ["AMS1117-3.3 Voltage Regulator SOT-223 50pcs", "", 1, 18.0, "2025-11-11"],
     ["GY-BME280 Temperature Humidity Pressure Sensor Module I2C", "3.3V", 2, 39.0, "2025-10-05"],

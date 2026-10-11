@@ -8,6 +8,7 @@ const files = {
   "index.html": [/(app\.js|style\.css)(\?v=\w+)?"/g, (_, f) => `${f}?v=${v}"`],
   "app.js": [/from "\.\/((?:worker\/src\/)?(?:bambu|auth|records|parts|messages))\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
   "parts.js": [/from "\.\/(circuits|packages|pack|categories|footprints)\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
+  "circuits.js": [/from "\.\/(footprints)\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
   "messages.js": [/from "\.\/(auth)\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
 };
 for (const [file, [re, fn]] of Object.entries(files)) {

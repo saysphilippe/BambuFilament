@@ -5,20 +5,24 @@
 // pinnerekkefølge. Skjemaene er inline SVG med currentColor, så de virker i lyst og mørkt tema.
 // Stil: strøm øverst, jord nederst, signal fra venstre mot høyre, verdier på alle deler.
 
+import { kicadName } from "./footprints.js?v=20261009202254";
+
 // ---------- Delenummer ----------
 
 // Mønstre for delenumre vi kjenner igjen, med type og pinnerekkefølge.
 // pins: rekkefølgen sett forfra (TO-92: flat side mot deg, bena ned; TO-220: forsiden, bena ned).
+// alt: andre pakker med samme navn og annen pinnerekkefølge (re testes mot delenummeret i treffet,
+// eller pkg mot pakken i tittelen), f.eks. MMBT3904 (SOT-23, B-E-C) mot 2N3904 (TO-92, E-B-C).
 const PARTS = [
   // NPN
-  [/\b(PN2222A?|2N2222A?|MMBT2222A?)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], note: "Opptil 600 mA. MMBT2222 er SOT-23: 1 = B, 2 = E, 3 = C." }],
-  [/\b(2N3904|MMBT3904)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], note: "Opptil 200 mA." }],
+  [/\b(PN2222A?|2N2222A?|MMBT2222A?)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], alt: [{ re: /^MMBT/i, pkg: "SOT-23", pins: ["B", "E", "C"] }], note: "Opptil 600 mA." }],
+  [/\b(2N3904|MMBT3904)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], alt: [{ re: /^MMBT/i, pkg: "SOT-23", pins: ["B", "E", "C"] }], note: "Opptil 200 mA." }],
   [/\b(BC54[6-9][A-C]?|BC33[78](-\d+)?)\b/i, { kind: "npn", pkg: "TO-92", pins: ["C", "B", "E"], note: "Opptil 100 mA (BC337: 800 mA). Merk: C-B-E, motsatt av 2N2222." }],
   [/\b(S8050|S9013|S9014|S9018|SS8050)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], note: "S8050: opptil 500 mA." }],
   [/\b(TIP12[0-2]|TIP3[15][A-C]?|TIP41[A-C]?|BD13[5-9]|MJE13005)\b/i, { kind: "npn", pkg: "TO-220", pins: ["B", "C", "E"], note: "Effekttransistor. TIP120–122 er Darlington (ca. 1,4 V fall B–E)." }],
   [/\b2SC\d{3,4}\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "C", "B"], note: "Japanske 2SC-transistorer har ofte E-C-B. Sjekk databladet." }],
   // PNP
-  [/\b(2N3906|MMBT3906)\b/i, { kind: "pnp", pkg: "TO-92", pins: ["E", "B", "C"], note: "Opptil 200 mA." }],
+  [/\b(2N3906|MMBT3906)\b/i, { kind: "pnp", pkg: "TO-92", pins: ["E", "B", "C"], alt: [{ re: /^MMBT/i, pkg: "SOT-23", pins: ["B", "E", "C"] }], note: "Opptil 200 mA." }],
   [/\b(2N2907A?)\b/i, { kind: "pnp", pkg: "TO-92", pins: ["E", "B", "C"], note: "Opptil 600 mA." }],
   [/\b(BC55[6-9][A-C]?|BC32[78](-\d+)?)\b/i, { kind: "pnp", pkg: "TO-92", pins: ["C", "B", "E"], note: "Merk: C-B-E." }],
   [/\b(S8550|S9012|S9015|SS8550)\b/i, { kind: "pnp", pkg: "TO-92", pins: ["E", "B", "C"], note: "S8550: opptil 500 mA." }],
@@ -26,11 +30,11 @@ const PARTS = [
   // N-MOSFET
   [/\b(IRLZ44N?|IRLZ34N?|IRLB8721|IRL540N?|IRL3705N?|IRLR7843)\b/i, { kind: "nmos", pkg: "TO-220", pins: ["G", "D", "S"], logic: true, note: "Logikknivå: slår helt på med 3,3–5 V på gate." }],
   [/\b(IRF520N?|IRF540N?|IRFZ44N?|IRF3205|IRF840|FQP\d+N\d+\w*|IRFP\d+|IRF1404)\b/i, { kind: "nmos", pkg: "TO-220", pins: ["G", "D", "S"], logic: false, note: "Ikke logikknivå: trenger ca. 10 V på gate for å slå helt på. Fra 3,3 V blir den varm. Bruk IRLZ44N eller en gate-driver." }],
-  [/\b(AO3400A?|SI2302|SI2300|A2SHB|AO3402)\b/i, { kind: "nmos", pkg: "SOT-23", pins: ["G", "S", "D"], logic: true, note: "Logikknivå, SMD. Pinne 1 = G, 2 = S, 3 = D." }],
-  [/\b(2N7000\w*|2N7002\w*)\b/i, { kind: "nmos", pkg: "TO-92", pins: ["S", "G", "D"], logic: true, note: "Små laster, opptil 200 mA. 2N7002 er SOT-23." }],
+  [/\b(AO3400A?|SI2302|SI2300|A2SHB|AO3402)\b/i, { kind: "nmos", pkg: "SOT-23", pins: ["G", "S", "D"], logic: true, note: "Logikknivå, SMD." }],
+  [/\b(2N7000\w*|2N7002\w*)\b/i, { kind: "nmos", pkg: "TO-92", pins: ["S", "G", "D"], alt: [{ re: /^2N7002/i, pkg: "SOT-23", pins: ["G", "S", "D"] }], logic: true, note: "Små laster, opptil 200 mA." }],
   [/\bBS170\b/i, { kind: "nmos", pkg: "TO-92", pins: ["D", "G", "S"], logic: true, note: "Merk: D-G-S, motsatt av 2N7000." }],
   // P-MOSFET
-  [/\b(AO3401A?|SI2301|A1SHB|AO3407)\b/i, { kind: "pmos", pkg: "SOT-23", pins: ["G", "S", "D"], note: "P-kanal, SMD. Pinne 1 = G, 2 = S, 3 = D." }],
+  [/\b(AO3401A?|SI2301|A1SHB|AO3407)\b/i, { kind: "pmos", pkg: "SOT-23", pins: ["G", "S", "D"], note: "P-kanal, SMD." }],
   [/\b(IRF9540N?|IRF9Z34N?|IRF4905|IRF5305)\b/i, { kind: "pmos", pkg: "TO-220", pins: ["G", "D", "S"], note: "P-kanal, ikke logikknivå." }],
   // Spenningsregulatorer
   [/\b(L?M?78(0[5-9]|1[25]|24)|LM78\d\d|L78\d\d)\b/i, { kind: "reg78", pkg: "TO-220", pins: ["IN", "GND", "OUT"], note: "Inn minst ca. 2 V over utgangen. Effekttap = (Vinn − Vut) × strøm, så bruk kjøleribbe." }],
@@ -45,13 +49,13 @@ const PARTS = [
   [/\b(1N58(1[7-9])|SS(1[0-9]|3[0-9]|5[0-9])|SB560|SR560)\b/i, { kind: "schottky", pkg: "DO-41/SMA", pins: ["A", "K"], note: "Schottky: lavt spenningsfall (ca. 0,3–0,5 V). Stripen er katoden." }],
   [/\b(1N4148\w*|LL4148)\b/i, { kind: "signaldiode", pkg: "DO-35", pins: ["A", "K"], note: "Signaldiode, opptil 300 mA. Stripen er katoden." }],
   // Flere transistorer og MOSFET-er
-  [/\b(MMBT4401|2N4401|2N5551|MMBT5551)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], note: "Opptil 600 mA. MMBT-versjonen er SOT-23: 1 = B, 2 = E, 3 = C." }],
-  [/\b(BC8[14][67]\w*)\b/i, { kind: "npn", pkg: "SOT-23", pins: ["B", "E", "C"], note: "SMD-utgaven av BC547/BC337. Pinne 1 = B, 2 = E, 3 = C." }],
-  [/\b(2N4403|2N5401|MMBT4403|MMBT5401)\b/i, { kind: "pnp", pkg: "TO-92", pins: ["E", "B", "C"], note: "PNP. MMBT-versjonen er SOT-23: 1 = B, 2 = E, 3 = C." }],
-  [/\b(BC8[05][67]\w*)\b/i, { kind: "pnp", pkg: "SOT-23", pins: ["B", "E", "C"], note: "PNP, SMD. Pinne 1 = B, 2 = E, 3 = C." }],
+  [/\b(MMBT4401|2N4401|2N5551|MMBT5551)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], alt: [{ re: /^MMBT/i, pkg: "SOT-23", pins: ["B", "E", "C"] }], note: "Opptil 600 mA." }],
+  [/\b(BC8[14][67]\w*)\b/i, { kind: "npn", pkg: "SOT-23", pins: ["B", "E", "C"], note: "SMD-utgaven av BC547/BC337." }],
+  [/\b(2N4403|2N5401|MMBT4403|MMBT5401)\b/i, { kind: "pnp", pkg: "TO-92", pins: ["E", "B", "C"], alt: [{ re: /^MMBT/i, pkg: "SOT-23", pins: ["B", "E", "C"] }], note: "PNP." }],
+  [/\b(BC8[05][67]\w*)\b/i, { kind: "pnp", pkg: "SOT-23", pins: ["B", "E", "C"], note: "PNP, SMD." }],
   [/\b(IRFZ34N?\w*|IRF710\w*|IRF3710\w*|IRF2907Z?\w*|IRF530N?\w*)\b/i, { kind: "nmos", pkg: "TO-220", pins: ["G", "D", "S"], logic: false, note: "Ikke logikknivå: trenger ca. 10 V på gate for å slå helt på." }],
   [/\b(FQP47P06|FQP27P06|NDP6020P|IRF9530N?)\b/i, { kind: "pmos", pkg: "TO-220", pins: ["G", "D", "S"], note: "P-kanal effekt-MOSFET. NDP6020P er logikknivå (slår på ved ca. −4,5 V på gate)." }],
-  [/\b(DMP2045U\w*|DMG3415U\w*|DMP3098L\w*)\b/i, { kind: "pmos", pkg: "SOT-23", pins: ["G", "S", "D"], note: "P-kanal, logikknivå, SMD. Pinne 1 = G, 2 = S, 3 = D." }],
+  [/\b(DMP2045U\w*|DMG3415U\w*|DMP3098L\w*)\b/i, { kind: "pmos", pkg: "SOT-23", pins: ["G", "S", "D"], note: "P-kanal, logikknivå, SMD." }],
   // Tyristorer og triacer
   [/\b(2N506[0-4]|BT169\w*|MCR100\w*|MCR22\w*|PCR406\w*|CR02AM)\b/i, { kind: "scr", pkg: "TO-92", pins: ["K", "G", "A"], note: "Følsom tyristor (SCR): tenner på ca. 0,2 mA gatestrøm og holder seg på til strømmen gjennom den brytes." }],
   [/\b(BT151\w*|BT152\w*|TYN6\d\d\w*|TYN1\d\d\d\w*|C106\w*|S6006\w*)\b/i, { kind: "scr", pkg: "TO-220", pins: ["K", "A", "G"], note: "Effekt-tyristor. Merk: K-A-G på TO-220 (C106 i TO-126 har samme rekkefølge)." }],
@@ -121,9 +125,77 @@ export function findPart(title, mpn = "") {
   for (const [re, info] of PARTS) {
     const m = text.match(re);
     // Treff på en beskrivelse («relay module», «servo motor») vises med et norsk navn i stedet.
-    if (m) return { mpn: /\s/.test(m[0].trim()) ? PHRASE_NAME[info.kind] || m[0].trim() : m[0].toUpperCase(), ...info };
+    if (!m) continue;
+    const mpn = /\s/.test(m[0].trim()) ? PHRASE_NAME[info.kind] || m[0].trim() : m[0].toUpperCase();
+    const out = { mpn, ...info };
+    // Samme navn i en annen pakke (MMBT3904 i SOT-23, eller «SOT-23» i tittelen): annen pinnerekkefølge.
+    const v = (info.alt || []).find((a) => a.re.test(mpn) || new RegExp(`\\b${a.pkg.replace("-", "-?")}\\b`, "i").test(text));
+    if (v) Object.assign(out, { pkg: v.pkg, pins: v.pins });
+    // De andre variantene (inkludert hovedvarianten) vises som advarsel.
+    out.variants = [{ pkg: info.pkg, pins: info.pins }, ...(info.alt || [])].filter((a) => a.pkg !== out.pkg || a.pins.join() !== out.pins.join());
+    return out;
   }
   return null;
+}
+
+// ---------- KiCad: symbol, fotavtrykk og pinnenumre ----------
+//
+// KiCad kobler symbolets pinnenummer til padden med samme nummer i fotavtrykket. Velger man et
+// symbol med feil rekkefølge, blir bena byttet selv om fotavtrykket er riktig. De generiske
+// symbolene i Device-biblioteket har rekkefølgen i navnet: Q_NMOS_GSD = pinne 1 G, 2 S, 3 D.
+const KICAD_KIND = { npn: "Q_NPN", pnp: "Q_PNP", nmos: "Q_NMOS", pmos: "Q_PMOS", scr: "Q_SCR", triac: "Q_Triac" };
+const PIN_NAME = { B: "Base", C: "Collector", E: "Emitter", G: "Gate", D: "Drain", S: "Source", K: "Katode", A: "Anode", MT1: "MT1 (A1)", MT2: "MT2 (A2)" };
+// Hvordan komponenten holdes når pinnene telles fra 1.
+const PKG_VIEW = {
+  "TO-92": "Flat side mot deg, bena ned: pinne 1 er til venstre.",
+  "TO-220": "Teksten mot deg, kjøleflaten bak, bena ned: pinne 1 er til venstre.",
+  "TO-126": "Teksten mot deg, bena ned: pinne 1 er til venstre.",
+  "TO-247": "Teksten mot deg, bena ned: pinne 1 er til venstre.",
+  "SOT-23": "Sett ovenfra med to ben ned: pinne 1 nede til venstre, 2 nede til høyre, 3 alene oppe. I KiCad-fotavtrykket er den dreid: 1 og 2 til venstre, 3 til høyre.",
+};
+// Ferdige symboler i KiCad-bibliotekene, med pakken de er laget for. Brukes bare når pakken stemmer
+// (et 2N3904-symbol har TO-92-rekkefølgen og passer ikke til en 2N3904 i SOT-23).
+const KICAD_SYMBOL = {
+  "2N3904": ["Transistor_BJT:2N3904", "TO-92"], "2N3906": ["Transistor_BJT:2N3906", "TO-92"], "PN2222A": ["Transistor_BJT:PN2222A", "TO-92"],
+  "BC547": ["Transistor_BJT:BC547", "TO-92"], "BC557": ["Transistor_BJT:BC557", "TO-92"], "BC337": ["Transistor_BJT:BC337", "TO-92"], "BC327": ["Transistor_BJT:BC327", "TO-92"],
+  "MMBT3904": ["Transistor_BJT:MMBT3904", "SOT-23"], "MMBT3906": ["Transistor_BJT:MMBT3906", "SOT-23"], "BC817": ["Transistor_BJT:BC817", "SOT-23"], "BC807": ["Transistor_BJT:BC807", "SOT-23"],
+  "TIP120": ["Transistor_BJT:TIP120", "TO-220"], "TIP125": ["Transistor_BJT:TIP125", "TO-220"],
+  "2N7000": ["Transistor_FET:2N7000", "TO-92"], "2N7002": ["Transistor_FET:2N7002", "SOT-23"], "BS170": ["Transistor_FET:BS170", "TO-92"],
+  "AO3400A": ["Transistor_FET:AO3400A", "SOT-23"], "AO3401A": ["Transistor_FET:AO3401A", "SOT-23"],
+};
+const pinKey = (pins) => pins.map((p) => ({ MT1: "A1", MT2: "A2" })[p] || p).join("");
+
+export function kicadPins(info) {
+  const base = KICAD_KIND[info?.kind];
+  if (!base || !info.pins?.length || info.pins.length !== 3) return null;
+  const sym = Object.entries(KICAD_SYMBOL).find(([k]) => info.mpn.replace(/-.*$/, "").startsWith(k))?.[1];
+  const known = sym && sym[1] === info.pkg ? sym[0] : "";
+  return {
+    generic: `Device:${base}_${pinKey(info.pins)}`,
+    known,
+    footprint: kicadName(info.pkg) || "",
+    view: PKG_VIEW[info.pkg] || "",
+    pins: info.pins.map((p, i) => ({ n: i + 1, pin: p, name: PIN_NAME[p] || p })),
+    variants: (info.variants || []).map((v) => ({ pkg: v.pkg, pins: v.pins, generic: `Device:${base}_${pinKey(v.pins)}` })),
+  };
+}
+
+function kicadHtml(info) {
+  const k = kicadPins(info);
+  if (!k) return "";
+  const code = (t) => `<code class="kicad-name">${esc(t)}</code>`;
+  return `<div class="kicad-box">
+    <h4>KiCad</h4>
+    <dl>
+      <dt>Symbol</dt><dd>${k.known ? `${code(k.known)} <span class="hint">eller</span> ` : ""}${code(k.generic)}</dd>
+      ${k.footprint ? `<dt>Fotavtrykk</dt><dd>${code(k.footprint)}</dd>` : ""}
+    </dl>
+    <table class="kicad-pins"><thead><tr><th>Pad / pinne</th>${k.pins.map((p) => `<th>${p.n}</th>`).join("")}</tr></thead>
+      <tbody><tr><th>${esc(info.pkg)}</th>${k.pins.map((p) => `<td><b>${esc(p.pin)}</b><span>${esc(p.name)}</span></td>`).join("")}</tr></tbody></table>
+    ${k.view ? `<p class="hint">${esc(k.view)}</p>` : ""}
+    <p class="hint">Bokstavene i det generiske symbolnavnet er pinne 1, 2 og 3. De må stemme med tabellen over, ellers blir bena byttet på kortet selv om fotavtrykket er riktig.</p>
+    ${k.variants.length ? `<p class="kicad-warn"><b>Obs:</b> ${k.variants.map((v) => `Samme type finnes i ${esc(v.pkg)} med rekkefølgen ${esc(v.pins.join("-"))} (${code(v.generic)}).`).join(" ")} Sjekk pakken og merkingen på komponenten.</p>` : ""}
+  </div>`;
 }
 
 function candidateMpns(title, mpn) {
@@ -847,6 +919,7 @@ export function componentInfo(part) {
     pkg: found?.pkg || "",
     pins: found?.pins || [],
     note: found?.note || "",
+    kicad: found ? kicadHtml(found) : "",
     circuit,
   };
 }
@@ -856,13 +929,14 @@ export function componentHtml(part) {
   const info = componentInfo(part);
   if (!info) return "";
   const pins = info.pins.length
-    ? `<div class="pinout"><span class="hint">${info.pkg ? `${esc(info.pkg)}, pinner ${/^(DIP|SO|TSSOP|MSOP)/.test(info.pkg) ? "sett ovenfra, mot klokka fra pinne 1" : "sett forfra"}:` : "Pinner på modulen:"}</span>${info.pins.map((p, i) => `<span class="pin"><b>${i + 1}</b>${esc(p)}</span>`).join("")}</div>`
+    ? `<div class="pinout"><span class="hint">${info.pkg ? `${esc(info.pkg)}, pinner ${/^SOT/.test(info.pkg) ? "sett ovenfra" : /^(DIP|SO|TSSOP|MSOP)/.test(info.pkg) ? "sett ovenfra, mot klokka fra pinne 1" : "sett forfra"}:` : "Pinner på modulen:"}</span>${info.pins.map((p, i) => `<span class="pin"><b>${i + 1}</b>${esc(p)}</span>`).join("")}</div>`
     : "";
   return `<section class="component-info">
     <h3>Datablad og kobling${info.mpn ? ` · <span class="mpn">${esc(info.mpn)}</span>` : ""}</h3>
     ${info.datasheets.length ? `<p class="ds-links">Datablad: ${info.datasheets.map((d) => `<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.label)} ↗</a>`).join(" · ")}${info.others.length ? ` <span class="hint">(fant også ${info.others.map(esc).join(", ")})</span>` : ""}</p>` : ""}
     ${pins}
     ${info.note ? `<p class="hint">${esc(info.note)}</p>` : ""}
+    ${info.kicad}
     ${info.circuit ? `<figure class="schematic-fig"><figcaption><b>${esc(info.circuit.title)}</b></figcaption><div class="schematic-wrap">${info.circuit.svg}</div><figcaption>${esc(info.circuit.caption)}</figcaption></figure>` : ""}
   </section>`;
 }

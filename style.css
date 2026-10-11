@@ -1024,3 +1024,19 @@ dialog label.msg-rcpt { display: flex; align-items: center; gap: 7px; margin: 0;
   .msg-to { grid-template-columns: 1fr; }
   .msg-time { margin-left: 0; width: 100%; }
 }
+
+/* KiCad: symbol, fotavtrykk og pinnenumre for transistorer */
+.kicad-box { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); min-width: 0; }
+.kicad-box h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.kicad-box dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 8px; font-size: 13px; }
+.kicad-box dt { color: var(--muted); }
+.kicad-box dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.kicad-name { font: 12.5px ui-monospace, Consolas, monospace; padding: 1px 5px; border-radius: 5px; background: var(--muted-bg); user-select: all; }
+.kicad-pins { border-collapse: collapse; margin: 4px 0 8px; font-size: 13px; }
+.kicad-pins th, .kicad-pins td { padding: 4px 12px; border: 1px solid var(--border); text-align: center; }
+.kicad-pins thead th { background: var(--muted-bg); font-variant-numeric: tabular-nums; }
+.kicad-pins tbody th { font-weight: 600; text-align: left; }
+.kicad-pins td b { display: block; font: 700 15px ui-monospace, Consolas, monospace; }
+.kicad-pins td span { display: block; font-size: 11px; color: var(--muted); }
+.kicad-box .hint { margin: 4px 0; }
+.kicad-warn { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--out) 14%, var(--surface)); font-size: 13px; }
