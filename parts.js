@@ -813,7 +813,7 @@ function render() {
         <div class="stats stats-side">
           <div class="stat"><b>${all.length.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
           <div class="stat"><b>${all.filter((p) => remaining(p) > 0).length.toLocaleString("nb-NO")}</b><span>har igjen</span></div>
-          ${totalNok && (ctx.DEMO || ctx.isAdmin?.()) ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.${noTotal.size ? ` For ${noTotal.size} ordre finnes ikke totalen lenger hos butikken (gamle AliExpress-ordre), så der er bare varene med, uten frakt.` : ""}`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca. (${allOrders.size.toLocaleString("nb-NO")} ordre${noTotal.size ? `, frakt mangler for ${noTotal.size}` : ", inkl. frakt"})</span></div>` : ""}
+          ${totalNok && (ctx.DEMO || (ctx.isAdmin?.() && !pstate.prefs[meName()]?.hideSpent)) ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.${noTotal.size ? ` For ${noTotal.size} ordre finnes ikke totalen lenger hos butikken (gamle AliExpress-ordre), så der er bare varene med, uten frakt.` : ""}`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca. (${allOrders.size.toLocaleString("nb-NO")} ordre${noTotal.size ? `, frakt mangler for ${noTotal.size}` : ", inkl. frakt"})</span></div>` : ""}
         </div>
         <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori</span><div class="chips">
           ${chip("cat", "", "Alle", undefined)}${cats.map(([id, name, n]) => chip("cat", id, name, n)).join("")}
@@ -1106,9 +1106,12 @@ export function partsSettingsHtml() {
     .sort((a, b) => (a === me ? -1 : b === me ? 1 : a.localeCompare(b, "nb")));
   const intro = `<h3>Komponenter: kategorier som vises</h3>
     <p class="hint">Hver bruker velger hvilke av sine egne kategorier som vises i komponentbiblioteket. Skjulte kategorier forsvinner fra listen, filtrene og tellingen for alle. Valget lagres i databasen.</p>`;
-  if (!pstate.loaded) return intro + `<p class="hint">Henter komponentene…</p>`;
-  if (!owners.length) return intro + `<p class="hint">Ingen har lest inn komponenter ennå.</p>`;
-  return intro + owners.map((owner) => {
+  const spent = ctx.isAdmin?.() ? `<h3>Komponenter: beløp betalt</h3>
+    <label class="cat-toggle"><input type="checkbox" data-showspent${pstate.prefs[me]?.hideSpent ? "" : " checked"}> Vis boksen «kr betalt» i komponentoversikten</label>
+    <p class="hint">Bare du som administrator ser boksen og denne innstillingen.</p>` : "";
+  if (!pstate.loaded) return spent + intro + `<p class="hint">Henter komponentene…</p>`;
+  if (!owners.length) return spent + intro + `<p class="hint">Ingen har lest inn komponenter ennå.</p>`;
+  return spent + intro + owners.map((owner) => {
     const hidden = hiddenFor(owner);
     const canEdit = ctx.DEMO || owner === me || ctx.isAdmin?.();
     const mine = pstate.parts.filter((p) => p.owner === owner);
@@ -1124,10 +1127,20 @@ export async function setCategoryShown(owner, id, shown) {
   if (!owner || !CAT_NAME[id]) return;
   const hidden = hiddenFor(owner);
   if (shown) hidden.delete(id); else hidden.add(id);
-  const pref = { hidden: [...hidden], updated: new Date().toISOString(), by: meName() };
+  const pref = { ...pstate.prefs[owner], hidden: [...hidden], updated: new Date().toISOString(), by: meName() };
   pstate.prefs[owner] = pref;
   render();
   if (!ctx.DEMO) await savePatch([{ coll: "partprefs", id: owner, data: pref }]);
+}
+
+// «kr betalt» i komponentoversikten: bare administrator ser den, og kan slå den av for seg selv.
+export async function setSpentShown(shown) {
+  const me = meName();
+  if (!me || !ctx.isAdmin?.()) return;
+  const pref = { ...pstate.prefs[me], hidden: [...hiddenFor(me)], hideSpent: !shown, updated: new Date().toISOString(), by: me };
+  pstate.prefs[me] = pref;
+  render();
+  if (!ctx.DEMO) await savePatch([{ coll: "partprefs", id: me, data: pref }]);
 }
 
 // Antallene i Innstillinger trenger komponentene; hent dem i bakgrunnen.

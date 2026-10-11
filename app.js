@@ -1,7 +1,7 @@
 import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009202254";
 import { toRecords } from "./worker/src/records.js?v=20261009202254";
 import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009202254";
-import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, loadParts } from "./parts.js?v=20261009202254";
+import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, setSpentShown, loadParts } from "./parts.js?v=20261009202254";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
 if (window.top !== window.self) {
@@ -3801,6 +3801,12 @@ $("#tab-loans").addEventListener("input", (e) => {
 });
 $("#tab-settings").addEventListener("change", (e) => {
   if (e.target.dataset.setting) saveSetting(e.target.dataset.setting, e.target);
+  if (e.target.hasAttribute("data-showspent")) {
+    const box = e.target;
+    setSpentShown(box.checked)
+      .then(() => setSync("Lagret"))
+      .catch((err) => { box.checked = !box.checked; setSync(err.message, true); });
+  }
   if (e.target.dataset.showcat) {
     const box = e.target;
     setCategoryShown(box.dataset.owner, box.dataset.showcat, box.checked)
