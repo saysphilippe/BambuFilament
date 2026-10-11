@@ -289,6 +289,56 @@ async function deleteParts(list) {
   if (!ctx.DEMO) await savePatch(list.map((p) => ({ id: p.id, data: { id: p.id, deleted: true, owner: p.owner, title: p.title.slice(0, 80), deletedAt: now, by } })));
 }
 
+// ---------- Forstørret fotavtrykk og koblingsskjema ----------
+// Eget vindu over produktvinduet. Zoom med knappene, Ctrl/⌘ + hjul eller to fingre (nettleseren).
+const FP_ZOOMS = [1, 1.5, 2, 3, 4];
+function openFootprintZoom(pkg, hint) {
+  const name = kicadName(pkg, hint);
+  openZoom(`<b>${ctx.esc(pkg)}</b>${name ? `<br><code class="kicad-name">${ctx.esc(name)}</code>` : ""}`, footprintSvg(pkg, 600, { detail: true }),
+    `<p class="hint">${ctx.esc(footprintCaption(pkg, hint))}</p><span class="fp-legend"><i class="cu"></i>F.Cu <i class="silk"></i>F.SilkS <i class="drill"></i>Drill</span>`, true);
+}
+// head, svg og foot er ferdig escapet HTML (svg er laget av egen kode).
+function openZoom(head, svg, foot, light) {
+  let dlg = document.getElementById("fp-zoom");
+  if (!dlg) {
+    dlg = document.createElement("dialog");
+    dlg.id = "fp-zoom";
+    dlg.className = "fp-zoom-dialog";
+    document.body.append(dlg);
+    dlg.addEventListener("click", (e) => {
+      const z = e.target.closest("[data-fpz]");
+      if (z) return setZoom(dlg, Number(dlg.dataset.z || 0) + Number(z.dataset.fpz));
+      if (e.target.closest("[data-fpzclose]") || e.target === dlg) dlg.close();
+    });
+    dlg.addEventListener("wheel", (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      setZoom(dlg, Number(dlg.dataset.z || 0) + (e.deltaY < 0 ? 1 : -1));
+    }, { passive: false });
+  }
+  dlg.innerHTML = `<div class="fpz-head">
+      <div>${head}</div>
+      <div class="fpz-tools">
+        <button type="button" class="icon-btn" data-fpz="-1" aria-label="Zoom ut" title="Zoom ut">−</button>
+        <span class="fpz-level" aria-live="polite"></span>
+        <button type="button" class="icon-btn" data-fpz="1" aria-label="Zoom inn" title="Zoom inn">+</button>
+        <button type="button" class="icon-btn" data-fpzclose aria-label="Lukk" title="Lukk"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+    </div>
+    <div class="fpz-stage${light ? " light" : ""}">${svg}</div>
+    ${foot}`;
+  setZoom(dlg, 0);
+  dlg.showModal();
+}
+function setZoom(dlg, i) {
+  i = Math.max(0, Math.min(FP_ZOOMS.length - 1, i));
+  dlg.dataset.z = i;
+  dlg.style.setProperty("--fpz", FP_ZOOMS[i]);
+  dlg.querySelector(".fpz-level").textContent = `${Math.round(FP_ZOOMS[i] * 100)} %`;
+  dlg.querySelector('[data-fpz="-1"]').disabled = i === 0;
+  dlg.querySelector('[data-fpz="1"]').disabled = i === FP_ZOOMS.length - 1;
+}
+
 async function savePatch(ops, onProgress) {
   for (let i = 0; i < ops.length; i += PATCH_CHUNK) {
     await ctx.dbCall("/db/patch", { ops: ops.slice(i, i + PATCH_CHUNK).map((o) => ({ coll: o.coll || "parts", id: o.id, data: o.data })) });
@@ -1089,7 +1139,7 @@ function openPart(id) {
         ${row("Status", ctx.esc(p.status))}
         ${row("Produsent", ctx.esc(p.maker))}
         ${row("Delenummer", ctx.esc(p.mpn))}
-        ${row("Pakke", p.pkg ? `<span class="pkg-row">${footprintSvg(p.pkg, 150, { detail: true }) || packageSvg(p.pkg, 64)}<span><b>${ctx.esc(p.pkg)}</b><br><span class="hint">${ctx.esc(packageInfo(p.pkg))}</span>${kicadName(p.pkg, kicadHint(p)) ? `<br><code class="kicad-name" title="Fotavtrykk i KiCads standardbibliotek">${ctx.esc(kicadName(p.pkg, kicadHint(p)))}</code>` : ""}${footprintCaption(p.pkg) ? `<br><span class="hint fp-cap">${ctx.esc(footprintCaption(p.pkg, kicadHint(p)))}</span><span class="fp-legend"><i class="cu"></i>F.Cu <i class="silk"></i>F.SilkS <i class="drill"></i>Drill</span>` : ""}</span></span>` : "")}
+        ${row("Pakke", p.pkg ? `<span class="pkg-row">${footprintSvg(p.pkg, 150, { detail: true }) ? `<button type="button" class="fp-zoom-btn" data-fpzoom="${ctx.esc(p.pkg)}" title="Trykk for å forstørre" aria-label="Forstørr fotavtrykket for ${ctx.esc(p.pkg)}">${footprintSvg(p.pkg, 150, { detail: true })}<span class="fp-zoom-icon" aria-hidden="true">⤢</span></button>` : packageSvg(p.pkg, 64)}<span><b>${ctx.esc(p.pkg)}</b><br><span class="hint">${ctx.esc(packageInfo(p.pkg))}</span>${kicadName(p.pkg, kicadHint(p)) ? `<br><code class="kicad-name" title="Fotavtrykk i KiCads standardbibliotek">${ctx.esc(kicadName(p.pkg, kicadHint(p)))}</code>` : ""}${footprintCaption(p.pkg) ? `<br><span class="hint fp-cap">${ctx.esc(footprintCaption(p.pkg, kicadHint(p)))}</span><span class="fp-legend"><i class="cu"></i>F.Cu <i class="silk"></i>F.SilkS <i class="drill"></i>Drill</span>` : ""}</span></span>` : "")}
         ${row("Beskrivelse", ctx.esc(p.description))}
         ${row("Produktside", p.url ? `<a href="${ctx.esc(p.url)}" target="_blank" rel="noopener">Åpne hos ${ctx.esc(SOURCE_LABEL[p.source])} ↗</a>` : "")}
         ${row("Bilde", [p.imgSearch ? "Fra en lignende vare. Originalen er fjernet hos AliExpress." : "", p.imgUpdated ? `Sist byttet ${ctx.esc(fmtStamp(p.imgUpdated))}${p.imgBy ? ` (${ctx.esc(p.imgBy)})` : ""}.` : ""].filter(Boolean).join(" "))}
@@ -1182,6 +1232,14 @@ function openPart(id) {
       try { await saveOne(p); ctx.setSync(iw.dataset.imgweb === "ok" ? "Bildet er godkjent" : "Merket som feil bilde"); dlg.close(""); openPart(p.id); }
       catch (err) { ctx.setSync(err.message, true); }
       return;
+    }
+    const fz = e.target.closest("[data-fpzoom]");
+    if (fz) return openFootprintZoom(fz.dataset.fpzoom, kicadHint(p));
+    const sch = e.target.closest(".schematic-fig .schematic-wrap");
+    if (sch) {
+      const fig = sch.closest(".schematic-fig");
+      const [title, caption] = [...fig.querySelectorAll("figcaption")].map((f) => f.textContent.trim());
+      return openZoom(`<b>${ctx.esc(title || "Koblingsskjema")}</b>`, sch.innerHTML, caption ? `<p class="hint">${ctx.esc(caption)}</p>` : "", false);
     }
     const sib = e.target.closest("[data-sibling]");
     if (sib) { dlg.close(""); openPart(sib.dataset.sibling); return; }
