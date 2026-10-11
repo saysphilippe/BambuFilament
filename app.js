@@ -1832,7 +1832,7 @@ function renderSettings() {
     ${field("postenFeeHigh", "Posten: fortolling over 3000 kr", "Postens gebyr over 3000 kr. Pakken må da ofte hentes.", "kr")}
     ${field("dhlFee", "DHL: fortollingsgebyr", "Anslag hvis DHL leverer selv (utlegg av mva). Sjekk fakturaen fra DHL.", "kr")}
     ${field("eurRate", "Eurokurs (reserve)", `Brukes bare når eurokursen fra Norges Bank mangler. Nå brukes ${state.store?.fx ? `Norges Banks kurs ${String(state.store.fx.eurNok).replace(".", ",")}` : "denne"}.`, "kr per euro")}
-    ${partsSettingsHtml()}
+    <div id="parts-settings">${partsSettingsHtml()}</div>
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;
   // Antall per kategori: hent komponentene og tegn på nytt når de er klare.
@@ -3801,9 +3801,9 @@ $("#tab-loans").addEventListener("input", (e) => {
 });
 $("#tab-settings").addEventListener("change", (e) => {
   if (e.target.dataset.setting) saveSetting(e.target.dataset.setting, e.target);
-  if (e.target.hasAttribute("data-showspent")) {
+  if (e.target.hasAttribute("data-hidespent")) {
     const box = e.target;
-    setSpentShown(box.checked)
+    setSpentShown(!box.checked)
       .then(() => setSync("Lagret"))
       .catch((err) => { box.checked = !box.checked; setSync(err.message, true); });
   }
@@ -3832,7 +3832,13 @@ document.querySelector(".sections").addEventListener("click", (e) => {
   const b = e.target.closest(".section-btn");
   if (b) showSection(b.dataset.section);
 });
-initParts({ $, esc, dbCall, token, userName, userColor, setSync, DEMO, showSection, store, isAdmin });
+// Innstillinger fra komponentdelen: bytt til fanen Innstillinger og hopp til komponentvalgene.
+const openSettings = () => {
+  state.tab = "settings";
+  showSection("filament");
+  requestAnimationFrame(() => $("#parts-settings")?.scrollIntoView({ block: "start" }));
+};
+initParts({ $, esc, dbCall, token, userName, userColor, setSync, DEMO, showSection, store, isAdmin, openSettings });
 store("bf.hiddenCats", ""); // skjulte kategorier lå tidligere i nettleseren; nå i databasen per eier
 $("#ams-me").addEventListener("change", (e) => e.target.dataset.ams?.startsWith("share") && amsAction(e.target.dataset.ams, e.target));
 $("#bambu form").addEventListener("submit", bambuSubmit);

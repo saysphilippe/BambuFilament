@@ -183,7 +183,7 @@ async function loadNow() {
     pstate.parts = (parts?.parts || []).map(cleanPart).filter(Boolean);
     pstate.reqs = (parts?.requests || []).map(cleanReq).filter(Boolean);
     pstate.prefs = Object.fromEntries(Object.entries(parts?.prefs || {})
-      .filter(([o, v]) => o && v && Array.isArray(v.hidden)).map(([o, v]) => [String(o).slice(0, 40), { hidden: v.hidden.map(String).slice(0, 40) }]));
+      .filter(([o, v]) => o && v && Array.isArray(v.hidden)).map(([o, v]) => [String(o).slice(0, 40), { hidden: v.hidden.map(String).slice(0, 40), hideSpent: !!v.hideSpent }]));
     pstate.loaded = true;
   } catch (err) {
     pstate.error = err.message;
@@ -276,6 +276,7 @@ function subnav() {
     ${b("cart", `Handlekurv${n ? ` <span class="nav-n">${n}</span>` : ""}`)}
     ${b("requests", `Ønsket fra meg${m ? ` <span class="nav-n alert">${m}</span>` : ""}`)}
     ${b("import", "Importer")}
+    <button type="button" class="parts-tab" data-psettings>Innstillinger</button>
   </nav>`;
 }
 
@@ -1025,7 +1026,7 @@ export function initParts(context) {
   listenForImport();
   const root = ctx.$("#parts-root");
   root.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-pclear], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
+    const t = e.target.closest("[data-pf], [data-part], [data-pview], [data-pmore], [data-psettings], [data-pclear], [data-pimport], [data-reqact], [data-sendcart], [data-cartstep]");
     if (!t) return;
     if (t.dataset.cartstep) {
       try { await cartStep(t.dataset.pid, Number(t.dataset.cartstep)); } catch (err) { ctx.setSync(err.message, true); }
@@ -1046,6 +1047,7 @@ export function initParts(context) {
       shown = PAGE;
       render();
     } else if (t.dataset.part) openPart(t.dataset.part);
+    else if (t.hasAttribute("data-psettings")) ctx.openSettings?.();
     else if (t.dataset.pview) { pstate.view = t.dataset.pview; render(); }
     else if (t.hasAttribute("data-pmore")) { shown += PAGE * 2; render(); }
     else if (t.dataset.pimport === "mouser") {
@@ -1107,7 +1109,7 @@ export function partsSettingsHtml() {
   const intro = `<h3>Komponenter: kategorier som vises</h3>
     <p class="hint">Hver bruker velger hvilke av sine egne kategorier som vises i komponentbiblioteket. Skjulte kategorier forsvinner fra listen, filtrene og tellingen for alle. Valget lagres i databasen.</p>`;
   const spent = ctx.isAdmin?.() ? `<h3>Komponenter: beløp betalt</h3>
-    <label class="cat-toggle"><input type="checkbox" data-showspent${pstate.prefs[me]?.hideSpent ? "" : " checked"}> Vis boksen «kr betalt» i komponentoversikten</label>
+    <label class="cat-toggle"><input type="checkbox" data-hidespent${pstate.prefs[me]?.hideSpent ? " checked" : ""}> Skjul boksen «kr betalt» i komponentoversikten</label>
     <p class="hint">Bare du som administrator ser boksen og denne innstillingen.</p>` : "";
   if (!pstate.loaded) return spent + intro + `<p class="hint">Henter komponentene…</p>`;
   if (!owners.length) return spent + intro + `<p class="hint">Ingen har lest inn komponenter ennå.</p>`;
