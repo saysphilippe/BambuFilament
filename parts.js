@@ -150,6 +150,12 @@ const fmtMoney = (p) => {
 // Pris per stykk (kjøpt pris delt på pakkestørrelsen) og verdien av et ønske i kroner.
 const pieceMoney = (p) => (p && p.unitPrice !== null ? { unitPrice: p.unitPrice / (p.pack || 1), currency: p.currency } : null);
 const nok = (v) => `${Math.round(v).toLocaleString("nb-NO")} kr`;
+// Beløp slik butikken skrev det («kr 1 928,63», «42,52kr», «US $12.45») vises på samme måte som
+// resten av siden («1 928,63 kr»).
+const fmtTotal = (text) => {
+  const t = parsePrice(text);
+  return t.amount === null ? String(text || "") : fmtMoney({ unitPrice: t.amount, currency: t.currency || "NOK" });
+};
 const reqNok = (q) => {
   const p = pstate.parts.find((x) => x.id === q.partId), m = pieceMoney(p);
   return m ? m.unitPrice * q.qty * (FX_NOK[m.currency] || 1) : null;
@@ -978,7 +984,7 @@ function render() {
     } else if (p.unitPrice !== null) spent[p.currency || "NOK"] = (spent[p.currency || "NOK"] || 0) + p.unitPrice * p.qty;
   }
   const totalNok = Object.entries(spent).reduce((s, [c, v]) => s + v * (FX_NOK[c] || 1), 0);
-  const spentTip = Object.entries(spent).sort((a, b) => b[1] - a[1]).map(([c, v]) => `${Math.round(v).toLocaleString("nb-NO")} ${c}`).join(" + ");
+  const spentTip = Object.entries(spent).sort((a, b) => b[1] - a[1]).map(([c, v]) => c === "NOK" ? nok(v) : fmtMoney({ unitPrice: Math.round(v), currency: c }).replace(/[,.]00$/, "")).join(" + ");
   box.innerHTML = subnav() + `
     <div class="parts-layout">
       <aside class="parts-rail">
@@ -1128,7 +1134,7 @@ function openPart(id) {
       <h2>${ctx.esc(p.title)}</h2>
       ${p.variant ? `<p class="part-variant">${ctx.esc(p.variant)}</p>` : ""}
       <table class="part-facts${orderOpen ? " order-open" : ""}">
-        ${row("Kjøpt", `${p.pack > 1 ? `${ctx.esc(p.qty)} × ${ctx.esc(p.pack)} stk = <b>${units(p)} stk</b>` : `<b>${units(p)} stk</b>`}${fmtMoney(p) ? ` à ${ctx.esc(fmtMoney(p))}${p.pack > 1 ? ` (${ctx.esc(fmtMoney({ ...p, unitPrice: p.unitPrice / p.pack }))} per stk)` : ""}` : ""}${p.orderTotal ? ` · ordre totalt ${ctx.esc(p.orderTotal)}` : ""}`)}
+        ${row("Kjøpt", `${p.pack > 1 ? `${ctx.esc(p.qty)} × ${ctx.esc(p.pack)} stk = <b>${units(p)} stk</b>` : `<b>${units(p)} stk</b>`}${fmtMoney(p) ? ` à ${ctx.esc(fmtMoney(p))}${p.pack > 1 ? ` (${ctx.esc(fmtMoney({ ...p, unitPrice: p.unitPrice / p.pack }))} per stk)` : ""}` : ""}${p.orderTotal ? ` · ordre totalt ${ctx.esc(fmtTotal(p.orderTotal))}` : ""}`)}
         ${hasOrder ? `<tr class="order-toggle-row"><th></th><td><button type="button" class="linkbtn order-toggle" data-ordertoggle aria-expanded="${orderOpen}"><span class="order-show">Vis ordredetaljer ▾</span><span class="order-hide">Skjul ordredetaljer ▴</span></button> <span class="hint">eier, dato, butikk, ordrenummer, status</span></td></tr>` : ""}
         ${row("Eier", `<span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span> ${ctx.esc(p.owner || "Ukjent")}`, "order-row")}
         ${row("Dato", ctx.esc(fmtDate(p.orderDate)), "order-row")}
