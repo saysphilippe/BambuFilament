@@ -229,6 +229,9 @@ function applyCats(list) {
     CAT_NAME[id] = name;
   }
 }
+// Kategoriene alfabetisk (norsk sortering), med «Annet» til slutt. CATEGORIES selv beholder
+// rekkefølgen, fordi klassifiseringen bruker den ved likt antall poeng.
+const sortedCats = () => [...CATEGORIES].sort(([a, x], [b, y]) => (a === "other") - (b === "other") || x.localeCompare(y, "nb"));
 const isCustomCat = (id) => /^c_/.test(id);
 const slug = (t) => String(t).toLowerCase().normalize("NFKD").replace(/[æ]/g, "ae").replace(/[ø]/g, "o").replace(/[å]/g, "a").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 24);
 
@@ -906,7 +909,7 @@ function render() {
   const pkgCount = {};
   for (const p of all) if (p.pkg) pkgCount[p.pkg] = (pkgCount[p.pkg] || 0) + 1;
   const pkgs = Object.entries(pkgCount).sort((a, b) => b[1] - a[1]).slice(0, 18);
-  const cats = CATEGORIES.map(([id, name]) => [id, name, count("category", id)]);
+  const cats = sortedCats().map(([id, name]) => [id, name, count("category", id)]);
   const chip = (key, val, label, n, dot) => `<button class="chip${pstate[key] === val ? " active" : ""}${key === "cat" && val ? ` cat-drop${!n && !isCustomCat(val) ? " empty" : ""}` : ""}" type="button" data-pf="${key}" data-pv="${ctx.esc(val)}">${dot ? `<span class="owner-dot" style="--owner:${dot}"></span>` : ""}${ctx.esc(label)}${n !== undefined ? ` <span class="chip-n">${n}</span>` : ""}</button>`;
   // Betalt (vises bare for administrator): ordretotalen (inkl. frakt og avgifter) telles én gang per ordre, i alle valutaer.
   // Ordre uten total (Mouser, lagt inn for hånd) teller stykkpris × antall.
@@ -1094,7 +1097,7 @@ function openPart(id) {
         ${row("Datablad", p.datasheet ? `<a href="${ctx.esc(p.datasheet)}" target="_blank" rel="noopener">Åpne PDF ↗</a>` : "")}
       </table>
       <div class="part-edit">
-        <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${CATEGORIES.map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
+        <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${sortedCats().map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
         <label>Stk per pakke<input id="pd-pack" type="number" min="1" max="100000" value="${p.pack}" ${mine ? "" : "disabled"}></label>
         <label>Antall igjen (stk)<input id="pd-left" type="number" min="0" max="10000000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
         <label>Plassering<input id="pd-loc" type="text" maxlength="80" value="${ctx.esc(p.location)}" placeholder="F.eks. Skuff 3, verkstedet" ${mine ? "" : "disabled"}></label>
@@ -1340,7 +1343,7 @@ export function partsSettingsHtml() {
     const hidden = hiddenFor(owner);
     const canEdit = ctx.DEMO || owner === me || ctx.isAdmin?.();
     const mine = pstate.parts.filter((p) => p.owner === owner);
-    const cats = CATEGORIES.map(([id, name]) => [id, name, mine.filter((p) => p.category === id).length]).filter(([, , n]) => n);
+    const cats = sortedCats().map(([id, name]) => [id, name, mine.filter((p) => p.category === id).length]).filter(([, , n]) => n);
     return `<div class="cat-owner">
       <h4><span class="owner-dot" style="--owner:${ctx.userColor(owner)}"></span> ${ctx.esc(owner)} <span class="hint">${mine.length.toLocaleString("nb-NO")} varer${hidden.size ? `, ${hidden.size} ${hidden.size === 1 ? "kategori" : "kategorier"} skjult` : ""}${canEdit ? "" : " · bare " + ctx.esc(owner) + " kan endre"}</span></h4>
       <div class="cat-toggles">${cats.map(([id, name, n]) => `<label class="cat-toggle"><input type="checkbox" data-showcat="${id}" data-owner="${ctx.esc(owner)}"${hidden.has(id) ? "" : " checked"}${canEdit ? "" : " disabled"}> ${ctx.esc(name)} <span class="chip-n">${n}</span></label>`).join("")}</div>
