@@ -863,7 +863,7 @@ function filtered() {
     (!pstate.owner || p.owner === pstate.owner) &&
     (!pstate.source || p.source === pstate.source) &&
     (!pstate.pkg || p.pkg === pstate.pkg) &&
-    (!pstate.imgf || (pstate.imgf === "wrong" ? p.imgWrong && !imgFixed(p) : pstate.imgf === "web" ? p.imgWeb : imgFixed(p))) &&
+    (!pstate.imgf || !!IMG_FILTERS.find(([id]) => id === pstate.imgf)?.[2](p)) &&
     (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0)) &&
     matchesQ(p, q));
   const by = {
@@ -890,6 +890,16 @@ function groupParts(list) {
 const pickRep = (items) => [...items].sort((a, b) => remaining(b) - remaining(a) || b.orderDate.localeCompare(a.orderDate))[0];
 
 // «Feil bilde»: er bildet byttet etter at det ble merket? Da kan eieren sjekke det og fjerne krysset.
+// Bildefilteret: én test per valg (pstate.imgf).
+const IMG_FILTERS = [
+  ["none", "Mangler bilde", (p) => !p.image],
+  ["similar", "Lånt fra lignende vare", (p) => !!p.image && p.imgSearch],
+  ["search", "Funnet av bildesøk", (p) => p.imgBy === "bildesøk" && !!p.image],
+  ["locked", "Låst (satt for hånd)", (p) => p.imgManual],
+  ["wrong", "Feil bilde", (p) => p.imgWrong && !imgFixed(p)],
+  ["fixed", "Byttet – sjekk", (p) => imgFixed(p)],
+  ["web", "Fra nettet – godkjenn", (p) => p.imgWeb],
+];
 const imgFixed = (p) => p.imgWrong && !!p.imgUpdated && p.imgUpdated > (p.imgWrongAt || "");
 const fmtStamp = (iso) => (iso ? new Date(iso).toLocaleString("nb-NO", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
 
@@ -1027,7 +1037,10 @@ function render() {
           ${owners.length ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, count("owner", o), ctx.userColor(o))).join("")}</div></div>` : ""}
           <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "lcsc", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
           ${pkgs.length ? `<div class="chip-row"><span class="chip-label">Pakke</span><div class="chips">${chip("pkg", "", "Alle")}${pkgs.map(([k, n]) => chip("pkg", k, k, n)).join("")}</div></div>` : ""}
-          ${all.some((p) => p.imgWrong || p.imgWeb) ? `<div class="chip-row"><span class="chip-label">Bilde</span><div class="chips">${chip("imgf", "", "Alle")}${chip("imgf", "wrong", "Feil bilde", products(all.filter((p) => p.imgWrong && !imgFixed(p))))}${chip("imgf", "fixed", "Byttet – sjekk", products(all.filter(imgFixed)))}${chip("imgf", "web", "Fant ikke på AliExpress, fra nettet – godkjenn", products(all.filter((p) => p.imgWeb)))}</div></div>` : ""}
+          ${(() => {
+            const n = IMG_FILTERS.map(([id, label, test]) => [id, label, products(all.filter(test))]).filter(([id, , c]) => c || id === pstate.imgf);
+            return n.length ? `<div class="chip-row"><span class="chip-label">Bilde</span><div class="chips">${chip("imgf", "", "Alle")}${n.map(([id, label, c]) => chip("imgf", id, label, c)).join("")}</div></div>` : "";
+          })()}
         </section>
         ${pstate.loading ? `<p class="count">Henter komponenter…</p>` : pstate.error ? `<p class="notice">${ctx.esc(pstate.error)}</p>` : ""}
         ${!pstate.loading && !all.length ? `<section class="panel empty-parts"><h2>Ingen komponenter ennå</h2><p class="hint">Importer det du har kjøpt hos AliExpress eller Mouser, så havner alt her, sortert i kategorier.</p><button class="btn btn-primary" type="button" data-pview="import">Importer</button></section>` : ""}
