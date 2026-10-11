@@ -66,7 +66,7 @@ const LIMITS = {
   "/ams": "DATA_LIMIT", "/library": "DATA_LIMIT",
   "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
   "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/whois": "AUTH_LIMIT", "/msg-notify": "DATA_LIMIT", "/reset-token": "AUTH_LIMIT", "/approve": "AUTH_LIMIT",
-  "/inventory-key": "AUTH_LIMIT", "/octopart": "DATA_LIMIT",
+  "/inventory-key": "AUTH_LIMIT",
   "/db/load": "DB_LIMIT", "/db/patch": "DB_LIMIT", "/store/load": "DB_LIMIT", "/store/history": "DB_LIMIT", "/reader/card": "DB_LIMIT", "/reader/scan": "DB_LIMIT",
 };
 
@@ -87,8 +87,6 @@ export default {
     if (reqPath === "/store/ingest") return storeIngest(request, env);
     // Lageroversikt for Claude-skillen: egen lesenøkkel («ik_…»), ingen Origin.
     if (reqPath === "/inventory") return inventoryRequest(request, env);
-    // Octopart med Claude-nøkkel (fra skillen); fra siden går det via vanlig innlogging under.
-    if (reqPath === "/octopart" && /^Bearer\s+ik_/i.test(request.headers.get("Authorization") || "")) return octopartKeyRequest(request, env);
     if (request.method !== "POST") return json({ error: "Bruk POST" }, 405, origin);
     if (!allowed.includes(sent)) return json({ error: "Ukjent opprinnelse" }, 403, origin);
 
@@ -138,9 +136,6 @@ export default {
         case "/msg-notify":
           await requireUser(token, env);
           return json(await msgNotify(body, env), 200, origin);
-        case "/octopart":
-          await requireUser(token, env);
-          return json(await octopart(body, env), 200, origin);
         case "/inventory-key":
           await requireUser(token, env);
           return json(await inventoryKey(body, env), 200, origin);
@@ -1199,96 +1194,6 @@ async function inventoryKey({ name }, env) {
   const created = new Date().toISOString();
   await env.RESET_KV.put(`inv:${await sha256Hex(key)}`, JSON.stringify({ name: who, created }), { expirationTtl: INV_TTL_S });
   return { key, name: who, created, expires: new Date(Date.now() + INV_TTL_S * 1000).toISOString() };
-}
-
-// ---------- Octopart (Nexar API) ----------
-//
-// Oppslag på delenummer: bilde, datablad, produsent, beskrivelse, spesifikasjoner og tilbud hos
-// forhandlerne. Nøklene ligger som secrets (NEXAR_CLIENT_ID, NEXAR_CLIENT_SECRET). Uten dem svarer
-// endepunktet { configured: false }. Tilgangsnøkkelen og svarene bufres i KV, så gratiskvoten holder.
-const NEXAR_TOKEN_URL = "https://identity.nexar.com/connect/token";
-const NEXAR_API = "https://api.nexar.com/graphql";
-const OCTO_TTL_S = 30 * 86400;
-const OCTO_QUERY = `query ($q: String!, $limit: Int!) {
-  supSearchMpn(q: $q, limit: $limit) {
-    hits
-    results { part {
-      mpn
-      manufacturer { name }
-      shortDescription
-      octopartUrl
-      category { name }
-      bestImage { url }
-      bestDatasheet { url }
-      specs { attribute { name shortname } displayValue }
-      sellers { company { name } offers { sku inventoryLevel moq clickUrl prices { quantity price currency } } }
-    } }
-  }
-}`;
-
-async function nexarToken(env) {
-  const cached = await env.RESET_KV?.get("nexar-token");
-  if (cached) return cached;
-  const res = await fetch(NEXAR_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "client_credentials", client_id: String(env.NEXAR_CLIENT_ID).trim(), client_secret: String(env.NEXAR_CLIENT_SECRET).trim(), scope: "supply.domain" }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.access_token) {
-    // Nexars feilkode (invalid_client, invalid_scope …) sier hva som er galt; den inneholder ingen nøkler.
-    const why = { invalid_client: "feil Client ID eller Client Secret", invalid_scope: "appen mangler tilgang til Supply (supply.domain)", unauthorized_client: "appen har ikke lov til client credentials" }[data.error] || data.error || "ukjent";
-    throw fail(`Nexar avviste innloggingen (${res.status}: ${why}).`, 502);
-  }
-  // Gyldig i ca. 24 t; bufres litt kortere.
-  await env.RESET_KV?.put("nexar-token", data.access_token, { expirationTtl: Math.max(300, Number(data.expires_in || 86400) - 600) });
-  return data.access_token;
-}
-
-function octoPart(p) {
-  const spec = (...names) => p.specs?.find((s) => names.includes(String(s.attribute?.shortname || "").toLowerCase()) || names.includes(String(s.attribute?.name || "").toLowerCase()))?.displayValue || "";
-  const offers = [];
-  for (const s of p.sellers || []) for (const o of s.offers || []) {
-    const pr = (o.prices || []).sort((a, b) => a.quantity - b.quantity)[0];
-    offers.push({ seller: s.company?.name || "", sku: o.sku || "", stock: o.inventoryLevel ?? null, moq: o.moq ?? null, price: pr?.price ?? null, currency: pr?.currency || "", qty: pr?.quantity ?? null, url: o.clickUrl || "" });
-  }
-  offers.sort((a, b) => (b.stock > 0) - (a.stock > 0) || (a.price ?? 1e9) - (b.price ?? 1e9));
-  return {
-    mpn: p.mpn || "", maker: p.manufacturer?.name || "", desc: p.shortDescription || "", url: p.octopartUrl || "",
-    category: p.category?.name || "", image: p.bestImage?.url || "", datasheet: p.bestDatasheet?.url || "",
-    pkg: spec("case_package", "case/package", "package / case", "package"), mount: spec("mount", "mounting_style"),
-    specs: (p.specs || []).slice(0, 24).map((s) => [s.attribute?.name || s.attribute?.shortname || "", s.displayValue || ""]),
-    offers: offers.slice(0, 12),
-  };
-}
-
-async function octopart({ mpn, limit }, env) {
-  const q = String(mpn || "").trim().replace(/\s+/g, " ").slice(0, 60);
-  if (!q) throw fail("Mangler delenummer.");
-  if (!env.NEXAR_CLIENT_ID || !env.NEXAR_CLIENT_SECRET) return { configured: false, mpn: q };
-  const n = Math.min(10, Math.max(1, Number(limit) || 5));
-  const key = `octo:${q.toUpperCase()}:${n}`;
-  const hit = await env.RESET_KV?.get(key);
-  if (hit) return { configured: true, cached: true, ...JSON.parse(hit) };
-  const run = async (tok) => fetch(NEXAR_API, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` }, body: JSON.stringify({ query: OCTO_QUERY, variables: { q, limit: n } }) });
-  let res = await run(await nexarToken(env));
-  if (res.status === 401) { await env.RESET_KV?.delete("nexar-token"); res = await run(await nexarToken(env)); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.errors?.length) throw fail(`Octopart svarte ${res.status}: ${String(data.errors?.[0]?.message || "ukjent feil").slice(0, 160)}`, 502);
-  const out = { mpn: q, hits: data.data?.supSearchMpn?.hits ?? 0, parts: (data.data?.supSearchMpn?.results || []).map((r) => octoPart(r.part || {})) };
-  await env.RESET_KV?.put(key, JSON.stringify(out), { expirationTtl: OCTO_TTL_S });
-  return { configured: true, ...out };
-}
-
-async function octopartKeyRequest(request, env) {
-  const reply = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-  const ip = request.headers.get("CF-Connecting-IP") || "ukjent";
-  if (env.DATA_LIMIT && !(await env.DATA_LIMIT.limit({ key: `/octopart:${ip}` })).success) return reply({ error: "For mange forsøk" }, 429);
-  const tok = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!/^ik_[A-Za-z0-9_-]{20,}$/.test(tok) || !(await env.RESET_KV?.get(`inv:${await sha256Hex(tok)}`))) return reply({ error: "Ukjent eller utløpt lesenøkkel" }, 401);
-  const url = new URL(request.url);
-  const body = request.method === "POST" ? await request.json().catch(() => ({})) : { mpn: url.searchParams.get("mpn"), limit: url.searchParams.get("limit") };
-  try { return reply(await octopart(body, env)); } catch (err) { return reply({ error: err.message }, err.status || 500); }
 }
 
 async function inventoryRequest(request, env) {

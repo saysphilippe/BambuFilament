@@ -63,9 +63,6 @@ Del kretsen i funksjonsblokker (forsyning, styring, sensorer, drivere, kontakter
 4. **Alternativer**: Finnes ikke delen, foreslå det nærmeste som finnes på lager, og si hva som
    endres (pinner, verdier, kode). Ellers foreslå kjøp: LCSC-nummer (C…) når du kjenner det, eller
    søkeord for AliExpress.
-   Slå opp delen hos Octopart for å sjekke produsent, pakke, datablad og hvem som har den på lager
-   (og til hvilken pris): `node scripts/lager.mjs --octopart <delenummer>`. Bruk bare treff der
-   delenummeret stemmer eksakt.
 5. Se `circuits.js` (PARTS, kicadPins, TYPICAL) for pinner, typiske koblinger og «Typical application»
    fra databladet som siden allerede kjenner. Datablad: feltet `datasheet`, ellers produsentens PDF.
 
