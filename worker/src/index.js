@@ -65,7 +65,7 @@ const LIMITS = {
   "/login": "AUTH_LIMIT", "/send-code": "AUTH_LIMIT", "/tfa": "AUTH_LIMIT", "/refresh": "AUTH_LIMIT",
   "/ams": "DATA_LIMIT", "/library": "DATA_LIMIT",
   "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
-  "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/reset-token": "AUTH_LIMIT", "/approve": "AUTH_LIMIT",
+  "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/whois": "AUTH_LIMIT", "/msg-notify": "DATA_LIMIT", "/reset-token": "AUTH_LIMIT", "/approve": "AUTH_LIMIT",
   "/db/load": "DB_LIMIT", "/db/patch": "DB_LIMIT", "/store/load": "DB_LIMIT", "/store/history": "DB_LIMIT", "/reader/card": "DB_LIMIT", "/reader/scan": "DB_LIMIT",
 };
 
@@ -123,6 +123,16 @@ export default {
           }
           return json(path === "/reset" ? await sendReset(who, env) : await register(body, env), 200, origin);
         }
+        case "/whois": {
+          // Felles tak (alle IP-er): hvert oppslag kan bruke GitHub-kvoten til den delte tokenen.
+          if (env?.PUBLIC_LIMIT && !(await env.PUBLIC_LIMIT.limit({ key: "whois" })).success) {
+            return json({ error: "Mange forespørsler akkurat nå. Prøv igjen om et minutt." }, 429, origin);
+          }
+          return json(await whois(body, env), 200, origin);
+        }
+        case "/msg-notify":
+          await requireUser(token, env);
+          return json(await msgNotify(body, env), 200, origin);
         case "/db/load":
           await requireUser(token, env);
           return json(await dbLoad(body, env), 200, origin);
@@ -676,6 +686,69 @@ async function sendReset(who, env) {
   return done;
 }
 
+// contacts.json (e-post, mobil, varselvalg, CallMeBot-nøkler), hurtigbufret i minnet i to
+// minutter så ikke hvert oppslag går til GitHub.
+let contactsCache = null;
+async function contacts(env) {
+  if (contactsCache && contactsCache.exp > Date.now()) return contactsCache.doc;
+  const { doc } = await readJson(DATA_REPO, "contacts.json", await siteToken(env));
+  contactsCache = { doc: doc || {}, exp: Date.now() + 2 * 60 * 1000 };
+  return contactsCache.doc;
+}
+const contactEmails = async (env) => (await contacts(env)).emails || {};
+
+// Innlogging med e-post: hvilket brukernavn hører adressen til? Passordet sjekkes i
+// nettleseren (det dekrypterer brukerens nøkkel), så her returneres bare navnet.
+async function whois({ email }, env) {
+  const who = String(email || "").trim().toLowerCase().slice(0, 100);
+  if (!EMAIL_RE.test(who)) return { name: "" };
+  const emails = await contactEmails(env);
+  return { name: Object.keys(emails).find((n) => String(emails[n]).trim().toLowerCase() === who) || "" };
+}
+
+// Varsel om ny melding på e-post og/eller WhatsApp, etter mottakerens eget valg
+// (contacts.notify[navn] = { mail, wa }; WhatsApp krever mobil og egen CallMeBot-nøkkel).
+// Innholdet er kryptert og sendes ikke, bare hvem den er fra. Høyst ett varsel per mottaker i minuttet.
+async function msgNotify({ to, from }, env) {
+  const names = [...new Set(Array.isArray(to) ? to.map((n) => String(n).slice(0, 40)) : [])].slice(0, 30);
+  const sender = String(from || "").replace(/[\r\n<>]/g, "").trim().slice(0, 40) || "En bruker";
+  const doc = await contacts(env);
+  let sent = 0;
+  for (const name of names) {
+    const pref = doc.notify?.[name] || {};
+    const email = pref.mail === false ? "" : String(doc.emails?.[name] || "").trim();
+    const phone = String(doc.phones?.[name] || "").replace(/\D/g, "");
+    const apikey = pref.wa === false ? "" : String(doc.wakeys?.[name] || "").trim();
+    const wa = /^[49]\d{7}$/.test(phone) && /^\d{4,10}$/.test(apikey);
+    if (!EMAIL_RE.test(email) && !wa) continue;
+    if (env?.EMAIL_LIMIT && !(await env.EMAIL_LIMIT.limit({ key: `notify:${name}` })).success) continue;
+    if (wa) {
+      try {
+        await sendWhatsApp(env, `Filament og elektronikk universet: ny melding fra ${sender}. Les den her: ${SITE_URL}#messages`, { phone: `+47${phone}`, apikey });
+        sent++;
+      } catch (err) {
+        console.warn("WhatsApp-varsel feilet:", err.message);
+      }
+    }
+    if (!EMAIL_RE.test(email)) continue;
+    try {
+      await sendMail(env, email, `Ny melding fra ${sender}`, [
+        `Hei ${name}!`,
+        "",
+        `${sender} har sendt deg en melding på Filament og elektronikk universet.`,
+        "",
+        `Les den her: ${SITE_URL}#messages`,
+        "",
+        "Meldingen er kryptert og kan bare leses på siden når du er logget inn.",
+      ].join("\n"));
+      sent++;
+    } catch (err) {
+      console.warn("Varsel feilet:", err.message);
+    }
+  }
+  return { ok: true, sent };
+}
+
 // Ny bruker ber om tilgang. Administrator godkjenner i brukeroversikten på siden.
 async function register({ name, email, phone }, env) {
   name = String(name || "").trim().replace(/\s+/g, " ");
@@ -728,12 +801,14 @@ async function register({ name, email, phone }, env) {
 
 // WhatsApp til administrator via CallMeBot (secrets CALLMEBOT_PHONE og CALLMEBOT_APIKEY).
 // Uten dem sendes bare e-post.
-async function sendWhatsApp(env, text) {
-  if (!env.CALLMEBOT_PHONE || !env.CALLMEBOT_APIKEY) return;
+// Uten to: til administrator (secrets CALLMEBOT_PHONE og CALLMEBOT_APIKEY).
+// Med to = { phone, apikey }: til en bruker med egen CallMeBot-nøkkel.
+async function sendWhatsApp(env, text, to = { phone: env.CALLMEBOT_PHONE, apikey: env.CALLMEBOT_APIKEY }) {
+  if (!to?.phone || !to?.apikey) return;
   const url = new URL("https://api.callmebot.com/whatsapp.php");
-  url.searchParams.set("phone", String(env.CALLMEBOT_PHONE).replace(/[^\d+]/g, ""));
+  url.searchParams.set("phone", String(to.phone).replace(/[^\d+]/g, ""));
   url.searchParams.set("text", text);
-  url.searchParams.set("apikey", String(env.CALLMEBOT_APIKEY).trim());
+  url.searchParams.set("apikey", String(to.apikey).trim());
   const res = await fetch(url, { headers: { "User-Agent": "BambuFilament-proxy" } });
   const body = await res.text();
   // CallMeBot svarer 200 også ved enkelte feil, med forklaringen i teksten.

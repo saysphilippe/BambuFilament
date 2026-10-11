@@ -1,6 +1,7 @@
 import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009202254";
 import { toRecords } from "./worker/src/records.js?v=20261009202254";
-import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken } from "./auth.js?v=20261009202254";
+import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken, newKeys, openKeysFull, openPrivate, rewrapKeys } from "./auth.js?v=20261009202254";
+import { initMessages, openMessages, loadMessages, messagesSession, signOff } from "./messages.js?v=20261009202254";
 import { initParts, showParts, refreshParts, partsSettingsHtml, setCategoryShown, setSpentShown, loadParts } from "./parts.js?v=20261009202254";
 
 // Mot clickjacking: GitHub Pages kan ikke sende frame-ancestors, så siden nekter å kjøre i en ramme.
@@ -115,7 +116,8 @@ function saveSession(value, remember) {
   } catch { /* ingen lagring tilgjengelig */ }
 }
 
-// Innlogget bruker: { user, token }. Tokenen er dekryptert med brukerens passord.
+// Innlogget bruker: { user, token, mk }. Tokenen er dekryptert med brukerens passord; mk er den
+// private nøkkelen (for å lese meldinger), dekryptert med det samme passordet.
 let session = DEMO ? null : loadSession();
 // Lokal utvikling: http://127.0.0.1:8765/?dev=Navn logger inn mot den lokale Workeren
 // (wrangler dev med DEV_TOKEN=local-test, se CONTRIBUTING.md). Virker bare på 127.0.0.1/localhost.
@@ -440,10 +442,15 @@ function cleanContacts(c) {
     name: clip(p?.name, MAX.user), email: cleanEmail(p?.email), phone: cleanPhone(p?.phone), at: str(p?.at),
   })).filter((p) => p.name && p.email);
   const phones = Object.fromEntries(Object.entries(c?.phones || {}).map(([k, v]) => [str(k), cleanPhone(v)]).filter(([, v]) => v));
-  return { emails, pending, phones };
+  const notify = Object.fromEntries(Object.entries(c?.notify || {}).map(([k, v]) => [str(k), { mail: v?.mail !== false, wa: v?.wa !== false }]));
+  const wakeys = Object.fromEntries(Object.entries(c?.wakeys || {}).map(([k, v]) => [str(k), cleanWaKey(v)]).filter(([, v]) => v));
+  return { emails, pending, phones, notify, wakeys };
 }
 
 // Norsk mobilnummer for Vipps: 8 sifre (med eller uten +47 og mellomrom).
+// CallMeBot-nøkkel (WhatsApp): bare sifre.
+const cleanWaKey = (v) => (/^\d{4,10}$/.test(str(v).trim()) ? str(v).trim() : "");
+
 function cleanPhone(v) {
   const d = str(v).replace(/[\s.-]/g, "").replace(/^(\+47|0047)/, "");
   return /^[49]\d{7}$/.test(d) ? d : "";
@@ -1427,6 +1434,51 @@ async function copyValue(id, btn) {
   }
 }
 
+function notifyStatus() {
+  const me = userName();
+  const pref = state.contacts.notify?.[me] || {};
+  const ways = [];
+  if (pref.mail !== false && state.contacts.emails[me]) ways.push("e-post");
+  if (pref.wa !== false && state.contacts.wakeys?.[me] && state.contacts.phones?.[me]) ways.push("WhatsApp");
+  if (pref.wa !== false && state.contacts.wakeys?.[me] && !state.contacts.phones?.[me]) return "Legg inn mobilnummeret ditt over for å få varsel på WhatsApp.";
+  return ways.length ? `Du får varsel på ${ways.join(" og ")}.` : "Du får ikke varsel om nye meldinger.";
+}
+
+async function saveNotify() {
+  const me = userName();
+  const raw = $("#a-wakey").value.trim();
+  const key = cleanWaKey(raw);
+  if (raw && !key) return ($("#a-n-msg").textContent = "Nøkkelen fra CallMeBot er bare sifre.");
+  const pref = { mail: $("#a-n-mail").checked, wa: $("#a-n-wa").checked };
+  $("#a-n-msg").textContent = "Lagrer…";
+  try {
+    await saveDoc((doc) => {
+      doc.notify = doc.notify && typeof doc.notify === "object" ? doc.notify : {};
+      doc.wakeys = doc.wakeys && typeof doc.wakeys === "object" ? doc.wakeys : {};
+      doc.notify[me] = pref;
+      if (key) doc.wakeys[me] = key; else delete doc.wakeys[me];
+    }, `Varsler (${me})`, "contacts");
+    $("#a-n-msg").textContent = `Lagret. ${notifyStatus()}`;
+  } catch (err) {
+    $("#a-n-msg").textContent = err.message;
+  }
+}
+
+async function testNotify() {
+  $("#a-n-msg").textContent = "Sender testvarsel…";
+  try {
+    const { sent } = await proxy("/msg-notify", { to: [userName()], from: "Testvarsel" }, token());
+    $("#a-n-msg").textContent = sent ? "Testvarselet er sendt. Det kan ta et minutt før det kommer frem." : "Ingenting ble sendt. Sjekk valgene over, eller vent et minutt (høyst ett varsel i minuttet).";
+  } catch (err) {
+    $("#a-n-msg").textContent = err.message;
+  }
+}
+
+function openNotifySettings() {
+  openAccount();
+  setTimeout(() => $("#a-notify")?.scrollIntoView({ block: "center" }), 50);
+}
+
 async function savePhone(input) {
   const me = userName();
   const v = input.value.trim();
@@ -2175,7 +2227,7 @@ function renderAccount() {
 
 function setSession(value, remember = !!session?.exp) {
   const changed = !!session?.token !== !!value?.token;
-  session = value && { user: value.user, token: value.token };
+  session = value && { user: value.user, token: value.token, ...(value.mk ? { mk: value.mk } : {}) };
   saveSession(session, remember);
   renderGate();
   // Ved inn- eller utlogging hentes dataene på nytt (eller tømmes).
@@ -2188,7 +2240,17 @@ function setSession(value, remember = !!session?.exp) {
   state.amsError = "";
   renderAccount();
   render();
+  if (changed) messagesSession();
   if (value && state.tab === "ams") refreshAms();
+}
+
+// Ny privat nøkkel for meldinger (etter passordbytte eller ny nøkkel), lagret i innloggingen.
+function setMsgKey(key) {
+  if (!session || !key) return;
+  session.mk = key;
+  let kept = false;
+  try { kept = !!localStorage.getItem("bf.session"); } catch { /* ingen lagring */ }
+  saveSession(session, kept);
 }
 
 function openAccount() {
@@ -2196,6 +2258,11 @@ function openAccount() {
   $("#a-name").textContent = session.user;
   $("#a-phone").value = fmtPhone(state.contacts.phones?.[session.user] || "");
   $("#a-email").value = state.contacts.emails[session.user] || "";
+  const pref = state.contacts.notify?.[session.user] || {};
+  $("#a-n-mail").checked = pref.mail !== false;
+  $("#a-n-wa").checked = pref.wa !== false;
+  $("#a-wakey").value = state.contacts.wakeys?.[session.user] || "";
+  $("#a-n-msg").textContent = notifyStatus();
   $("#a-color").value = state.doc.users.find((u) => u.name === session.user)?.color || "#2563eb";
   $("#a-msg").textContent = "";
   openQuiet("#account-dialog");
@@ -2204,23 +2271,46 @@ function openAccount() {
 function openLogin() {
   const withLogin = state.doc.users.filter(hasLogin);
   if (!withLogin.length) return openSetup();
-  const last = store("bf.lastUser");
-  $("#l-user").innerHTML = withLogin.map((u) => `<option${u.name === last ? " selected" : ""}>${esc(u.name)}</option>`).join("");
+  const last = store("bf.lastLogin") || store("bf.lastUser");
+  $("#l-user").value = last;
   $("#l-password").value = "";
   $("#l-error").textContent = "";
   $("#login").showModal();
+  (last ? $("#l-password") : $("#l-user")).focus();
+}
+
+// Brukernavn (uten forskjell på store og små bokstaver) eller e-postadresse -> brukernavn.
+// E-postadressene er private, så Workeren slår dem opp.
+const loginNames = new Map();
+async function resolveLogin(who) {
+  const byName = state.doc.users.find((u) => u.name.toLowerCase() === who.toLowerCase());
+  if (byName) return byName.name;
+  if (!who.includes("@")) return "";
+  const key = who.toLowerCase();
+  if (!loginNames.has(key)) loginNames.set(key, (await proxy("/whois", { email: key })).name || "");
+  return loginNames.get(key);
 }
 
 async function login(e) {
   e.preventDefault();
   if (e.submitter?.value === "cancel") return $("#login").close();
-  const name = $("#l-user").value;
-  const user = state.doc.users.find((u) => u.name === name);
+  const who = $("#l-user").value.trim();
+  if (!who) return ($("#l-error").textContent = "Skriv brukernavnet eller e-postadressen din.");
   $("#l-error").textContent = "Sjekker…";
+  let name = "";
+  try { name = await resolveLogin(who); } catch (err) { return ($("#l-error").textContent = err.message); }
+  const user = state.doc.users.find((u) => u.name === name);
+  if (!user || !hasLogin(user)) {
+    $("#l-error").textContent = who.includes("@")
+      ? "Fant ingen bruker med den e-postadressen. Prøv brukernavnet ditt."
+      : "Fant ingen bruker med det navnet. Du kan også skrive e-postadressen din.";
+    return;
+  }
   const pw = $("#l-password").value;
   // Nøkkelpar (vanlig), eldre innlogging (tokenen kryptert direkte med passordet) eller
   // midlertidig passord fra e-post (gjelder i 4 timer).
-  let tok = user?.kp && (await openKeys(user.kp, pw));
+  const opened = user.kp && (await openKeysFull(user.kp, pw));
+  let tok = opened?.token || null;
   let legacy = false;
   if (!tok && user?.cred) {
     tok = await decryptToken(user.cred, pw);
@@ -2249,7 +2339,8 @@ async function login(e) {
     return;
   }
   store("bf.lastUser", name);
-  setSession({ user: name, token: tok }, $("#l-remember").checked);
+  store("bf.lastLogin", who);
+  setSession({ user: name, token: tok, mk: opened?.key || "" }, $("#l-remember").checked);
   recordLogin(name, $("#l-remember").checked);
   $("#login").close();
   if (user.admin) shareToken();
@@ -2262,13 +2353,14 @@ const hasLogin = (u) => !!(u && (u.kp || u.cred || u.reset));
 // Eldre innlogging gjøres om til nøkkelpar i bakgrunnen, med samme passord.
 async function upgradeLogin(name, tok, pw) {
   try {
-    const kp = await makeKeys(tok, pw);
+    const { kp, key } = await newKeys(tok, pw);
     await saveDoc((doc) => {
       const u = doc.users.find((x) => x.name === name);
       if (!u) return "Brukeren finnes ikke.";
       u.kp = kp;
       delete u.cred;
     }, `Ny innloggingsnøkkel (${name})`, "users");
+    setMsgKey(key);
   } catch (err) {
     console.warn("Kunne ikke oppgradere innloggingen:", err.message);
   }
@@ -2308,7 +2400,9 @@ async function saveRekey(e) {
       if (!res.ok) throw new Error(`Tokenen har ikke tilgang til ${repo.split("/")[1]}. Velg både BambuFilament-data og BambuFilament-auth under Repository access.`);
     }
     err.textContent = "Krypterer og lagrer…";
-    const mine = await makeKeys(tok, rekey.password);
+    const meUser = state.doc.users.find((u) => u.name === rekey.name);
+    const oldKey = meUser?.kp && (await openPrivate(meUser.kp, rekey.password));
+    const mine = oldKey ? await rewrapKeys(tok, oldKey, meUser.kp.pub, rekey.password) : await makeKeys(tok, rekey.password);
     // E-postadressene kunne ikke leses med den gamle tokenen.
     session = { user: rekey.name, token: tok };
     state.contacts = cleanContacts(await loadFile("contacts").catch(() => FILES.contacts.empty()));
@@ -2381,7 +2475,7 @@ async function saveRekey(e) {
 
 function accountAction(e) {
   const action = e.submitter?.value;
-  if (action === "logout") setSession(null);
+  if (action === "logout") signOff().finally(() => setSession(null));
   if (action === "password") setTimeout(() => openChangePassword(false));
 }
 
@@ -2406,18 +2500,24 @@ async function changePassword(e) {
   const dlg = $("#password");
   if (e.submitter?.value === "cancel" && !dlg.dataset.forced) return dlg.close();
   const pw = $("#p-new").value;
+  const me = state.doc.users.find((u) => u.name === userName());
+  let oldKey = session?.mk || "";
   if (!dlg.dataset.forced) {
-    const me = state.doc.users.find((u) => u.name === userName());
     const cur = $("#p-current").value;
-    const ok = ((me?.kp && (await openKeys(me.kp, cur))) || (me?.cred && (await decryptToken(me.cred, cur)))) === token();
+    const opened = me?.kp && (await openKeysFull(me.kp, cur));
+    const ok = (opened?.token || (me?.cred && (await decryptToken(me.cred, cur)))) === token();
     if (!ok) return ($("#p-error").textContent = "Nåværende passord er feil.");
+    oldKey ||= opened?.key || "";
   }
   const weak = passwordProblem(pw, userName());
   if (weak) return ($("#p-error").textContent = weak);
   if (pw !== $("#p-repeat").value) return ($("#p-error").textContent = "Passordene er ikke like.");
   $("#p-error").textContent = "Lagrer…";
   try {
-    const kp = await makeKeys(token(), pw);
+    // Meldinger er kryptert til nøkkelparet, så det beholdes når den private nøkkelen er kjent.
+    const { kp, key } = oldKey && me?.kp?.pub
+      ? { kp: await rewrapKeys(token(), oldKey, me.kp.pub, pw), key: oldKey }
+      : await newKeys(token(), pw);
     await saveDoc((doc) => {
       const u = doc.users.find((x) => x.name === userName());
       if (!u) return "Brukeren din finnes ikke lenger.";
@@ -2427,6 +2527,7 @@ async function changePassword(e) {
       delete u.reset;
     }, `Byttet passord (${userName()})`, "users");
     freshPasswords = freshPasswords.filter(([n]) => n !== userName());
+    setMsgKey(key);
     dlg.close();
   } catch (err) {
     $("#p-error").textContent = err.message;
@@ -3839,6 +3940,17 @@ const openSettings = () => {
   requestAnimationFrame(() => $("#parts-settings")?.scrollIntoView({ block: "start" }));
 };
 initParts({ $, esc, dbCall, token, userName, userColor, setSync, DEMO, showSection, store, isAdmin, openSettings });
+initMessages({
+  esc, dbCall, proxy, token, userColor, DEMO,
+  userName: () => userName() || (DEMO ? "Deg" : ""),
+  users: () => (DEMO ? users().map((u) => ({ ...u, kp: { pub: "demo" } })) : state.doc.users),
+  lastSeen: (name) => state.activity.seen?.[name] || "",
+  msgKey: () => session?.mk || "",
+  relogin: () => { setSession(null); openLogin(); },
+  openNotifySettings,
+});
+for (const id of ["a-n-mail", "a-n-wa", "a-wakey"]) $(`#${id}`).addEventListener("change", saveNotify);
+$("#a-n-test").addEventListener("click", testNotify);
 store("bf.hiddenCats", ""); // skjulte kategorier lå tidligere i nettleseren; nå i databasen per eier
 $("#ams-me").addEventListener("change", (e) => e.target.dataset.ams?.startsWith("share") && amsAction(e.target.dataset.ams, e.target));
 $("#bambu form").addEventListener("submit", bambuSubmit);
@@ -3861,6 +3973,8 @@ fetch("data/colors.json")
       // Komponenter: valgt sist, eller siden ble åpnet av import-bokmerket (#import).
       // Hent komponentene i bakgrunnen, så Komponenter-knappen viser ønsker som venter.
       setTimeout(() => token() && loadParts(), 2500);
+      if (DEMO) { if (location.hash === "#messages") openMessages("inbox"); }
+      else if (token()) messagesSession();
       if (location.hash === "#import" || location.hash === "#parts" || (!TABS.includes(location.hash.slice(1)) && store("bf.section") === "parts")) showSection("parts");
       // Hent AMS i bakgrunnen, så et delt øyeblikksbilde holdes oppdatert uansett fane.
       if (bambuToken() && state.tab !== "ams") refreshAms();

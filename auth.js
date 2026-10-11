@@ -109,22 +109,98 @@ export async function sealToken(token, pub) {
 }
 
 // Nytt nøkkelpar for en bruker, med privat nøkkel kryptert med passordet.
-export async function makeKeys(token, password) {
+// Returnerer { kp, key }: kp lagres i brukerlisten, key (privat nøkkel) holdes i innloggingen.
+export async function newKeys(token, password) {
   const pair = await crypto.subtle.generateKey(ECDH, true, ["deriveBits"]);
   const pub = b64(await crypto.subtle.exportKey("raw", pair.publicKey));
-  const priv = await encryptToken(b64(await crypto.subtle.exportKey("pkcs8", pair.privateKey)), password);
-  return { pub, priv, box: await sealToken(token, pub) };
+  const key = b64(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
+  return { kp: { pub, priv: await encryptToken(key, password), box: await sealToken(token, pub) }, key };
 }
+export const makeKeys = async (token, password) => (await newKeys(token, password)).kp;
 
 // Returnerer tokenen, eller null ved feil passord.
 export async function openKeys(kp, password) {
+  return (await openKeysFull(kp, password))?.token || null;
+}
+
+// Returnerer { token, key } (key = privat nøkkel for meldinger), eller null ved feil passord.
+export async function openKeysFull(kp, password) {
+  const pkcs8 = await openPrivate(kp, password);
+  const token = pkcs8 && (await tokenFromKey(kp, pkcs8));
+  return token ? { token, key: pkcs8 } : null;
+}
+
+async function tokenFromKey(kp, pkcs8) {
   try {
-    const pkcs8 = await decryptToken(kp.priv, password);
-    if (!pkcs8) return null;
     const priv = await crypto.subtle.importKey("pkcs8", unb64(pkcs8), ECDH, false, ["deriveBits"]);
     const epk = await crypto.subtle.importKey("raw", unb64(kp.box.epk), ECDH, false, []);
     const key = await boxKey(priv, epk, "decrypt");
     const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(kp.box.iv) }, key, unb64(kp.box.data));
+    return new TextDecoder().decode(data);
+  } catch {
+    return null;
+  }
+}
+
+// Den private nøkkelen (pkcs8, base64), eller null ved feil passord. Holdes i innloggingen
+// så meldinger kan leses uten å skrive passordet på nytt.
+export async function openPrivate(kp, password) {
+  try { return (await decryptToken(kp.priv, password)) || null; } catch { return null; }
+}
+
+// Samme nøkkelpar med nytt passord (og ny token), så meldinger kryptert til nøkkelen
+// fortsatt kan leses etter passordbytte.
+export async function rewrapKeys(token, privB64, pub, password) {
+  return { pub, priv: await encryptToken(privB64, password), box: await sealToken(token, pub) };
+}
+
+// ---------- Meldinger ----------
+//
+// Teksten krypteres med en tilfeldig AES-nøkkel. Den nøkkelen krypteres til den offentlige
+// nøkkelen til hver mottaker (og avsenderen), så bare de kan lese meldingen, selv om alle
+// innloggede kan hente postene fra databasen.
+
+async function msgKey(privateKey, publicKey, usage) {
+  const bits = await crypto.subtle.deriveBits({ name: "ECDH", public: publicKey }, privateKey, 256);
+  const base = await crypto.subtle.importKey("raw", bits, "HKDF", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: new TextEncoder().encode("BambuFilament melding") },
+    base, { name: "AES-GCM", length: 256 }, false, [usage],
+  );
+}
+
+// pubs: { navn: offentlig nøkkel }. Returnerer { iv, data, keys: { navn: { epk, iv, data } } }.
+export async function sealMessage(text, pubs) {
+  const raw = crypto.getRandomValues(new Uint8Array(32));
+  const aes = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, new TextEncoder().encode(text));
+  const keys = {};
+  for (const [name, pub] of Object.entries(pubs)) {
+    const recipient = await crypto.subtle.importKey("raw", unb64(pub), ECDH, false, []);
+    const eph = await crypto.subtle.generateKey(ECDH, true, ["deriveBits"]);
+    const k = await msgKey(eph.privateKey, recipient, "encrypt");
+    const kiv = crypto.getRandomValues(new Uint8Array(12));
+    keys[name] = {
+      epk: b64(await crypto.subtle.exportKey("raw", eph.publicKey)),
+      iv: b64(kiv),
+      data: b64(await crypto.subtle.encrypt({ name: "AES-GCM", iv: kiv }, k, raw)),
+    };
+  }
+  return { iv: b64(iv), data: b64(data), keys };
+}
+
+// Returnerer teksten, eller null hvis meldingen ikke kan åpnes med denne nøkkelen.
+export async function openMessage(enc, me, privB64) {
+  try {
+    const box = enc?.keys?.[me];
+    if (!box || !privB64) return null;
+    const priv = await crypto.subtle.importKey("pkcs8", unb64(privB64), ECDH, false, ["deriveBits"]);
+    const epk = await crypto.subtle.importKey("raw", unb64(box.epk), ECDH, false, []);
+    const k = await msgKey(priv, epk, "decrypt");
+    const raw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(box.iv) }, k, unb64(box.data));
+    const aes = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["decrypt"]);
+    const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(enc.iv) }, aes, unb64(enc.data));
     return new TextDecoder().decode(data);
   } catch {
     return null;

@@ -23,6 +23,10 @@
       <button id="refresh" class="icon-btn" title="Oppdater" aria-label="Oppdater">
         <svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>
       </button>
+      <button id="open-messages" class="icon-btn msg-btn" title="Meldinger" aria-label="Meldinger" hidden>
+        <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3.5 6.5l8.5 6 8.5-6"/></svg>
+        <span class="msg-badge" hidden></span>
+      </button>
       <button id="open-users" class="icon-btn" title="Brukere" aria-label="Brukere">
         <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>
       </button>
@@ -246,7 +250,7 @@
   <dialog id="login">
     <form method="dialog">
       <h2>Logg inn</h2>
-      <label>Bruker<select id="l-user"></select></label>
+      <label>Brukernavn eller e-post<input id="l-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="100" required></label>
       <label>Passord<input id="l-password" type="password" autocomplete="current-password"></label>
       <label class="switch"><input id="l-remember" type="checkbox"> Husk meg på denne enheten i 30 dager</label>
       <p class="hint">Uten «Husk meg» logges du ut når du lukker fanen. Bruk det bare på din egen PC eller telefon.</p>
@@ -344,6 +348,14 @@
       <label>E-post (for nytt passord og varsler)<input id="a-email" type="email" autocomplete="email" maxlength="100" placeholder="navn@eksempel.no"></label>
       <label>Mobilnummer (for Vipps når noen gjør opp med deg)<input id="a-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="F.eks. 912 34 567" maxlength="20"></label>
       <label class="a-color">Din farge (på spolene dine)<input id="a-color" type="color"></label>
+      <fieldset id="a-notify" class="a-notify">
+        <legend>Varsel om nye meldinger</legend>
+        <label class="switch"><input id="a-n-mail" type="checkbox"> På e-post</label>
+        <label class="switch"><input id="a-n-wa" type="checkbox"> På WhatsApp (bruker mobilnummeret over)</label>
+        <label>Din CallMeBot-nøkkel for WhatsApp<input id="a-wakey" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="F.eks. 1234567"></label>
+        <p class="hint">WhatsApp-varslene sendes gjennom den gratis tjenesten CallMeBot, som trenger en egen nøkkel for nummeret ditt. Følg trinnene under «WhatsApp» på <a href="https://www.callmebot.com/blog/free-api-whatsapp-messages/" target="_blank" rel="noopener">callmebot.com ↗</a>: legg inn nummeret deres som kontakt og send dem meldingen de oppgir. Du får nøkkelen i svaret. Lim den inn her.</p>
+        <p class="a-n-row"><span id="a-n-msg" class="hint" role="status"></span><button id="a-n-test" type="button" class="btn btn-small">Send testvarsel</button></p>
+      </fieldset>
       <p id="a-msg" class="hint" role="status"></p>
       <div class="d-buttons">
         <button value="logout" class="btn btn-danger">Logg ut</button>

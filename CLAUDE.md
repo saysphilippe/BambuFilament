@@ -8,7 +8,8 @@ AliExpress, Mouser og LCSC) for en lukket vennegjeng. Se `CONTRIBUTING.md` for o
 - `index.html`, `app.js` (filament, innlogging, innstillinger), `parts.js` (komponenter, import,
   handlekurv), `categories.js` (kategorier og poengbasert klassifisering), `circuits.js`
   (datablad, pinner, koblingsskjema), `packages.js` (pakketyper med SVG), `pack.js` (stk per pakke),
-  `auth.js` (kryptert innlogging), `style.css`.
+  `auth.js` (kryptert innlogging og meldinger), `messages.js` (meldinger mellom brukere, kryptert
+  til mottakernes nøkler; «pålogget nå» via D1-samlingen presence), `style.css`.
 - `worker/` – Cloudflare Worker: Bambu-proxy, D1-database (`records`: coll/id/data), e-post,
   lesere. `worker/src/records.js` deles med nettsiden.
 - `firmware/` – ESP32-leser. `docs/leserbygger.html` – byggeveiledning.

@@ -11,6 +11,10 @@ export const FILE_COLLS = {
   // partprefs: per bruker (id = navn) – kategorier eieren har skjult fra komponentbiblioteket.
   // partcats: felles kategorier (id = kategori-id): nye kategorier og nye navn på de innebygde.
   parts: ["parts", "partreqs", "partprefs", "partcats"],
+  // Meldinger mellom brukere (teksten er kryptert til mottakerne, se auth.js), og per bruker
+  // (id = navn) når innboksen sist ble lest og hvilke meldinger som er skjult. presence (id = navn):
+  // når brukeren sist hadde siden åpen (oppdateres hvert 2. minutt), for «pålogget nå».
+  messages: ["messages", "msgread", "presence"],
 };
 
 const MAX_LOGINS = 500;
@@ -37,6 +41,10 @@ export function toRecords(file, doc) {
     for (const q of doc.requests || []) if (q?.id) add("partreqs", q.id, q);
     for (const [owner, pref] of Object.entries(doc.prefs || {})) add("partprefs", owner, pref);
     for (const [id, c] of Object.entries(doc.cats || {})) add("partcats", id, c);
+  } else if (file === "messages") {
+    for (const m of doc.messages || []) if (m?.id) add("messages", m.id, m);
+    for (const [name, r] of Object.entries(doc.read || {})) add("msgread", name, r);
+    for (const [name, r] of Object.entries(doc.presence || {})) add("presence", name, r);
   }
   return out;
 }
@@ -60,5 +68,6 @@ export function fromRecords(file, rows) {
     return { version: 1, logins, seen: map("seen") };
   }
   if (file === "parts") return { version: 1, parts: by("parts").map((r) => r.data), requests: by("partreqs").map((r) => r.data), prefs: map("partprefs"), cats: map("partcats") };
+  if (file === "messages") return { version: 1, messages: by("messages").map((r) => r.data).sort((a, b) => String(a.at).localeCompare(String(b.at))), read: map("msgread"), presence: map("presence") };
   throw new Error(`Ukjent fil: ${file}`);
 }
