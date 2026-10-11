@@ -74,6 +74,10 @@ const safeImg = (u) => {
   if (/^img\/parts\/[A-Za-z0-9_-]+\.(png|jpe?g|webp)$/.test(u)) return u;
   return IMG_HOSTS.test(u) ? u.split(/[?#]/)[0] : "";
 };
+const safeWebImg = (u) => {
+  u = String(u || "").trim();
+  return /^https:\/\/[a-z0-9.-]+\.[a-z]{2,}\/[^\s"'<>]{1,400}$/i.test(u) && !/\.svg(\?|$)/i.test(u) ? u : "";
+};
 const safeUrl = (u) => {
   u = String(u || "").trim();
   if (u.startsWith("//")) u = "https:" + u;
@@ -107,7 +111,9 @@ function cleanPart(p) {
     unitPrice: num(p.unitPrice), currency: clip(p.currency, 4), orderTotal: clip(p.orderTotal, 40),
     orderId: clip(p.orderId, 40), orderDate: /^\d{4}-\d{2}-\d{2}$/.test(p.orderDate || "") ? p.orderDate : "",
     status: clip(p.status, 60), store: clip(p.store, 100), itemId: clip(p.itemId, 30),
-    url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: safeImg(p.image),
+    url: safeUrl(p.url), storeUrl: safeUrl(p.storeUrl), image: p.imgWeb ? safeWebImg(p.image) : safeImg(p.image),
+    // Bildet er funnet ved søk på nettet (ikke hos AliExpress) og må godkjennes av eieren.
+    imgWeb: !!p.imgWeb && !!safeWebImg(p.image), imgWebSrc: /^https:\/\//.test(String(p.imgWebSrc || "")) ? clip(p.imgWebSrc, 400) : "",
     // Bildet er hentet fra en lignende vare (søk på tittelen), fordi originalen er fjernet hos AliExpress.
     imgSearch: !!p.imgSearch && !!safeImg(p.image),
     // Bildet er satt eller fjernet for hånd; automatiske bildesøk rører det ikke.
@@ -555,12 +561,12 @@ function listenForImport() {
         await load();
         const byId = new Map(pstate.parts.map((p) => [p.id, p]));
         const changed = [];
-        for (const { id, image } of msg.images.slice(0, 20000)) {
+        for (const { id, image, web, src } of msg.images.slice(0, 20000)) {
           const p = byId.get(String(id));
           if (!p || p.owner !== ctx.userName() || (p.imgManual && !p.imgWrong)) continue;
-          const img = safeImg(image);
+          const img = web ? safeWebImg(image) : safeImg(image);
           if (img === p.image || (p.imgWrong && !img)) continue;
-          p.image = img; p.imgSearch = !!img; p.updated = p.imgUpdated = new Date().toISOString(); p.imgBy = "bildesøk";
+          p.image = img; p.imgSearch = !!img && !web; p.imgWeb = !!web && !!img; p.imgWebSrc = web ? clip(src, 400) : ""; p.updated = p.imgUpdated = new Date().toISOString(); p.imgBy = "bildesøk";
           changed.push(p);
         }
         if (changed.length && !ctx.DEMO) await savePatch(changed.map((p) => ({ id: p.id, data: p })));
@@ -798,7 +804,7 @@ function filtered() {
     (!pstate.owner || p.owner === pstate.owner) &&
     (!pstate.source || p.source === pstate.source) &&
     (!pstate.pkg || p.pkg === pstate.pkg) &&
-    (!pstate.imgf || (pstate.imgf === "wrong" ? p.imgWrong && !imgFixed(p) : imgFixed(p))) &&
+    (!pstate.imgf || (pstate.imgf === "wrong" ? p.imgWrong && !imgFixed(p) : pstate.imgf === "web" ? p.imgWeb : imgFixed(p))) &&
     (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0)) &&
     matchesQ(p, q));
   const by = {
@@ -845,7 +851,7 @@ function partCard(group) {
   <button class="part-open" type="button" data-part="${ctx.esc(p.id)}">
     <span class="part-img">${p.image ? `<img src="${ctx.esc(/alicdn|aliexpress-media/.test(p.image) ? `${p.image}_220x220.jpg` : p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-full="${ctx.esc(p.image)}">` : `<span class="part-noimg">${ctx.esc(CAT_NAME[p.category])}</span>`}
 </span>
-    <span class="part-cat">${p.imgWrong ? (imgFixed(p) ? `<span class="img-wrong-tag fixed" title="Byttet ${ctx.esc(fmtStamp(p.imgUpdated))}">Byttet – sjekk</span> ` : `<span class="img-wrong-tag">Feil bilde</span> `) : ""}${ctx.esc(CAT_NAME[p.category])}</span>
+    <span class="part-cat">${p.imgWeb ? `<span class="img-wrong-tag web">Fra nettet – godkjenn</span> ` : ""}${p.imgWrong ? (imgFixed(p) ? `<span class="img-wrong-tag fixed" title="Byttet ${ctx.esc(fmtStamp(p.imgUpdated))}">Byttet – sjekk</span> ` : `<span class="img-wrong-tag">Feil bilde</span> `) : ""}${ctx.esc(CAT_NAME[p.category])}</span>
     <span class="part-body">
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
@@ -958,7 +964,7 @@ function render() {
           ${owners.length ? `<div class="chip-row"><span class="chip-label">Eier</span><div class="chips">${chip("owner", "", "Alle")}${owners.map((o) => chip("owner", o, o, count("owner", o), ctx.userColor(o))).join("")}</div></div>` : ""}
           <div class="chip-row"><span class="chip-label">Butikk</span><div class="chips">${chip("source", "", "Alle")}${["aliexpress", "mouser", "lcsc", "manual"].filter((s) => all.some((p) => p.source === s)).map((s) => chip("source", s, SOURCE_LABEL[s])).join("")}</div></div>
           ${pkgs.length ? `<div class="chip-row"><span class="chip-label">Pakke</span><div class="chips">${chip("pkg", "", "Alle")}${pkgs.map(([k, n]) => chip("pkg", k, k, n)).join("")}</div></div>` : ""}
-          ${all.some((p) => p.imgWrong) ? `<div class="chip-row"><span class="chip-label">Bilde</span><div class="chips">${chip("imgf", "", "Alle")}${chip("imgf", "wrong", "Feil bilde", all.filter((p) => p.imgWrong && !imgFixed(p)).length)}${chip("imgf", "fixed", "Byttet – sjekk", all.filter(imgFixed).length)}</div></div>` : ""}
+          ${all.some((p) => p.imgWrong || p.imgWeb) ? `<div class="chip-row"><span class="chip-label">Bilde</span><div class="chips">${chip("imgf", "", "Alle")}${chip("imgf", "wrong", "Feil bilde", all.filter((p) => p.imgWrong && !imgFixed(p)).length)}${chip("imgf", "fixed", "Byttet – sjekk", all.filter(imgFixed).length)}${chip("imgf", "web", "Fant ikke på AliExpress, fra nettet – godkjenn", all.filter((p) => p.imgWeb).length)}</div></div>` : ""}
         </section>
         ${pstate.loading ? `<p class="count">Henter komponenter…</p>` : pstate.error ? `<p class="notice">${ctx.esc(pstate.error)}</p>` : ""}
         ${!pstate.loading && !all.length ? `<section class="panel empty-parts"><h2>Ingen komponenter ennå</h2><p class="hint">Importer det du har kjøpt hos AliExpress eller Mouser, så havner alt her, sortert i kategorier.</p><button class="btn btn-primary" type="button" data-pview="import">Importer</button></section>` : ""}
@@ -1093,6 +1099,8 @@ function openPart(id) {
         <label>Antall igjen (stk)<input id="pd-left" type="number" min="0" max="10000000" value="${remaining(p)}" ${mine ? "" : "disabled"}></label>
         <label>Plassering<input id="pd-loc" type="text" maxlength="80" value="${ctx.esc(p.location)}" placeholder="F.eks. Skuff 3, verkstedet" ${mine ? "" : "disabled"}></label>
         <label class="pd-note">Notat<textarea id="pd-note" rows="2" maxlength="400" ${mine ? "" : "disabled"}>${ctx.esc(p.note)}</textarea></label>
+        ${p.imgWeb ? `<div class="img-web-box"><b>Bildet er funnet på nettet</b>, ikke hos AliExpress${p.imgWebSrc ? ` (<a href="${ctx.esc(p.imgWebSrc)}" target="_blank" rel="noopener">kilde ↗</a>)` : ""}. Stemmer det?
+          ${mine ? `<span class="img-web-actions"><button type="button" class="btn btn-small btn-primary" data-imgweb="ok">Godkjenn</button><button type="button" class="btn btn-small btn-danger" data-imgweb="no">Feil bilde</button></span>` : ""}</div>` : ""}
         <label class="cat-toggle pd-imgwrong"><input type="checkbox" id="pd-imgwrong"${p.imgWrong ? " checked" : ""}${mine ? "" : " disabled"}> Feil bilde – finn riktig bilde ved neste bildesøk${p.imgWrong ? ` <span class="hint">(merket ${ctx.esc(fmtStamp(p.imgWrongAt))}${imgFixed(p) ? `; bildet ble byttet ${ctx.esc(fmtStamp(p.imgUpdated))}${p.imgBy ? ` av ${ctx.esc(p.imgBy)}` : ""} – fjern krysset hvis det nå er riktig` : "; ikke byttet ennå"})</span>` : ""}</label>
         <label class="pd-note">Bilde (lenke fra AliExpress, LCSC eller Mouser; tom = ingen bilde)<input id="pd-img" type="url" maxlength="400" value="${ctx.esc(p.image)}" placeholder="https://ae-pic-a1.aliexpress-media.com/kf/….jpg" ${mine ? "" : "disabled"}></label>
       </div>
@@ -1160,6 +1168,16 @@ function openPart(id) {
         dlg.close("");
         ctx.setSync(list.length > 1 ? `${list.length} kjøp er slettet` : "Varen er slettet");
       } catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
+    const iw = e.target.closest("[data-imgweb]");
+    if (iw && mine) {
+      // Godkjent: bildet blir stående som et vanlig, låst bilde. Avvist: varen havner i «Feil bilde».
+      p.imgWeb = false;
+      if (iw.dataset.imgweb === "ok") { p.imgManual = true; p.imgWrong = false; }
+      else { p.imgWrong = true; p.imgWrongAt = new Date().toISOString(); }
+      try { await saveOne(p); ctx.setSync(iw.dataset.imgweb === "ok" ? "Bildet er godkjent" : "Merket som feil bilde"); dlg.close(""); openPart(p.id); }
+      catch (err) { ctx.setSync(err.message, true); }
       return;
     }
     const sib = e.target.closest("[data-sibling]");

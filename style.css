@@ -979,3 +979,6 @@ body.dragging-part .parts-cats { position: sticky; top: env(safe-area-inset-top,
 .part-del-confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--danger); border-radius: 10px; }
 .part-del-confirm p { margin: 0 0 10px; }
 .btn-solid-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.img-wrong-tag.web { background: #2f6fd6; }
+.img-web-box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, #2f6fd6 12%, transparent); font-size: 13px; }
+.img-web-actions { display: flex; gap: 6px; margin-left: auto; }
