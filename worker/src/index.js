@@ -1232,10 +1232,14 @@ async function nexarToken(env) {
   const res = await fetch(NEXAR_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "client_credentials", client_id: env.NEXAR_CLIENT_ID, client_secret: env.NEXAR_CLIENT_SECRET, scope: "supply.domain" }),
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: String(env.NEXAR_CLIENT_ID).trim(), client_secret: String(env.NEXAR_CLIENT_SECRET).trim(), scope: "supply.domain" }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.access_token) throw fail(`Nexar avviste innloggingen (${res.status}). Sjekk NEXAR_CLIENT_ID og NEXAR_CLIENT_SECRET.`, 502);
+  if (!res.ok || !data.access_token) {
+    // Nexars feilkode (invalid_client, invalid_scope …) sier hva som er galt; den inneholder ingen nøkler.
+    const why = { invalid_client: "feil Client ID eller Client Secret", invalid_scope: "appen mangler tilgang til Supply (supply.domain)", unauthorized_client: "appen har ikke lov til client credentials" }[data.error] || data.error || "ukjent";
+    throw fail(`Nexar avviste innloggingen (${res.status}: ${why}).`, 502);
+  }
   // Gyldig i ca. 24 t; bufres litt kortere.
   await env.RESET_KV?.put("nexar-token", data.access_token, { expirationTtl: Math.max(300, Number(data.expires_in || 86400) - 600) });
   return data.access_token;
