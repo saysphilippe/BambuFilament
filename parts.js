@@ -1114,7 +1114,10 @@ function openPart(id) {
     document.body.appendChild(dlg);
   }
   const mine = ctx.DEMO || p.owner === ctx.userName() || !p.owner;
-  const row = (k, v) => (v ? `<tr><th>${ctx.esc(k)}</th><td>${v}</td></tr>` : "");
+  const row = (k, v, cls = "") => (v ? `<tr${cls ? ` class="${cls}"` : ""}><th>${ctx.esc(k)}</th><td>${v}</td></tr>` : "");
+  // Ordredetaljer (eier, dato, butikk, ordrenummer, status) er skjult til man åpner dem; valget huskes.
+  const orderOpen = ctx.store("bf.partOrder") === "1";
+  const hasOrder = !!(p.owner || p.orderDate || p.source || p.orderId || p.status);
   dlg.innerHTML = `<button type="button" class="dlg-close" aria-label="Lukk" title="Lukk (Esc)">×</button>
   <form method="dialog" class="part-detail">
     <div class="part-detail-side">
@@ -1124,19 +1127,20 @@ function openPart(id) {
     <div class="part-detail-text">
       <h2>${ctx.esc(p.title)}</h2>
       ${p.variant ? `<p class="part-variant">${ctx.esc(p.variant)}</p>` : ""}
-      <table class="part-facts">
-        ${row("Eier", `<span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span> ${ctx.esc(p.owner || "Ukjent")}`)}
+      <table class="part-facts${orderOpen ? " order-open" : ""}">
         ${row("Kjøpt", `${p.pack > 1 ? `${ctx.esc(p.qty)} × ${ctx.esc(p.pack)} stk = <b>${units(p)} stk</b>` : `<b>${units(p)} stk</b>`}${fmtMoney(p) ? ` à ${ctx.esc(fmtMoney(p))}${p.pack > 1 ? ` (${ctx.esc(fmtMoney({ ...p, unitPrice: p.unitPrice / p.pack }))} per stk)` : ""}` : ""}${p.orderTotal ? ` · ordre totalt ${ctx.esc(p.orderTotal)}` : ""}`)}
-        ${row("Dato", ctx.esc(fmtDate(p.orderDate)))}
+        ${hasOrder ? `<tr class="order-toggle-row"><th></th><td><button type="button" class="linkbtn order-toggle" data-ordertoggle aria-expanded="${orderOpen}"><span class="order-show">Vis ordredetaljer ▾</span><span class="order-hide">Skjul ordredetaljer ▴</span></button> <span class="hint">eier, dato, butikk, ordrenummer, status</span></td></tr>` : ""}
+        ${row("Eier", `<span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span> ${ctx.esc(p.owner || "Ukjent")}`, "order-row")}
+        ${row("Dato", ctx.esc(fmtDate(p.orderDate)), "order-row")}
         ${(() => {
           const sib = siblings(p).sort((a, b) => b.orderDate.localeCompare(a.orderDate));
           if (sib.length < 2) return "";
           const left = sib.reduce((n, x) => n + remaining(x), 0), total = sib.reduce((n, x) => n + units(x), 0);
           return row("Alle kjøp", `<b>${total} stk</b> i ${sib.length} kjøp, ${left} igjen<ul class="buy-list">${sib.map((x) => `<li><button type="button" class="linkbtn${x.id === p.id ? " current" : ""}" data-sibling="${ctx.esc(x.id)}">${ctx.esc(fmtDate(x.orderDate) || "uten dato")} · ${units(x)} stk${fmtMoney(x) ? ` à ${ctx.esc(fmtMoney(x))}` : ""}${x.orderId ? ` · ordre ${ctx.esc(x.orderId)}` : ""}</button> <span class="hint">${remaining(x)} igjen</span></li>`).join("")}</ul>`);
         })()}
-        ${row("Butikk", `${ctx.esc(SOURCE_LABEL[p.source])}${p.store && p.store !== "Mouser" ? ` · ${p.storeUrl ? `<a href="${ctx.esc(p.storeUrl)}" target="_blank" rel="noopener">${ctx.esc(p.store)}</a>` : ctx.esc(p.store)}` : ""}`)}
-        ${row("Ordrenummer", ctx.esc(p.orderId))}
-        ${row("Status", ctx.esc(p.status))}
+        ${row("Butikk", `${ctx.esc(SOURCE_LABEL[p.source])}${p.store && p.store !== "Mouser" ? ` · ${p.storeUrl ? `<a href="${ctx.esc(p.storeUrl)}" target="_blank" rel="noopener">${ctx.esc(p.store)}</a>` : ctx.esc(p.store)}` : ""}`, "order-row")}
+        ${row("Ordrenummer", ctx.esc(p.orderId), "order-row")}
+        ${row("Status", ctx.esc(p.status), "order-row")}
         ${row("Produsent", ctx.esc(p.maker))}
         ${row("Delenummer", ctx.esc(p.mpn))}
         ${row("Pakke", p.pkg ? `<span class="pkg-row">${footprintSvg(p.pkg, 150, { detail: true }) ? `<button type="button" class="fp-zoom-btn" data-fpzoom="${ctx.esc(p.pkg)}" title="Trykk for å forstørre" aria-label="Forstørr fotavtrykket for ${ctx.esc(p.pkg)}">${footprintSvg(p.pkg, 150, { detail: true })}<span class="fp-zoom-icon" aria-hidden="true">⤢</span></button>` : packageSvg(p.pkg, 64)}<span><b>${ctx.esc(p.pkg)}</b><br><span class="hint">${ctx.esc(packageInfo(p.pkg))}</span>${kicadName(p.pkg, kicadHint(p)) ? `<br><code class="kicad-name" title="Fotavtrykk i KiCads standardbibliotek">${ctx.esc(kicadName(p.pkg, kicadHint(p)))}</code>` : ""}${footprintCaption(p.pkg) ? `<br><span class="hint fp-cap">${ctx.esc(footprintCaption(p.pkg, kicadHint(p)))}</span><span class="fp-legend"><i class="cu"></i>F.Cu <i class="silk"></i>F.SilkS <i class="drill"></i>Drill</span>` : ""}</span></span>` : "")}
@@ -1231,6 +1235,13 @@ function openPart(id) {
       else { p.imgWrong = true; p.imgWrongAt = new Date().toISOString(); }
       try { await saveOne(p); ctx.setSync(iw.dataset.imgweb === "ok" ? "Bildet er godkjent" : "Merket som feil bilde"); dlg.close(""); openPart(p.id); }
       catch (err) { ctx.setSync(err.message, true); }
+      return;
+    }
+    const ot = e.target.closest("[data-ordertoggle]");
+    if (ot) {
+      const open = ot.closest("table").classList.toggle("order-open");
+      ot.setAttribute("aria-expanded", open);
+      ctx.store("bf.partOrder", open ? "1" : "");
       return;
     }
     const fz = e.target.closest("[data-fpzoom]");

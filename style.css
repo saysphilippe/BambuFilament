@@ -1056,3 +1056,9 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .fpz-stage.light { background: #fff; color: #1c1f1d; }
 .schematic-fig .schematic-wrap { cursor: zoom-in; }
 .fpz-stage svg, .fpz-stage .schematic { min-width: 0; display: block; margin: 0 auto; width: calc(var(--fpz, 1) * 100%); max-width: none; height: auto; max-height: calc(var(--fpz, 1) * (100vh - 220px)); }
+
+/* Ordredetaljer i produktvinduet: skjult til man åpner dem */
+.part-facts .order-row { display: none; }
+.part-facts.order-open .order-row { display: table-row; }
+.order-toggle .order-hide, .part-facts.order-open .order-toggle .order-show { display: none; }
+.part-facts.order-open .order-toggle .order-hide { display: inline; }
