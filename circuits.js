@@ -900,6 +900,51 @@ const GENERIC = [
   [/\b(1N4148)\b/i, null],
 ];
 
+// ---------- «Typical application» fra databladet ----------
+// Utklipp av koblingseksempelet i produsentens datablad (img/typical), med kilde og side.
+// Laget med PyMuPDF fra PDF-ene; nye legges til her med samme form.
+const TYPICAL = [
+  [/^A4988/, { img: "img/typical/A4988.png", w: 1093, h: 492, src: "https://www.allegromicro.com/-/media/files/datasheets/a4988-datasheet.pdf", page: 1, note: "Steppermotordriver koblet til mikrokontroller og en bipolar steppermotor." }],
+  [/^ACS712/, { img: "img/typical/ACS712.png", w: 509, h: 509, src: "https://www.allegromicro.com/-/media/files/datasheets/acs712-datasheet.pdf", page: 1, note: "Strømmen går gjennom pinne 1–2 til 3–4; utgangen er en analog spenning rundt VCC/2." }],
+  [/^ADS1015/, { img: "img/typical/ADS1015.png", w: 782, h: 329, src: "https://www.ti.com/lit/ds/symlink/ads1015.pdf", page: 29, note: "Eksempel: måling av strøm i en høyspenningskrets via shunt og forsterker." }],
+  [/^ADS1115/, { img: "img/typical/ADS1115.png", w: 481, h: 209, src: "https://www.ti.com/lit/ds/symlink/ads1115.pdf", page: 33, note: "Eksempel: måling av strøm i en høyspenningskrets via shunt og forsterker." }],
+  [/^(AMS|LM)1117/, { img: "img/typical/AMS1117.png", w: 580, h: 291, src: "http://www.advanced-monolithic.com/pdf/ds1117.pdf", page: 4, note: "Justerbar variant: VOUT = 1,25 V × (1 + R2/R1). Faste varianter (3.3/5.0) trenger bare kondensatorer inn og ut (22 µF tantal på utgangen)." }],
+  [/^CH340/, { img: "img/typical/CH340.png", w: 610, h: 390, src: "https://cdn.sparkfun.com/datasheets/Dev/Arduino/Other/CH340DS1.PDF", page: 5, note: "USB til seriell: 12 MHz krystall med 22 pF, avkobling på VCC og V3 (V3 kobles til VCC ved 3,3 V)." }],
+  [/^DRV8833/, { img: "img/typical/DRV8833.png", w: 549, h: 529, src: "https://www.ti.com/lit/ds/symlink/drv8833.pdf", page: 12, note: "To DC-motorer (eller én stepper); R2 er strømmålemotstand." }],
+  [/^DS1307/, { img: "img/typical/DS1307.png", w: 605, h: 454, src: "https://cdn-shop.adafruit.com/datasheets/DS1307.pdf", page: 1, note: "Sanntidsklokke på I2C med 32,768 kHz krystall og backup-batteri på VBAT." }],
+  [/^DS18B20/, { img: "img/typical/DS18B20.png", w: 1241, h: 348, src: "https://cdn-shop.adafruit.com/datasheets/DS18B20.pdf", page: 6, note: "Ekstern forsyning: 4,7 kΩ pull-up på datalinjen (1-Wire)." }],
+  [/^DS3231/, { img: "img/typical/DS3231.png", w: 1218, h: 418, src: "https://cdn-shop.adafruit.com/product-files/3013/DS3231.pdf", page: 1, note: "Sanntidsklokke på I2C med innebygd krystall; pull-up på SDA/SCL." }],
+  [/^FT232/, { img: "img/typical/FT232R.png", w: 1169, h: 402, src: "https://cdn.sparkfun.com/datasheets/BreakoutBoards/DS_FT232R.pdf", page: 27, note: "USB til RS232 med nivåomformer; LED-er på CBUS0/1 viser trafikk." }],
+  [/^HDC1080/, { img: "img/typical/HDC1080.png", w: 1097, h: 412, src: "https://www.ti.com/lit/ds/symlink/hdc1080.pdf", page: 1, note: "Fukt- og temperatursensor på I2C." }],
+  [/^HX711/, { img: "img/typical/HX711.png", w: 1061, h: 566, src: "https://datasheet.lcsc.com/datasheet/pdf/19a1151aaf9f4738f2b7e47b47658d99.pdf", page: 1, note: "Lastcelle (Wheatstone-bro) på INA±, S8550 som regulator for AVDD." }],
+  [/^INA219/, { img: "img/typical/INA219.png", w: 1026, h: 443, src: "https://www.ti.com/lit/ds/symlink/ina219.pdf", page: 1, note: "Strøm- og spenningsmåler over en shunt (VIN+ / VIN−), avlest på I2C." }],
+  [/^L293/, { img: "img/typical/L293D.png", w: 595, h: 631, src: "https://www.ti.com/lit/ds/symlink/l293.pdf", page: 9, note: "To DC-motorer eller én bipolar stepper; 5 V logikk og separat motorspenning." }],
+  [/^L298/, { img: "img/typical/L298.png", w: 1087, h: 651, src: "https://www.sparkfun.com/datasheets/Robotics/L298_H_Bridge.pdf", page: 6, note: "Én DC-motor i begge retninger med hurtige frihjulsdioder D1–D4. RS er strømmålemotstand." }],
+  [/^LM2596/, { img: "img/typical/LM2596.png", w: 908, h: 197, src: "https://www.ti.com/lit/ds/symlink/lm2596.pdf", page: 1, note: "Buck-omformer: 5,0 V-variant, 33 µH spole og Schottky-diode 1N5824." }],
+  [/^LM317/, { img: "img/typical/LM317.png", w: 580, h: 584, src: "https://www.ti.com/lit/ds/symlink/lm317.pdf", page: 1, note: "VOUT = 1,25 V × (1 + R2/R1)." }],
+  [/^(LM358|LM324)/, { img: "img/typical/LM358.png", w: 459, h: 287, src: "https://www.ti.com/lit/ds/symlink/lm358.pdf", page: 27, note: "Inverterende forsterker: forsterkning = −RF/RI." }],
+  [/^LM386/, { img: "img/typical/LM386.png", w: 519, h: 286, src: "https://www.ti.com/lit/ds/symlink/lm386.pdf", page: 10, note: "Lydforsterker med forsterkning 20 og 8 Ω høyttaler." }],
+  [/^(LM)?78\d\d/, { img: "img/typical/LM7805.png", w: 495, h: 303, src: "https://www.ti.com/lit/ds/symlink/lm340.pdf", page: 14, note: "Fast regulator: 0,22 µF inn og 0,1 µF ut når den står langt fra filterkondensatoren." }],
+  [/^MAX72(19|21)/, { img: "img/typical/MAX7219.png", w: 587, h: 563, src: "https://cdn-shop.adafruit.com/datasheets/MAX7219.pdf", page: 1, note: "8-sifret 7-segmentdisplay på SPI; RSET (9,53 kΩ) setter segmentstrømmen." }],
+  [/^MAX9814/, { img: "img/typical/MAX9814.png", w: 1210, h: 898, src: "https://cdn-shop.adafruit.com/datasheets/MAX9814.pdf", page: 10, note: "Mikrofonforsterker med automatisk forsterkning (AGC) og bias for elektretmikrofon." }],
+  [/^MAX98357/, { img: "img/typical/MAX98357.png", w: 580, h: 355, src: "https://cdn-shop.adafruit.com/product-files/3006/MAX98357A-MAX98357B.pdf", page: 1, note: "I2S-lydforsterker (klasse D); høyttaleren kobles rett på OUTP/OUTN." }],
+  [/^MCP4725/, { img: "img/typical/MCP4725.png", w: 610, h: 521, src: "https://ww1.microchip.com/downloads/en/devicedoc/22039d.pdf", page: 33, note: "12-bit DAC på I2C; A0 til VSS gir adresse 0x60." }],
+  [/^MT3608/, { img: "img/typical/MT3608.png", w: 575, h: 407, src: "https://www.olimex.com/Products/Breadboarding/BB-PWR-3608/resources/MT3608.pdf", page: 1, note: "Boost-omformer: VOUT = 0,6 V × (1 + R1/R2)." }],
+  [/^(NE|LM|SA|NA)555/, { img: "img/typical/NE555.png", w: 591, h: 525, src: "https://www.ti.com/lit/ds/symlink/ne555.pdf", page: 12, note: "Astabil (blinker): f ≈ 1,44 / ((RA + 2·RB) · C)." }],
+  [/^PCA9685/, { img: "img/typical/PCA9685.png", w: 1116, h: 1224, src: "https://cdn-shop.adafruit.com/datasheets/PCA9685.pdf", page: 35, note: "16 PWM-utganger på I2C (LED eller servo)." }],
+  [/^PCF8574/, { img: "img/typical/PCF8574.png", w: 1116, h: 681, src: "https://www.ti.com/lit/ds/symlink/pcf8574.pdf", page: 16, note: "8 ekstra I/O-pinner på I2C." }],
+  [/^SN754410/, { img: "img/typical/SN754410.png", w: 1029, h: 775, src: "https://www.ti.com/lit/ds/symlink/sn754410.pdf", page: 10, note: "Dobbel H-bro: én bipolar stepper eller to DC-motorer." }],
+  [/^TB6612/, { img: "img/typical/TB6612FNG.png", w: 1219, h: 696, src: "https://cdn.sparkfun.com/datasheets/Robotics/TB6612FNG.pdf", page: 7, note: "Dobbel H-bro for to DC-motorer; STBY må være høy." }],
+  [/^TCA9548/, { img: "img/typical/TCA9548A.png", w: 718, h: 355, src: "https://www.ti.com/lit/ds/symlink/tca9548a.pdf", page: 1, note: "I2C-multiplekser: 8 kanaler med samme adresse på hver." }],
+  [/^TL07[24]/, { img: "img/typical/TL072.png", w: 412, h: 258, src: "https://www.ti.com/lit/ds/symlink/tl072.pdf", page: 30, note: "Inverterende forsterker: forsterkning = −RF/RI." }],
+  [/^TL431/, { img: "img/typical/TL431.png", w: 616, h: 408, src: "https://www.ti.com/lit/ds/symlink/tl431.pdf", page: 23, note: "Justerbar referanse: VOUT = 2,5 V × (1 + R1/R2)." }],
+  [/^TP4056/, { img: "img/typical/TP4056.png", w: 627, h: 393, src: "https://datasheet.lcsc.com/datasheet/pdf/b209eb93844734cd2c812e40e45fdd10.pdf", page: 1, note: "Litiumlader: RPROG setter ladestrømmen (1,2 kΩ ≈ 1 A); NTC på TEMP er valgfri." }],
+  [/^ULN200[34]/, { img: "img/typical/ULN2003.png", w: 684, h: 416, src: "https://www.ti.com/lit/ds/symlink/uln2003a.pdf", page: 16, note: "Sju Darlington-drivere; COM til motorspenningen for frihjulsdiodene." }],
+  [/^XL6009/, { img: "img/typical/XL6009.png", w: 870, h: 592, src: "https://www.haoyuelectronics.com/Attachment/XL6009/XL6009-DC-DC-Converter-Datasheet.pdf", page: 3, note: "Boost-omformer: VOUT = 1,25 V × (1 + R2/R1)." }],
+];
+const typicalFor = (mpn) => (mpn ? TYPICAL.find(([re]) => re.test(mpn))?.[1] || null : null);
+const host = (u) => { try { return new URL(u).hostname.replace(/^(www|cdn|cdn-shop|ww1)./, ""); } catch { return ""; } };
+
 // ---------- Inngang ----------
 
 // Alt detaljvinduet trenger: delenummer, datablad, pinner og koblingsskjema.
@@ -920,6 +965,7 @@ export function componentInfo(part) {
     pins: found?.pins || [],
     note: found?.note || "",
     kicad: found ? kicadHtml(found) : "",
+    typical: typicalFor(found?.mpn || mpns[0]),
     circuit,
   };
 }
@@ -937,6 +983,7 @@ export function componentHtml(part) {
     ${pins}
     ${info.note ? `<p class="hint">${esc(info.note)}</p>` : ""}
     ${info.kicad}
+    ${info.typical ? `<figure class="schematic-fig typical-fig"><figcaption><b>Typisk kobling fra databladet</b></figcaption><div class="schematic-wrap"><img src="${esc(info.typical.img)}" width="${info.typical.w}" height="${info.typical.h}" alt="Koblingseksempel fra databladet for ${esc(info.mpn)}" loading="lazy"></div><figcaption>${esc(info.typical.note)} <span class="hint">Kilde: <a href="${esc(info.typical.src)}" target="_blank" rel="noopener">datablad (${esc(host(info.typical.src))}), s. ${info.typical.page} ↗</a></span></figcaption></figure>` : ""}
     ${info.circuit ? `<figure class="schematic-fig"><figcaption><b>${esc(info.circuit.title)}</b></figcaption><div class="schematic-wrap">${info.circuit.svg}</div><figcaption>${esc(info.circuit.caption)}</figcaption></figure>` : ""}
   </section>`;
 }
