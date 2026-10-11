@@ -1336,7 +1336,20 @@ async function cartStep(pid, delta) {
   }
 }
 
+// Ny tegning nullstiller rullingen i kategorilisten (egen rulling) og i chip-radene som rulles
+// sidelengs på mobil. Den tas vare på, så listen ikke hopper til toppen når man f.eks. flytter en vare.
 function render() {
+  const box = ctx.$("#parts-root");
+  const rail = box?.querySelector(".parts-rail")?.scrollTop || 0;
+  const rows = box ? [...box.querySelectorAll(".chips")].map((c) => c.scrollLeft) : [];
+  renderView();
+  if (!box) return;
+  const r = box.querySelector(".parts-rail");
+  if (r && rail) r.scrollTop = rail;
+  box.querySelectorAll(".chips").forEach((c, i) => { if (rows[i]) c.scrollLeft = rows[i]; });
+}
+
+function renderView() {
   updateBadge();
   const box = ctx.$("#parts-root");
   if (!box || box.hidden) return;
