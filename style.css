@@ -1209,3 +1209,6 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .pick-box { position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 6px; border: 2px solid #fff; background: rgba(0, 0, 0, .35); box-shadow: 0 0 0 1px rgba(0, 0, 0, .3); }
 .card.picked .pick-box { background: var(--accent); }
 .card.picked .pick-box::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 15px; font-weight: 700; line-height: 1; }
+
+/* Testknapper under «Godkjenning» (bare administrator) */
+.loan-test { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border); }

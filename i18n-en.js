@@ -725,6 +725,13 @@ export default {
     "Zenerdiode: leder bakover ved zenerspenningen. Stripen er katoden, og den vender mot pluss.": "Zener diode: conducts in reverse at the zener voltage. The stripe is the cathode, and it faces positive.",
   },
   "Filament og felles": {
+    "Slett viste bevegelser": "Delete shown movements",
+    "Sletter bare bevegelsene som vises med filtrene over. Lånene beholder utfallet sitt, men rullene mister historikken. Kan ikke angres.": "Only deletes the movements shown with the filters above. Loans keep their outcome, but the spools lose their history. Cannot be undone.",
+    "Slette {*} bevegelser? Kan ikke angres. Trykk igjen": "Delete {*} movements? Cannot be undone. Press again",
+    "Ingen bevegelser å slette.": "No movements to delete.",
+    "Slettet {*} bevegelser.": "Deleted {*} movements.",
+    "Test:": "Test:",
+    "Lag testdata og simuler RFID-innlesning": "Create test data and simulate RFID read",
     "Godkjenning": "Approval",
     "Godkjenning ({*})": "Approval ({*})",
     "Aktivitet": "Activity",

@@ -931,8 +931,52 @@ function activityHtml() {
       ${chipRow("who", "Hvem", [["", "Alle"], ...who.map((n) => [n, n])])}
       ${chipRow("src", "Kilde", [["", "Alle"], ["reader", "RFID-leser"], ["web", "Nettsiden"]])}
     </div>
+    ${isAdmin() && token() && !DEMO ? `<div class="act-admin">
+      <button type="button" class="btn btn-small" data-act-delete>Slett viste bevegelser</button>
+      <span class="hint">Sletter bare bevegelsene som vises med filtrene over. Lånene beholder utfallet sitt, men rullene mister historikken. Kan ikke angres.</span>
+      <span id="act-msg" class="hint" role="status"></span></div>` : ""}
     <ul id="activity-list">${activityItems()}</ul>
   </section>`;
+}
+
+// Sletter bevegelsene som vises (filtrene gjelder) fra historikken til rullene. Før det låses
+// utfallet til lån som bare kjente det fra historikken («levert», «brukt opp»), så de ikke endres.
+async function deleteActivity(btn) {
+  const msg = note("#act-msg");
+  const keys = new Set(filteredEvents().map((e) => `${e.spool.id}|${e.at}|${e.action}`));
+  if (!keys.size) return (msg.textContent = "Ingen bevegelser å slette.");
+  if (!confirmed(btn, `Slette ${keys.size} bevegelser? Kan ikke angres. Trykk igjen`)) return;
+  btn.disabled = true;
+  msg.textContent = "Sletter…";
+  try {
+    const freeze = [];
+    for (const l of state.loans) {
+      if (l.own || l.pending || l.settledAt || l.purchase || l.returnedAt || l.usedAt) continue;
+      const s = state.spools.find((x) => x.id === l.spool);
+      if (!s) continue;
+      const after = (s.history || []).filter((e) => e.at > l.at);
+      const st = loanState(l);
+      if (st === "returned" && after.length) freeze.push([l.id, "returnedAt", after.at(-1).at]);
+      else if (st === "owes") freeze.push([l.id, "usedAt", after.find((e) => e.action === "empty")?.at || ""]);
+    }
+    if (freeze.length) {
+      await saveDoc((doc) => {
+        for (const [id, field, at] of freeze) {
+          const l = doc.loans.find((x) => x.id === id);
+          if (l && at && !l[field]) l[field] = at;
+        }
+      }, `Låser utfallet til ${freeze.length} lån før sletting av bevegelser (${userName()})`, "loans");
+    }
+    await saveDoc((doc) => {
+      for (const s of doc.spools) if (s.history?.length) s.history = s.history.filter((e) => !keys.has(`${s.id}|${e.at}|${e.action}`));
+    }, `Slettet ${keys.size} bevegelser (${userName()})`);
+    render();
+    msg.textContent = `Slettet ${keys.size} bevegelser.`;
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // Hvem som bruker en lagerspole: «I AMS hos X» (fra X sin egen AMS) eller «Tatt ut av X».
@@ -1215,7 +1259,10 @@ function renderLoans() {
         <p class="hint">Spolene dine ble sjekket ut med RFID-leseren. Tok du den selv: trykk OK. Ellers velg hvem den gikk til og trykk Godkjenn, så blir det et lån.</p>
         <ul class="loan-list">${todos.map(pendingRow).join("")}</ul></div>` : ""}
       ${others.length ? `<h2>Venter på godkjenning hos andre (${others.length})</h2><ul class="loan-list">${others.map(pendingRow).join("")}</ul>` : ""}
-      ${waiting.length ? "" : `<p class="muted">Ingen utsjekk fra RFID-leseren venter på godkjenning.</p>`}`,
+      ${waiting.length ? "" : `<p class="muted">Ingen utsjekk fra RFID-leseren venter på godkjenning.</p>`}
+      ${isAdmin() && token() && !DEMO ? `<div class="loan-test"><span class="muted">Test:</span>
+        <button class="btn btn-small" data-test-scenario>Lag testdata og simuler RFID-innlesning</button>
+        <button class="btn btn-small" data-test-nuke>Slett testdata</button></div>` : ""}`,
     open: `<div class="loan-sum">${debtChips || `<span class="loan-debt clear">Ingen skylder filament akkurat nå</span>`}</div>
       <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Sjekk ut til» når du sjekker ut. Utsjekk med RFID-leseren må godkjennes først. Den som har fått en rull, skylder den til den leveres tilbake (sjekkes inn) eller er gjort opp, for eksempel med Vipps.</p>
       ${section("Utestående", open, "Ingen skylder filament.")}
@@ -1756,8 +1803,11 @@ async function checkoutPicked(btn) {
 const TEST_KEYS = ["GFA00-A0", "GFA00-B3", "GFA01-B0", "GFA05-P5", "GFG02-G0", "GFA00-M2",
   "GFA16-N0", "GFA09-K0", "GFB01-W0", "GFA17-B1", "GFA08-Y1", "GFU02-R0"];
 
-async function makeTestSpools(btn) {
-  if (!confirmed(btn, "Lage 12 testruller? Trykk igjen")) return;
+// Meldingsfelt som slås opp når teksten skrives (listen kan tegnes på nytt underveis).
+const note = (sel) => ({ set textContent(t) { const el = $(sel); if (el) el.textContent = t; } });
+
+async function makeTestSpools(btn, msg = note("#pick-msg")) {
+  if (btn && !confirmed(btn, "Lage 12 testruller? Trykk igjen")) return;
   const owners = users().filter((u) => u.known).map((u) => u.name);
   const stamp = Date.now().toString(36).toUpperCase();
   const at = new Date().toISOString();
@@ -1772,13 +1822,26 @@ async function makeTestSpools(btn) {
       blocks: buildBlocks({ materialId, variantId: `${materialId.slice(2)}-${code}`, detailedType: entry[1], colors: entry[2] }),
     };
   });
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   try {
     await saveDoc((doc) => { doc.spools.push(...fresh); }, `Testdata: ${fresh.length} ruller (${userName()})`);
     render();
-    $("#pick-msg").textContent = `Laget ${fresh.length} testruller. De slettes når de sjekkes inn igjen.`;
+    msg.textContent = `Laget ${fresh.length} testruller. De slettes når de sjekkes inn igjen.`;
   } catch (err) {
-    $("#pick-msg").textContent = err.message;
+    msg.textContent = err.message;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Lager testdata for godkjenning i ett trykk (fra «Godkjenning»): testruller om det ikke finnes
+// noen på lager, så simulert RFID-innlesning (utsjekk) som havner som ventende godkjenninger.
+async function testScenario(btn) {
+  const msg = note("#loan-error");
+  btn.disabled = true;
+  try {
+    if (!state.spools.some((s) => s.test && s.status === "in")) await makeTestSpools(null, msg);
+    await simulateReaderScans(btn, msg);
   } finally {
     btn.disabled = false;
   }
@@ -1787,8 +1850,7 @@ async function makeTestSpools(btn) {
 // Simulerer at RFID-leseren leser testruller på lager (inntil 6): hver blir sjekket ut med en
 // leserhendelse (dev: "reader"), og siden lager en ventende godkjenning i «Lånt filament», som
 // ved en ekte innlesning. Annenhver rull tas av en annen bruker enn eieren.
-async function simulateReaderScans(btn) {
-  const msg = $("#pick-msg");
+async function simulateReaderScans(btn, msg = note("#pick-msg")) {
   const ids = state.spools.filter((s) => s.test && s.status === "in").slice(0, 6).map((s) => s.id);
   if (!ids.length) return (msg.textContent = "Ingen testruller på lager. Lag testruller først.");
   const names = users().filter((u) => u.known).map((u) => u.name);
@@ -1854,9 +1916,8 @@ async function simulateReaderCheckins(btn) {
 // (ekte RFID-id-er er heksadesimale og kan ikke gjøre det).
 const isTestId = (id) => /^TEST[0-9A-Z]/.test(String(id));
 
-async function nukeTestData(btn) {
+async function nukeTestData(btn, msg = note("#pick-msg")) {
   if (!confirmed(btn, "Slette all testdata? Trykk igjen")) return;
-  const msg = $("#pick-msg");
   btn.disabled = true;
   msg.textContent = "Sletter…";
   try {
@@ -4148,6 +4209,12 @@ document.addEventListener("click", (e) => {
   if (pickGo) return checkoutPicked(pickGo);
   const pickTest = e.target.closest("#pick-test");
   if (pickTest) return makeTestSpools(pickTest);
+  const actDel = e.target.closest("[data-act-delete]");
+  if (actDel) return deleteActivity(actDel);
+  const testGo = e.target.closest("[data-test-scenario]");
+  if (testGo) return testScenario(testGo);
+  const testNuke = e.target.closest("[data-test-nuke]");
+  if (testNuke) return nukeTestData(testNuke, note("#loan-error"));
   const pickSim = e.target.closest("#pick-sim");
   if (pickSim) return simulateReaderScans(pickSim);
   const pickSimIn = e.target.closest("#pick-simin");
