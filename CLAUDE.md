@@ -28,6 +28,8 @@ AliExpress, Mouser og LCSC) for en lukket vennegjeng. Se `CONTRIBUTING.md` for o
   (norsk tekst -> engelsk, `{*}` for variable deler). Ny eller endret tekst må også legges inn der,
   ellers vises den på norsk. Brukerdata som ikke skal oversettes, merkes med `translate="no"`.
   Språkvalget lagres i `users[].lang`; ønskede språk i D1-samlingen `langreqs` (fil «ideas»).
+  Ordlisten er gruppert etter område (underfanene i Innstillinger → Oversettelser). Tekster endret
+  der (norsk og engelsk) ligger i D1-samlingen `texts` (fil «i18n») og går foran ordlisten.
 - Escape data før HTML (`esc`), farger via `safeColor`. Ingen inline-skript (CSP). Bildelenker
   bare fra godkjente verter (`safeImg`).
 - Mobil: siden skal aldri bli bredere enn skjermen (sjekk på ca. 390 px). Rader som rulles

@@ -1,5 +1,5 @@
 // i18n.js først: den henter oversettelsen før resten av siden tegnes.
-import { initLang, applyUserLang, langSelectHtml, onLangSelect } from "./i18n.js?v=20261009202254";
+import { initLang, applyUserLang, langSelectHtml, onLangSelect, loadTexts, renderTextsEditor } from "./i18n.js?v=20261009202254";
 import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009202254";
 import { toRecords } from "./worker/src/records.js?v=20261009202254";
 import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken, newKeys, openKeysFull, openPrivate, rewrapKeys } from "./auth.js?v=20261009202254";
@@ -517,7 +517,7 @@ function setDoc(doc) {
     wishes: doc.wishes || {},
   };
   state.spools = state.doc.spools.map(enrich);
-  if (session) applyUserLang();
+  if (session) { applyUserLang(); loadTexts(); }
 }
 
 function addEvent(spool, action, extra = {}) {
@@ -1874,7 +1874,7 @@ async function cardAction(kind, uid, value, el) {
 const fmtMinutes = (m) => (m < 1 ? `${Math.round(m * 60)} sekunder` : m === 1 ? "1 minutt" : `${String(m).replace(".", ",")} minutter`);
 
 // Underfaner i Innstillinger; valget huskes i nettleseren.
-const SETTING_TABS = [["rfid", "RFID-leser"], ["loans", "Lån"], ["cart", "Handlekurv"], ["parts", "Komponenter"], ["account", "Konto og varsler"]];
+const SETTING_TABS = [["rfid", "RFID-leser"], ["loans", "Lån"], ["cart", "Handlekurv"], ["parts", "Komponenter"], ["texts", "Oversettelser"], ["account", "Konto og varsler"]];
 const settingsTab = () => (SETTING_TABS.some(([id]) => id === store("bf.setTab")) ? store("bf.setTab") : "rfid");
 
 function renderSettings() {
@@ -1911,6 +1911,7 @@ function renderSettings() {
     ${field("dhlFee", "DHL: fortollingsgebyr", "Anslag hvis DHL leverer selv (utlegg av mva). Sjekk fakturaen fra DHL.", "kr")}
     ${field("eurRate", "Eurokurs (reserve)", `Brukes bare når eurokursen fra Norges Bank mangler. Nå brukes ${state.store?.fx ? `Norges Banks kurs ${String(state.store.fx.eurNok).replace(".", ",")}` : "denne"}.`, "kr per euro")}`,
     parts: `<div id="parts-settings">${partsSettingsHtml()}</div>`,
+    texts: `<div id="texts-editor" class="texts-editor"></div>`,
     account: `<h3>Konto og varsler</h3>
     <p class="hint">E-post, mobilnummer, farge, varsler om nye meldinger (e-post eller WhatsApp) og passord ligger på kontoen din.</p>
     <p class="settings-actions">${DEMO ? `<span class="hint">Ikke tilgjengelig i demoen.</span>` : token()
@@ -1927,6 +1928,7 @@ function renderSettings() {
     <div class="settings-body">${sections[tab]}</div>
     <p id="settings-msg" class="hint" role="status"></p>
   </section>`;
+  if (tab === "texts") renderTextsEditor($("#texts-editor"));
   // Antall per kategori: hent komponentene og tegn på nytt når de er klare.
   if (tab === "parts") loadParts()?.then?.(() => state.tab === "settings" && settingsTab() === "parts" && document.body.dataset.section !== "parts" && renderSettings());
 }

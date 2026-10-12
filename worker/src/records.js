@@ -19,6 +19,8 @@ export const FILE_COLLS = {
   // Forslag til forbedringer (id = tidspunkt + tilfeldig), se ideas.js. langreqs (id = språknavn
   // med små bokstaver): språk brukerne ønsker at siden oversettes til, med stemmer, se i18n.js.
   ideas: ["ideas", "langreqs"],
+  // Tekster endret i Innstillinger → Oversettelser (id = hash av den norske teksten i koden), se i18n.js.
+  i18n: ["texts"],
 };
 
 const MAX_LOGINS = 500;
@@ -82,6 +84,8 @@ export function toRecords(file, doc) {
   } else if (file === "ideas") {
     for (const i of doc.ideas || []) if (i?.id) add("ideas", i.id, i);
     for (const l of doc.langs || []) if (l?.id) add("langreqs", l.id, l);
+  } else if (file === "i18n") {
+    for (const t of doc.texts || []) if (t?.id) add("texts", t.id, t);
   }
   return out;
 }
@@ -107,5 +111,6 @@ export function fromRecords(file, rows) {
   if (file === "parts") return { version: 1, parts: by("parts").map((r) => r.data), requests: by("partreqs").map((r) => r.data), prefs: map("partprefs"), cats: map("partcats"), projects: by("projects").map((r) => r.data) };
   if (file === "messages") return { version: 1, messages: by("messages").map((r) => r.data).sort((a, b) => String(a.at).localeCompare(String(b.at))), read: map("msgread"), presence: map("presence") };
   if (file === "ideas") return { version: 1, ideas: by("ideas").map((r) => r.data), langs: by("langreqs").map((r) => r.data) };
+  if (file === "i18n") return { version: 1, texts: by("texts").map((r) => r.data) };
   throw new Error(`Ukjent fil: ${file}`);
 }
