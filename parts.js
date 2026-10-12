@@ -1390,7 +1390,10 @@ function renderView() {
   const groups = groupParts(list);
   // Tallene i filtrene teller produkter (flere kjøp av samme vare = én), som «varer totalt» og listen.
   const products = (list) => new Set(list.map(groupKey)).size;
-  const count = (key, val) => products(all.filter((p) => p[key] === val && (pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0))));
+  const showOk = (p) => pstate.show === "all" || (pstate.show === "have" ? remaining(p) > 0 : remaining(p) === 0);
+  const count = (key, val) => products(all.filter((p) => p[key] === val && showOk(p)));
+  // «varer totalt» teller som eier-filteret: samme «Har igjen/Brukt opp/Alle»-valg, og bare valgt eier.
+  const total = products(all.filter((p) => showOk(p) && (!pstate.owner || p.owner === pstate.owner)));
   const owners = [...new Set(all.map((p) => p.owner).filter(Boolean))].sort();
   const pkgCount = {};
   for (const p of all) if (p.pkg) (pkgCount[p.pkg] ||= new Set()).add(groupKey(p));
@@ -1420,7 +1423,7 @@ function renderView() {
     <div class="parts-layout">
       <aside class="parts-rail">
         <div class="stats stats-side">
-          <div class="stat"><b>${groupParts(all).length.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
+          <div class="stat"><b>${total.toLocaleString("nb-NO")}</b><span>varer totalt</span></div>
           ${totalNok && (ctx.DEMO || (ctx.isAdmin?.() && !pstate.prefs[meName()]?.hideSpent)) ? `<div class="stat" title="${ctx.esc(`${spentTip}. Omregnet til kroner med omtrentlig kurs.${noTotal.size ? ` For ${noTotal.size} ordre finnes ikke totalen lenger hos butikken (gamle AliExpress-ordre), så der er bare varene med, uten frakt.` : ""}`)}"><b>${Math.round(totalNok / 1000).toLocaleString("nb-NO")}k</b><span>kr betalt, ca. (${allOrders.size.toLocaleString("nb-NO")} ordre${noTotal.size ? `, frakt mangler for ${noTotal.size}` : ", inkl. frakt"})</span></div>` : ""}
         </div>
         <nav class="parts-cats" aria-label="Kategori"><span class="rail-label">Kategori <button type="button" class="linkbtn cat-edit-btn" data-editcats>${pstate.editCats ? "Ferdig" : "Endre"}</button></span>
