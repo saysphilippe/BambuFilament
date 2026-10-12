@@ -80,6 +80,9 @@ const state = {
   openTypes: new Set(),
   newsSub: store("bf.newsSub") || "new",
   loansSub: null,
+  loanPick: new Set(), // valgte utsjekk i «Godkjenning»
+  apprTo: "",
+  apprRefill: false,
   store: null,
   shop: { q: "", cat: "", status: store("bf.shopStatus") || "", sort: store("bf.shopSort") || "name", limit: 60 },
   filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type", ams: false, kind: "" },
@@ -1109,6 +1112,65 @@ async function syncReaderCheckouts() {
   }
 }
 
+// Oppdaterer «Merk alle», antall og knapp i Godkjenning uten å tegne listen på nytt
+// (radvalgene for «Sjekket ut til» skal ikke gå tapt).
+function updateApprBar() {
+  const boxes = [...document.querySelectorAll("[data-appr-pick]")];
+  const n = state.loanPick.size;
+  const all = $("#appr-all");
+  if (all) all.checked = !!boxes.length && boxes.every((c) => c.checked);
+  const count = $("#appr-count");
+  if (count) count.textContent = `${n} valgt`;
+  const go = $("#appr-go");
+  if (go) { go.disabled = !n; go.textContent = n ? `Godkjenn valgte (${n})` : "Godkjenn valgte"; }
+  for (const c of boxes) c.closest(".appr-row")?.classList.toggle("picked", c.checked);
+}
+
+// Godkjenner alle valgte utsjekk samlet, med samme steg som for én: mottaker per rad (eller én
+// felles), eget forbruk når mottakeren er eieren, ellers lån, og kjøp (refill) om det er krysset av.
+async function approveMany(btn) {
+  const msg = note("#appr-msg");
+  const bulkTo = $("#appr-to")?.value || "";
+  const bulkRefill = !!$("#appr-refill")?.checked;
+  const picks = [...state.loanPick].map((id) => {
+    const q = CSS.escape(id);
+    return {
+      id,
+      to: bulkTo || document.querySelector(`[data-pending-to="${q}"]`)?.value || "",
+      refill: bulkRefill || !!document.querySelector(`[data-pending-refill="${q}"]`)?.checked,
+    };
+  });
+  if (!picks.length) return (msg.textContent = "Velg minst én utsjekk.");
+  const missing = picks.filter((p) => !p.to).length;
+  if (missing) return (msg.textContent = `Velg hvem ${missing === 1 ? "én utsjekk" : missing + " utsjekk"} gikk til.`);
+  if (!confirmed(btn, `Godkjenn ${picks.length}? Trykk igjen`)) return;
+  btn.disabled = true;
+  msg.textContent = "Godkjenner…";
+  try {
+    let done = 0;
+    await saveDoc((doc) => {
+      done = 0;
+      for (const p of picks) {
+        const l = doc.loans.find((x) => x.id === p.id);
+        if (!l || !l.pending) continue;
+        l.pending = false;
+        l.to = p.to;
+        l.approvedBy = userName();
+        if (p.to === l.owner) l.own = true;
+        else if (p.refill) l.purchase = true;
+        done++;
+      }
+      if (!done) return "Utsjekkene finnes ikke lenger.";
+    }, `Godkjente ${picks.length} utsjekk (${userName()})`, "loans");
+    state.loanPick.clear();
+    render();
+    note("#appr-msg").textContent = `Godkjente ${done} utsjekk.`;
+  } catch (err) {
+    msg.textContent = err.message;
+    btn.disabled = false;
+  }
+}
+
 // Godkjenner en utsjekk fra leseren: til eieren = eget forbruk, ellers et lån.
 async function approveCheckout(loanId, to, btn, purchase = false) {
   if (!to) return ($("#loan-error").textContent = "Velg hvem spolen ble sjekket ut til.");
@@ -1231,20 +1293,28 @@ function renderLoans() {
       <span class="loan-actions">${canConfirm ? `<button class="btn btn-primary btn-small" data-spool-received="${esc(l.id)}">Mottatt</button>` : `<span class="muted">venter på at ${esc(l.owner)} bekrefter</span>`}</span>
     </li>`;
   };
-  const pendingRow = (l) => {
+  // Godkjenning: én rad per utsjekk, med avkrysning, så mange kan godkjennes samlet.
+  for (const id of [...state.loanPick]) if (!waiting.some((w) => w.id === id && canApprove(w))) state.loanPick.delete(id);
+  const approvable = waiting.filter(canApprove);
+  const picked = state.loanPick.size;
+  const apprRow = (l) => {
     const s = spoolOf(l);
     const ownStock = l.by === l.owner;
+    const can = canApprove(l);
+    const id = esc(l.id);
     // Den som tappet kortet er valgt på forhånd (også om vedkommende ikke er bruker ennå).
     const names = [...new Set([...users().filter((u) => u.known).map((u) => u.name), l.by].filter(Boolean))];
     const opts = names.map((n) =>
       `<option value="${esc(n)}"${n === l.by ? " selected" : ""}>${esc(n)}${n === l.owner ? " (eier)" : ""}</option>`).join("");
-    return `<li>
-      <span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
-      <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span>
-      <span class="muted">Sjekket ut med RFID-leseren${l.by ? ` av ${esc(l.by)}` : " (ukjent – ingen kort tappet)"} · ${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut}g` : ""}</span>
-      <span class="loan-actions">${canApprove(l) ? `<select data-pending-to="${esc(l.id)}" aria-label="Sjekket ut til">${l.by ? "" : `<option value="">Sjekket ut til …</option>`}${opts}</select>
-        ${ownStock ? "" : `<label class="pending-refill" title="Refill uten spole som ikke leveres tilbake"><input type="checkbox" data-pending-refill="${esc(l.id)}"> Kjøp (refill)</label>`}
-        <button class="btn btn-primary btn-small" data-approve-out="${esc(l.id)}">${ownStock ? "OK" : "Godkjenn"}</button>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
+    const isPicked = state.loanPick.has(l.id);
+    return `<li class="appr-row${isPicked ? " picked" : ""}">
+      <span class="appr-check">${can ? `<input type="checkbox" data-appr-pick="${id}" aria-label="Velg ${esc(s ? title(s) : l.title)}"${isPicked ? " checked" : ""}>` : ""}</span>
+      <span class="appr-what"><span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
+        <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span></span>
+      <span class="appr-by"><b>${l.by ? esc(l.by) : "Ukjent"}</b><span class="muted">${l.by ? "" : "ingen kort tappet · "}${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut}g` : ""}</span></span>
+      <span class="appr-to">${can ? `<select data-pending-to="${id}" aria-label="Sjekket ut til">${l.by ? "" : `<option value="">Velg …</option>`}${opts}</select>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
+      <span class="appr-refill">${can && !ownStock ? `<label class="pending-refill" title="Refill uten spole som ikke leveres tilbake"><input type="checkbox" data-pending-refill="${id}"> Kjøp (refill)</label>` : ""}</span>
+      <span class="appr-act">${can ? `<button class="btn btn-primary btn-small" data-approve-out="${id}">${ownStock ? "OK" : "Godkjenn"}</button>` : ""}</span>
     </li>`;
   };
 
@@ -1255,11 +1325,20 @@ function renderLoans() {
   const subTabs = [["approve", `Godkjenning${count(waiting.length)}`], ["open", `Utestående${count(open.length + coming.length)}`],
     ["done", "Avsluttet"], ["activity", "Aktivitet"]];
   const content = {
-    approve: `${todos.length ? `<div class="pending-box"><h2>Dine gjøremål: utsjekk å godkjenne (${todos.length})</h2>
-        <p class="hint">Spolene dine ble sjekket ut med RFID-leseren. Tok du den selv: trykk OK. Ellers velg hvem den gikk til og trykk Godkjenn, så blir det et lån.</p>
-        <ul class="loan-list">${todos.map(pendingRow).join("")}</ul></div>` : ""}
-      ${others.length ? `<h2>Venter på godkjenning hos andre (${others.length})</h2><ul class="loan-list">${others.map(pendingRow).join("")}</ul>` : ""}
-      ${waiting.length ? "" : `<p class="muted">Ingen utsjekk fra RFID-leseren venter på godkjenning.</p>`}
+    approve: `${waiting.length ? `
+      <div class="appr-bar">
+        <label class="appr-all"><input type="checkbox" id="appr-all"${approvable.length && picked === approvable.length ? " checked" : ""}${approvable.length ? "" : " disabled"}> Merk alle (${approvable.length})</label>
+        <b id="appr-count" class="appr-count">${picked} valgt</b>
+        <label class="appr-bulk">Sjekket ut til <select id="appr-to"><option value="">Som i hver rad</option>${users().filter((u) => u.known).map((u) => `<option value="${esc(u.name)}"${u.name === state.apprTo ? " selected" : ""}>${esc(u.name)}</option>`).join("")}</select></label>
+        <label class="pending-refill" title="Gjelder valgte rader der mottakeren ikke er eieren"><input type="checkbox" id="appr-refill"${state.apprRefill ? " checked" : ""}> Kjøp (refill)</label>
+        <button class="btn btn-primary" id="appr-go"${picked ? "" : " disabled"}>Godkjenn valgte${picked ? ` (${picked})` : ""}</button>
+      </div>
+      <p id="appr-msg" class="hint" role="status"></p>
+      <div class="appr-head" aria-hidden="true"><span></span><span>Rull</span><span>Tatt ut av</span><span>Sjekket ut til</span><span></span><span></span></div>
+      ${todos.length ? `<h3 class="appr-h">Dine gjøremål (${todos.length})</h3><ul class="appr-list">${todos.map(apprRow).join("")}</ul>` : ""}
+      ${others.length ? `<h3 class="appr-h">Venter på andre (${others.length})</h3><ul class="appr-list">${others.map(apprRow).join("")}</ul>` : ""}
+      <p class="hint">Spolene ble sjekket ut med RFID-leseren. Tok eieren den selv: trykk OK. Ellers velg hvem den gikk til, så blir det et lån. Kryss av flere og trykk «Godkjenn valgte» for å godkjenne samlet.</p>`
+      : `<p id="appr-msg" class="hint" role="status"></p><p class="muted">Ingen utsjekk fra RFID-leseren venter på godkjenning.</p>`}
       ${isAdmin() && token() && !DEMO ? `<div class="loan-test"><span class="muted">Test:</span>
         <button class="btn btn-small" data-test-scenario>Lag testdata og simuler RFID-innlesning</button>
         <button class="btn btn-small" data-test-nuke>Slett testdata</button></div>` : ""}`,
@@ -4209,6 +4288,21 @@ document.addEventListener("click", (e) => {
   if (pickGo) return checkoutPicked(pickGo);
   const pickTest = e.target.closest("#pick-test");
   if (pickTest) return makeTestSpools(pickTest);
+  const apprPick = e.target.closest("[data-appr-pick]");
+  if (apprPick) {
+    apprPick.checked ? state.loanPick.add(apprPick.dataset.apprPick) : state.loanPick.delete(apprPick.dataset.apprPick);
+    return updateApprBar();
+  }
+  const apprAll = e.target.closest("#appr-all");
+  if (apprAll) {
+    for (const c of document.querySelectorAll("[data-appr-pick]")) {
+      c.checked = apprAll.checked;
+      apprAll.checked ? state.loanPick.add(c.dataset.apprPick) : state.loanPick.delete(c.dataset.apprPick);
+    }
+    return updateApprBar();
+  }
+  const apprGo = e.target.closest("#appr-go");
+  if (apprGo) return approveMany(apprGo);
   const actDel = e.target.closest("[data-act-delete]");
   if (actDel) return deleteActivity(actDel);
   const testGo = e.target.closest("[data-test-scenario]");
@@ -4284,6 +4378,11 @@ $("#forgot form").addEventListener("submit", forgot);
 $("#vipps form").addEventListener("submit", vippsSubmit);
 $("#v-return").addEventListener("change", setVippsAmount);
 $("#pick-to").addEventListener("change", syncPickRefill);
+// Felles valg i Godkjenning huskes når listen tegnes på nytt.
+document.addEventListener("change", (e) => {
+  if (e.target.id === "appr-to") state.apprTo = e.target.value;
+  if (e.target.id === "appr-refill") state.apprRefill = e.target.checked;
+});
 $("#cart-carrier").addEventListener("change", (e) => { state.cartCarrier = e.target.value; store("bf.cartCarrier", e.target.value); renderCart(); });
 saveCart();
 $("#a-phone").addEventListener("change", (e) => savePhone(e.target));

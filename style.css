@@ -1212,3 +1212,40 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 
 /* Testknapper under «Godkjenning» (bare administrator) */
 .loan-test { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border); }
+
+/* Godkjenning: tabell med avkrysning, «Merk alle» og felles godkjenning */
+.appr-bar { position: sticky; top: 8px; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 14px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
+.appr-all { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+.appr-all input, .appr-check input { width: 18px; height: 18px; margin: 0; }
+.appr-count { min-width: 5em; color: var(--muted); }
+.appr-bulk { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.appr-bulk select { width: auto; max-width: 170px; padding: 4px 8px; font-size: 13px; }
+.appr-bar .btn-primary { margin-left: auto; }
+.appr-h { margin: 16px 0 6px; }
+.appr-head, .appr-row { display: grid; grid-template-columns: 28px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.2fr) 112px 92px; gap: 10px; align-items: center; }
+.appr-head { padding: 8px 12px 0; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.appr-list { list-style: none; margin: 0 0 8px; padding: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.appr-row { padding: 9px 12px; border-top: 1px solid var(--border); }
+.appr-row:first-child { border-top: 0; }
+.appr-row.picked { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+.appr-what { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.appr-what .dot { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); }
+.appr-what .loan-what { flex: 1 1 auto; }
+.appr-by { min-width: 0; }
+.appr-by b { display: block; }
+.appr-by .muted { font-size: 13px; }
+.appr-to select { width: 100%; max-width: 190px; padding: 4px 8px; font-size: 13px; }
+.appr-act { text-align: right; }
+@media (max-width: 760px) {
+  .appr-head { display: none; }
+  .appr-bar .btn-primary { margin-left: 0; width: 100%; }
+  .appr-row { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "c w a" "c b b" "c t t" "c r r"; row-gap: 6px; }
+  .appr-check { grid-area: c; align-self: start; padding-top: 2px; }
+  .appr-what { grid-area: w; }
+  .appr-by { grid-area: b; }
+  .appr-to { grid-area: t; }
+  .appr-refill { grid-area: r; }
+  .appr-act { grid-area: a; }
+  .appr-to select { max-width: 100%; }
+}
+.appr-bar .pending-refill, .appr-refill .pending-refill { white-space: nowrap; }
