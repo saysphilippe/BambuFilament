@@ -1683,7 +1683,7 @@ function renderPickBar() {
   sel.innerHTML = users().filter((u) => u.known).map((u) =>
     `<option value="${esc(u.name)}"${u.name === chosen ? " selected" : ""}>${esc(u.name)}${u.name === userName() ? " – meg" : ""}</option>`).join("");
   syncPickRefill();
-  $("#pick-test").hidden = DEMO || !token() || !isAdmin();
+  for (const b of ["#pick-test", "#pick-sim", "#pick-nuke"]) $(b).hidden = DEMO || !token() || !isAdmin();
 }
 
 // Refill-kjøp er bare aktuelt for spoler som går til noen andre enn eieren.
@@ -1766,6 +1766,72 @@ async function makeTestSpools(btn) {
     $("#pick-msg").textContent = `Laget ${fresh.length} testruller. De slettes når de sjekkes inn igjen.`;
   } catch (err) {
     $("#pick-msg").textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Simulerer at RFID-leseren leser testruller på lager (inntil 6): hver blir sjekket ut med en
+// leserhendelse (dev: "reader"), og siden lager en ventende godkjenning i «Lånt filament», som
+// ved en ekte innlesning. Annenhver rull tas av en annen bruker enn eieren.
+async function simulateReaderScans(btn) {
+  const msg = $("#pick-msg");
+  const ids = state.spools.filter((s) => s.test && s.status === "in").slice(0, 6).map((s) => s.id);
+  if (!ids.length) return (msg.textContent = "Ingen testruller på lager. Lag testruller først.");
+  const names = users().filter((u) => u.known).map((u) => u.name);
+  btn.disabled = true;
+  msg.textContent = "Simulerer…";
+  try {
+    const now = Date.now();
+    await saveDoc((doc) => {
+      ids.forEach((id, i) => {
+        const s = doc.spools.find((x) => x.id === id);
+        if (!s || statusOf(s) !== "in") return;
+        const at = new Date(now + i).toISOString();
+        const by = i % 2 ? names.find((n) => n !== s.owner) || s.owner : s.owner;
+        s.history = [...(s.history || []), { at, action: "out", by, dev: "reader" }].slice(-10);
+        s.status = "out";
+        s.lastScan = at;
+        s.scans = (num(s.scans) || 0) + 1;
+      });
+    }, `Simulert RFID-utsjekk av ${ids.length} testruller (${userName()})`);
+    await syncReaderCheckouts();
+    render();
+    msg.textContent = `Simulerte ${ids.length} innlesninger fra leseren. De venter på godkjenning under «Lånt filament».`;
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Sletter all testdata: testruller, testkort og alle lån (med retur) som hører til testruller.
+// Ekte data røres ikke: bare poster merket test: true, og ruller med id som starter på TEST
+// (ekte RFID-id-er er heksadesimale og kan ikke gjøre det).
+const isTestId = (id) => /^TEST[0-9A-Z]/.test(String(id));
+
+async function nukeTestData(btn) {
+  if (!confirmed(btn, "Slette all testdata? Trykk igjen")) return;
+  const msg = $("#pick-msg");
+  btn.disabled = true;
+  msg.textContent = "Sletter…";
+  try {
+    const ids = new Set();
+    let cards = 0, loans = 0;
+    await saveDoc((doc) => {
+      for (const s of doc.spools) if (s.test === true || isTestId(s.id)) ids.add(s.id);
+      doc.spools = doc.spools.filter((s) => !ids.has(s.id));
+      for (const [uid, c] of Object.entries(doc.cards || {})) if (c && c.test === true) { delete doc.cards[uid]; cards++; }
+    }, `Slettet testdata (${userName()})`);
+    await saveDoc((doc) => {
+      const before = doc.loans.length;
+      doc.loans = doc.loans.filter((l) => !(l.test === true || ids.has(l.spool) || isTestId(l.spool)));
+      loans = before - doc.loans.length;
+    }, `Slettet lån og retur for testdata (${userName()})`, "loans");
+    render();
+    msg.textContent = `Slettet ${ids.size} testruller, ${loans} lån og ${cards} testkort.`;
+  } catch (err) {
+    msg.textContent = err.message;
   } finally {
     btn.disabled = false;
   }
@@ -4030,6 +4096,10 @@ document.addEventListener("click", (e) => {
   if (pickGo) return checkoutPicked(pickGo);
   const pickTest = e.target.closest("#pick-test");
   if (pickTest) return makeTestSpools(pickTest);
+  const pickSim = e.target.closest("#pick-sim");
+  if (pickSim) return simulateReaderScans(pickSim);
+  const pickNuke = e.target.closest("#pick-nuke");
+  if (pickNuke) return nukeTestData(pickNuke);
   const card = e.target.closest(".card, #activity-list li");
   if (card && pick && card.matches("#grid .card")) return togglePick(card.dataset.id);
   if (card) return openDetail(card.dataset.id);
