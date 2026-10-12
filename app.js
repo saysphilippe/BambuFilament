@@ -1140,105 +1140,102 @@ function updateApprBar() {
   for (const c of boxes) c.closest(".appr-row")?.classList.toggle("picked", c.checked);
 }
 
-// Godkjenner innsjekk (innlesning fra leseren): rullen teller som på lager. Lagres som spool.inOk.
-async function approveIns(ids) {
+// Godkjenner rader i Godkjenning. Hver rad har et valg: «in» (rullen er sjekket inn, på lager) eller
+// «out:Navn» (sjekket ut til Navn; et lån når mottakeren ikke er eieren, ellers eget forbruk).
+// Gjelder både utsjekk og innlesning fra leseren, så en feil innlesning kan rettes ved godkjenning.
+async function approveRows(items) {
   const now = new Date().toISOString();
-  let done = 0;
-  await saveDoc((doc) => {
-    done = 0;
-    for (const id of ids) {
-      const s = doc.spools.find((x) => x.id === id);
-      if (!s || !pendingIn(s)) continue;
-      s.inOk = now;
-      done++;
+  const me = userName();
+  const edits = [], deletes = [], newLoans = [], inOk = [], setIn = [], setOut = [];
+  for (const { key, choice, refill } of items) {
+    const out = choice.startsWith("out:") ? choice.slice(4) : "";
+    if (key.startsWith("in:")) {
+      const s = state.spools.find((x) => x.id === key.slice(3));
+      if (!s) continue;
+      if (out) {
+        setOut.push({ id: s.id, to: out });
+        if (out !== s.owner) newLoans.push(loanFor(s, out, now, me, undefined, refill));
+      } else inOk.push(s.id);
+    } else {
+      const l = state.loans.find((x) => x.id === key);
+      if (!l) continue;
+      if (out) edits.push({ id: key, to: out, refill });
+      else { deletes.push(key); setIn.push(l.spool); }
     }
-    if (!done) return "Innlesningene finnes ikke lenger.";
-  }, `Godkjente ${ids.length} innsjekk (${userName()})`);
-  return done;
-}
-
-async function approveInOne(id, btn) {
-  btn.disabled = true;
-  try {
-    await approveIns([id]);
-    render();
-    purgeTestSpools();
-  } catch (err) {
-    note("#appr-msg").textContent = err.message;
-    btn.disabled = false;
   }
+  const n = edits.length + deletes.length + inOk.length + setOut.length;
+  if (!n) throw new Error("Radene finnes ikke lenger.");
+  if (edits.length || deletes.length || newLoans.length) {
+    await saveDoc((doc) => {
+      for (const e of edits) {
+        const l = doc.loans.find((x) => x.id === e.id);
+        if (!l || !l.pending) continue;
+        l.pending = false;
+        l.to = e.to;
+        l.approvedBy = me;
+        if (e.to === l.owner) l.own = true;
+        else if (e.refill) l.purchase = true;
+      }
+      doc.loans = doc.loans.filter((l) => !deletes.includes(l.id));
+      for (const l of newLoans) if (!doc.loans.some((x) => x.id === l.id)) doc.loans.push(l);
+      trimLoans(doc);
+    }, `Godkjente ${n} fra RFID-leseren (${me})`, "loans");
+  }
+  if (inOk.length || setIn.length || setOut.length) {
+    await saveDoc((doc) => {
+      for (const id of inOk) {
+        const s = doc.spools.find((x) => x.id === id);
+        if (s && pendingIn(s)) s.inOk = now;
+      }
+      for (const id of setIn) {
+        const s = doc.spools.find((x) => x.id === id);
+        if (!s) continue;
+        s.history = [...(s.history || []), { at: now, action: "in", by: me }].slice(-10);
+        s.status = "in";
+      }
+      for (const o of setOut) {
+        const s = doc.spools.find((x) => x.id === o.id);
+        if (!s) continue;
+        s.history = [...(s.history || []), { at: now, action: "out", by: me, ...(o.to !== me ? { to: o.to } : {}) }].slice(-10);
+        s.status = "out";
+      }
+    }, `Godkjente ${n} fra RFID-leseren (${me})`);
+  }
+  return n;
 }
 
-// Godkjenner alle valgte samlet, med samme steg som for én. Utsjekk: mottaker per rad (eller én
-// felles), eget forbruk når mottakeren er eieren, ellers lån, og kjøp (refill) om det er krysset av.
-// Innsjekk (innlesning): rullen legges på lager.
-async function approveMany(btn) {
+// Valg og kjøp (refill) for en rad, lest fra siden. Felles valg øverst går foran valget i raden.
+function rowItem(key, bulkChoice = "", bulkRefill = false) {
+  const q = CSS.escape(key);
+  return {
+    key,
+    choice: bulkChoice || document.querySelector(`[data-appr-as="${q}"]`)?.value || "",
+    refill: bulkRefill || !!document.querySelector(`[data-appr-refill="${q}"]`)?.checked,
+  };
+}
+
+async function approveSelected(items, btn) {
   const msg = note("#appr-msg");
-  const bulkTo = $("#appr-to")?.value || "";
-  const bulkRefill = !!$("#appr-refill")?.checked;
-  const inIds = [...state.loanPick].filter((id) => id.startsWith("in:")).map((id) => id.slice(3));
-  const picks = [...state.loanPick].filter((id) => !id.startsWith("in:")).map((id) => {
-    const q = CSS.escape(id);
-    return {
-      id,
-      to: bulkTo || document.querySelector(`[data-pending-to="${q}"]`)?.value || "",
-      refill: bulkRefill || !!document.querySelector(`[data-pending-refill="${q}"]`)?.checked,
-    };
-  });
-  if (!picks.length && !inIds.length) return (msg.textContent = "Velg minst én rad.");
-  const missing = picks.filter((p) => !p.to).length;
-  if (missing) return (msg.textContent = `Velg hvem ${missing === 1 ? "én utsjekk" : missing + " utsjekk"} gikk til.`);
-  if (!confirmed(btn, `Godkjenn ${picks.length + inIds.length}? Trykk igjen`)) return;
+  if (!items.length) return (msg.textContent = "Velg minst én rad.");
+  const missing = items.filter((i) => !i.choice).length;
+  if (missing) return (msg.textContent = `Velg «Sjekket inn» eller hvem ${missing === 1 ? "én rad" : missing + " rader"} gikk til.`);
+  if (btn.id === "appr-go" && !confirmed(btn, `Godkjenn ${items.length}? Trykk igjen`)) return;
   btn.disabled = true;
   msg.textContent = "Godkjenner…";
   try {
-    let done = 0;
-    if (picks.length) {
-      await saveDoc((doc) => {
-        for (const p of picks) {
-          const l = doc.loans.find((x) => x.id === p.id);
-          if (!l || !l.pending) continue;
-          l.pending = false;
-          l.to = p.to;
-          l.approvedBy = userName();
-          if (p.to === l.owner) l.own = true;
-          else if (p.refill) l.purchase = true;
-          done++;
-        }
-      }, `Godkjente ${picks.length} utsjekk (${userName()})`, "loans");
-    }
-    if (inIds.length) done += await approveIns(inIds);
+    const done = await approveRows(items);
     state.loanPick.clear();
     render();
+    await purgeTestSpools();
     note("#appr-msg").textContent = `Godkjente ${done}.`;
-    purgeTestSpools();
   } catch (err) {
     msg.textContent = err.message;
     btn.disabled = false;
   }
 }
 
-// Godkjenner en utsjekk fra leseren: til eieren = eget forbruk, ellers et lån.
-async function approveCheckout(loanId, to, btn, purchase = false) {
-  if (!to) return ($("#loan-error").textContent = "Velg hvem spolen ble sjekket ut til.");
-  btn.disabled = true;
-  try {
-    await saveDoc((doc) => {
-      const l = doc.loans.find((x) => x.id === loanId);
-      if (!l) return "Utsjekken finnes ikke lenger.";
-      l.pending = false;
-      l.to = to;
-      l.approvedBy = userName();
-      if (to === l.owner) l.own = true;
-      else if (purchase) l.purchase = true;
-    }, `Godkjente utsjekk til ${to} (${userName()})`, "loans");
-    $("#loan-error").textContent = "";
-  } catch (err) {
-    $("#loan-error").textContent = err.message;
-    btn.disabled = false;
-  }
-  render();
-}
+const approveMany = (btn) => approveSelected([...state.loanPick].map((key) => rowItem(key, $("#appr-to")?.value || "", !!$("#appr-refill")?.checked)), btn);
+const approveOne = (key, btn) => approveSelected([rowItem(key)], btn);
 
 async function loanAction(action, spoolId, btn) {
   const labels = { returned: "Levert? Trykk igjen", used: "Brukt opp? Trykk igjen", settled: "Gjort opp? Trykk igjen" };
@@ -1342,6 +1339,7 @@ function renderLoans() {
   };
   // Godkjenning: innlesning (innsjekk) og utsjekk fra leseren i samme tabell, med avkrysning,
   // så mange kan godkjennes samlet. Valg-id: lånets id (utsjekk) eller «in:» + rullens id (innlesning).
+  // Hver rad har ett valg: «Sjekket inn» (rullen er på lager) eller «Sjekket ut til …».
   const inWaiting = state.spools.filter((s) => s.pendingIn);
   const inMine = new Set(myInTodos().map((s) => s.id));
   const inTodos = inWaiting.filter((s) => inMine.has(s.id));
@@ -1351,27 +1349,26 @@ function renderLoans() {
   for (const id of [...state.loanPick]) if (!approvableIds.has(id)) state.loanPick.delete(id);
   const approvable = approvableIds.size;
   const picked = state.loanPick.size;
+  const choiceNames = (extra) => [...new Set([...users().filter((u) => u.known).map((u) => u.name), extra].filter(Boolean))];
+  const choiceOpts = (selected, owner, extra) => `${selected ? "" : `<option value="" selected>Velg …</option>`}<option value="in"${selected === "in" ? " selected" : ""}>Sjekket inn</option>${
+    choiceNames(extra).map((n) => `<option value="out:${esc(n)}"${selected === "out:" + n ? " selected" : ""}>Sjekket ut til ${esc(n)}${n === owner ? " (eier)" : ""}</option>`).join("")}`;
   const apprRow = (l) => {
     const s = spoolOf(l);
     const ownStock = l.by === l.owner;
     const can = canApprove(l);
     const id = esc(l.id);
-    // Den som tappet kortet er valgt på forhånd (også om vedkommende ikke er bruker ennå).
-    const names = [...new Set([...users().filter((u) => u.known).map((u) => u.name), l.by].filter(Boolean))];
-    const opts = names.map((n) =>
-      `<option value="${esc(n)}"${n === l.by ? " selected" : ""}>${esc(n)}${n === l.owner ? " (eier)" : ""}</option>`).join("");
     const isPicked = state.loanPick.has(l.id);
     return `<li class="appr-row${isPicked ? " picked" : ""}">
       <span class="appr-check">${can ? `<input type="checkbox" data-appr-pick="${id}" aria-label="Velg ${esc(s ? title(s) : l.title)}"${isPicked ? " checked" : ""}>` : ""}</span>
       <span class="appr-what"><span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
         <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span></span>
-      <span class="appr-by"><b><span class="appr-kind out">Sjekket ut</span>${l.by ? esc(l.by) : "Ukjent"}</b><span class="muted">${l.by ? "" : "ingen kort tappet · "}${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut}g` : ""}</span></span>
-      <span class="appr-to">${can ? `<select data-pending-to="${id}" aria-label="Sjekket ut til">${l.by ? "" : `<option value="">Velg …</option>`}${opts}</select>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
-      <span class="appr-refill">${can && !ownStock ? `<label class="pending-refill" title="Refill uten spole som ikke leveres tilbake"><input type="checkbox" data-pending-refill="${id}"> Kjøp (refill)</label>` : ""}</span>
-      <span class="appr-act">${can ? `<button class="btn btn-primary btn-small" data-approve-out="${id}">${ownStock ? "OK" : "Godkjenn"}</button>` : ""}</span>
+      <span class="appr-by"><b><span class="appr-kind out">Lest ut</span>${l.by ? esc(l.by) : "Ukjent"}</b><span class="muted">${l.by ? "" : "ingen kort tappet · "}${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut}g` : ""}</span></span>
+      <span class="appr-to">${can ? `<select data-appr-as="${id}" aria-label="Godkjenn som">${choiceOpts(l.by ? "out:" + l.by : "", l.owner, l.by)}</select>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
+      <span class="appr-refill">${can && !ownStock ? `<label class="pending-refill" title="Refill uten spole som ikke leveres tilbake"><input type="checkbox" data-appr-refill="${id}"> Kjøp (refill)</label>` : ""}</span>
+      <span class="appr-act">${can ? `<button class="btn btn-primary btn-small" data-appr-one="${id}">${ownStock ? "OK" : "Godkjenn"}</button>` : ""}</span>
     </li>`;
   };
-  // Innlesning: ny rull, eller rull satt tilbake på lager. Godkjent = den teller som på lager.
+  // Innlesning: ny rull, eller rull satt tilbake på lager. Godkjent som «Sjekket inn» = den teller som på lager.
   const apprInRow = (s) => {
     const e = s.history.at(-1);
     const can = canApproveSpool(s);
@@ -1382,10 +1379,10 @@ function renderLoans() {
       <span class="appr-check">${can ? `<input type="checkbox" data-appr-pick="${esc(key)}" aria-label="Velg ${esc(title(s))}"${isPicked ? " checked" : ""}>` : ""}</span>
       <span class="appr-what"><span class="dot" style="background:${swatch(s.tag)}"></span>
         <span class="loan-what"><b>${esc(title(s))}</b><span class="muted">${esc(s.typeName)} · eier ${esc(s.owner || "ukjent")}</span></span></span>
-      <span class="appr-by"><b><span class="appr-kind in">Sjekket inn</span>${e.by ? esc(e.by) : "Ukjent"}</b><span class="muted">${isNewRoll ? "ny rull · " : ""}${fmtTime(e.at)}</span></span>
-      <span class="appr-to"><span class="muted">${isNewRoll ? "Legges på lager" : "Tilbake på lager"}</span></span>
+      <span class="appr-by"><b><span class="appr-kind in">Lest inn</span>${e.by ? esc(e.by) : "Ukjent"}</b><span class="muted">${isNewRoll ? "ny rull · " : ""}${fmtTime(e.at)}</span></span>
+      <span class="appr-to">${can ? `<select data-appr-as="${esc(key)}" aria-label="Godkjenn som">${choiceOpts("in", s.owner, e.by)}</select>` : `<span class="muted">venter på ${esc(s.owner)}</span>`}</span>
       <span class="appr-refill"></span>
-      <span class="appr-act">${can ? `<button class="btn btn-primary btn-small" data-approve-in="${esc(s.id)}">Godkjenn</button>` : `<span class="muted">venter på ${esc(s.owner)}</span>`}</span>
+      <span class="appr-act">${can ? `<button class="btn btn-primary btn-small" data-appr-one="${esc(key)}">Godkjenn</button>` : ""}</span>
     </li>`;
   };
   // Nyeste hendelse øverst, utsjekk og innlesning blandet.
@@ -1403,19 +1400,20 @@ function renderLoans() {
       <div class="appr-bar">
         <label class="appr-all"><input type="checkbox" id="appr-all"${approvable && picked === approvable ? " checked" : ""}${approvable ? "" : " disabled"}> Merk alle (${approvable})</label>
         <b id="appr-count" class="appr-count">${picked} valgt</b>
-        <label class="appr-bulk" title="Gjelder valgte utsjekk">Sjekket ut til <select id="appr-to"><option value="">Som i hver rad</option>${users().filter((u) => u.known).map((u) => `<option value="${esc(u.name)}"${u.name === state.apprTo ? " selected" : ""}>${esc(u.name)}</option>`).join("")}</select></label>
+        <label class="appr-bulk">Godkjenn som <select id="appr-to"><option value="">Som i hver rad</option><option value="in"${state.apprTo === "in" ? " selected" : ""}>Sjekket inn</option>${users().filter((u) => u.known).map((u) => `<option value="out:${esc(u.name)}"${state.apprTo === "out:" + u.name ? " selected" : ""}>Sjekket ut til ${esc(u.name)}</option>`).join("")}</select></label>
         <label class="pending-refill" title="Gjelder valgte utsjekk der mottakeren ikke er eieren"><input type="checkbox" id="appr-refill"${state.apprRefill ? " checked" : ""}> Kjøp (refill)</label>
         <button class="btn btn-primary" id="appr-go"${picked ? "" : " disabled"}>Godkjenn valgte${picked ? ` (${picked})` : ""}</button>
       </div>
       <p id="appr-msg" class="hint" role="status"></p>
-      <div class="appr-head" aria-hidden="true"><span></span><span>Rull</span><span>Hendelse</span><span>Sjekket ut til</span><span></span><span></span></div>
+      <div class="appr-head" aria-hidden="true"><span></span><span>Rull</span><span>Lest av leseren</span><span>Godkjenn som</span><span></span><span></span></div>
       ${todos.length + inTodos.length ? `<h3 class="appr-h">Dine gjøremål (${todos.length + inTodos.length})</h3><ul class="appr-list">${apprItems(todos, inTodos)}</ul>` : ""}
       ${others.length + inOthers.length ? `<h3 class="appr-h">Venter på andre (${others.length + inOthers.length})</h3><ul class="appr-list">${apprItems(others, inOthers)}</ul>` : ""}
-      <p class="hint">Rullene ble lest inn eller sjekket ut med RFID-leseren. Innsjekk: trykk Godkjenn, så legges rullen på lager. Utsjekk: tok eieren den selv, trykk OK; ellers velg hvem den gikk til, så blir det et lån. Kryss av flere og trykk «Godkjenn valgte» for å godkjenne samlet.</p>`
+      <p class="hint">Leseren vet ikke hva som egentlig skjedde, så du velger per rad: «Sjekket inn» legger rullen på lager, og «Sjekket ut til …» registrerer utsjekken (et lån når mottakeren ikke er eieren). Kryss av flere og trykk «Godkjenn valgte» for å godkjenne samlet, eventuelt med samme valg på alle.</p>`
       : `<p id="appr-msg" class="hint" role="status"></p><p class="muted">Ingen innlesninger eller utsjekk fra RFID-leseren venter på godkjenning.</p>`}
       ${isAdmin() && token() && !DEMO ? `<div class="loan-test"><span class="muted">Test:</span>
         <button class="btn btn-small" data-test-scenario>Lag testdata (innsjekk og utsjekk)</button>
         <button class="btn btn-small" data-test-out>Simuler RFID-utsjekk</button>
+        <button class="btn btn-small" data-test-in>Simuler RFID-innsjekk til lager</button>
         <button class="btn btn-small" data-test-nuke>Slett testdata</button></div>` : ""}`,
     open: `<div class="loan-sum">${debtChips || `<span class="loan-debt clear">Ingen skylder filament akkurat nå</span>`}</div>
       <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Sjekk ut til» når du sjekker ut. Utsjekk med RFID-leseren må godkjennes først. Den som har fått en rull, skylder den til den leveres tilbake (sjekkes inn) eller er gjort opp, for eksempel med Vipps.</p>
@@ -1969,13 +1967,13 @@ async function makeTestSpools(btn, msg = note("#pick-msg"), mode = "stock") {
   const now = Date.now();
   const at = new Date(now).toISOString();
   const earlier = new Date(now - 3.6e6).toISOString();
-  const fresh = TEST_KEYS.filter((k) => state.colorNames[k]).map((key, i) => {
+  const fresh = (mode === "in" ? TEST_KEYS.slice(0, 6) : TEST_KEYS).filter((k) => state.colorNames[k]).map((key, i) => {
     const [materialId, code] = key.split("-");
     const entry = state.colorNames[key];
     const owner = owners[i % owners.length] || userName();
     // Annenhver rull leses av en annen enn eieren (kortet til en venn).
     const by = i % 2 ? owners.find((n) => n !== owner) || owner : owner;
-    const reader = mode === "mixed";
+    const reader = mode === "mixed" || mode === "in";
     const out = reader && i >= 6;
     const history = !reader ? [{ at, action: "in", by: userName() }]
       : out ? [{ at: earlier, action: "in", by: owner }, { at, action: "out", by, dev: "reader" }]
@@ -1993,8 +1991,10 @@ async function makeTestSpools(btn, msg = note("#pick-msg"), mode = "stock") {
     await saveDoc((doc) => { doc.spools.push(...fresh); }, `Testdata: ${fresh.length} ruller (${userName()})`);
     if (mode === "mixed") await syncReaderCheckouts();
     render();
-    msg.textContent = mode === "mixed"
-      ? `Laget ${fresh.length} testruller: ${fresh.filter((s) => s.status === "in").length} innsjekk og ${fresh.filter((s) => s.status === "out").length} utsjekk venter på godkjenning.`
+    msg.textContent = mode === "in"
+      ? `Simulerte ${fresh.length} innsjekk til lager fra leseren. De venter på godkjenning.`
+      : mode === "mixed"
+      ?`Laget ${fresh.length} testruller: ${fresh.filter((s) => s.status === "in").length} innsjekk og ${fresh.filter((s) => s.status === "out").length} utsjekk venter på godkjenning.`
       : `Laget ${fresh.length} testruller. De slettes når de sjekkes inn igjen.`;
   } catch (err) {
     msg.textContent = err.message;
@@ -2050,8 +2050,7 @@ async function simulateReaderScans(btn, msg = note("#pick-msg")) {
 
 // Simulerer at RFID-leseren leser testrullene som er sjekket ut inn igjen: innsjekken (dev: "reader")
 // venter på godkjenning under «Lånt filament». Når du har godkjent den, slettes testrullen.
-async function simulateReaderCheckins(btn) {
-  const msg = $("#pick-msg");
+async function simulateReaderCheckins(btn, msg = note("#pick-msg")) {
   const ids = state.spools.filter((s) => s.test && s.status === "out").map((s) => s.id);
   if (!ids.length) return (msg.textContent = "Ingen testruller er sjekket ut. Simuler en utsjekk først.");
   btn.disabled = true;
@@ -2073,6 +2072,18 @@ async function simulateReaderCheckins(btn) {
     msg.textContent = `Simulerte ${ids.length} innsjekk fra leseren. De venter på godkjenning under «Lånt filament».`;
   } catch (err) {
     msg.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Simulerer RFID-innsjekk til lager: utsjekkede testruller leses inn igjen, og finnes det ingen
+// slike, leses 6 nye testruller inn. Begge deler venter på godkjenning (som «Sjekket inn»).
+async function simulateReaderIntoStock(btn, msg = note("#loan-error")) {
+  if (state.spools.some((s) => s.test && s.status === "out")) return simulateReaderCheckins(btn, msg);
+  btn.disabled = true;
+  try {
+    await makeTestSpools(null, msg, "in");
   } finally {
     btn.disabled = false;
   }
@@ -4395,6 +4406,8 @@ document.addEventListener("click", (e) => {
   if (actDel) return deleteActivity(actDel);
   const testGo = e.target.closest("[data-test-scenario]");
   if (testGo) return testScenario(testGo);
+  const testIn = e.target.closest("[data-test-in]");
+  if (testIn) return simulateReaderIntoStock(testIn);
   const testOut = e.target.closest("[data-test-out]");
   if (testOut) return simulateReaderScans(testOut, note("#loan-error"));
   const testNuke = e.target.closest("[data-test-nuke]");
@@ -4424,14 +4437,8 @@ document.addEventListener("click", (e) => {
   if (stat) return statFilter(stat.dataset.stat);
   const goto = e.target.closest("[data-goto]");
   if (goto) return showTab(goto.dataset.goto);
-  const approveIn = e.target.closest("[data-approve-in]");
-  if (approveIn) return approveInOne(approveIn.dataset.approveIn, approveIn);
-  const approveBtn = e.target.closest("[data-approve-out]");
-  if (approveBtn) {
-    const id = CSS.escape(approveBtn.dataset.approveOut);
-    return approveCheckout(approveBtn.dataset.approveOut, document.querySelector(`[data-pending-to="${id}"]`)?.value || "", approveBtn,
-      !!document.querySelector(`[data-pending-refill="${id}"]`)?.checked);
-  }
+  const approveBtn = e.target.closest("[data-appr-one]");
+  if (approveBtn) return approveOne(approveBtn.dataset.apprOne, approveBtn);
   const loanBtn = e.target.closest("[data-loan]");
   if (loanBtn) return loanAction(loanBtn.dataset.loan, loanBtn.dataset.spool, loanBtn);
   const pub = e.target.closest("[data-open]");
