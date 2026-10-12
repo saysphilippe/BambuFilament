@@ -564,6 +564,7 @@ async function refresh() {
       recordSeen();
       shareToken();
       syncReaderCheckouts();
+      purgeTestSpools();
     }
     setSync(DEMO ? "Demo – eksempeldata" : `Oppdatert ${new Date().toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })}`);
   } catch (e) {
@@ -799,6 +800,7 @@ function render() {
   grid.innerHTML = !list.length
     ? `<p class="empty-msg">${items.length ? "Ingen spoler passer filteret." : `Ingen spoler ennå. Skann en spole med leseren, eller del Bambu-biblioteket ditt under «AMS og bibliotek»${DEMO ? "" : `, eller <a href="?demo">se demo med eksempeldata</a>`}.`}</p>`
     : grouped ? groupedCards(list) : list.map((s) => spoolCard(s)).join("");
+  renderPickBar();
 }
 
 // Klikk på en boks i venstremargen.
@@ -845,9 +847,13 @@ function spoolCard(s, showType = true) {
   const tagName = s.kind === "rfid" ? "button" : "div";
   const left = leftOnSpool(s);
   const pct = left && left.total ? Math.max(0, Math.min(100, Math.round((left.g / left.total) * 100))) : null;
+  // «Velg flere»: spoler på lager kan krysses av, de andre tones ned.
+  const canPick = pick && pickable(s);
+  const pickCls = pick ? (canPick ? ` pickable${pick.has(s.id) ? " picked" : ""}` : " unpickable") : "";
   return `
-    <${tagName} class="card status-${s.status} kind-${s.kind}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""}>
+    <${tagName} class="card status-${s.status} kind-${s.kind}${pickCls}" ${s.kind === "rfid" ? `data-id="${esc(s.id)}"` : ""}${canPick ? ` aria-pressed="${pick.has(s.id)}"` : ""}>
       <div class="swatch" style="background:${swatch(s.tag)}">
+        ${canPick ? `<span class="pick-box" aria-hidden="true"></span>` : ""}
         <span class="swatch-corner">${s.status !== "in" ? `<span class="badge badge-${s.status}">${STATUS[s.status]}</span>` : ""}${sourceIcon(placeKind(s))}</span>
         ${productionTip(s) ? `<span class="tip">${productionTip(s)}</span>` : ""}
       </div>
@@ -1624,10 +1630,160 @@ async function saveDetail(e) {
     if (action === "in" && openLoan(id)) await closeLoan(id, "returnedAt", "", libraryWeight(id));
     render();
     $("#detail").close();
+    if (action === "in") purgeTestSpools();
   } catch (err) {
     $("#d-error").textContent = err.message;
   } finally {
     form.querySelectorAll("button").forEach((b) => (b.disabled = false));
+  }
+}
+
+// ---------- Velg flere spoler ----------
+
+// Valgte spoler (id-er) når «Velg flere» er på, ellers null. Bare RFID-spoler på lager kan velges.
+let pick = null;
+// state.spools er alle RFID-spoler (uten kind); stockItems() har også bibliotek og AMS.
+const pickable = (s) => (s.kind ?? "rfid") === "rfid" && s.status === "in";
+
+function togglePickMode(on = !pick) {
+  pick = on ? new Set() : null;
+  $("#pick-msg").textContent = "";
+  render();
+}
+
+function togglePick(id) {
+  const s = state.spools.find((x) => x.id === id);
+  if (!s || !pickable(s)) return;
+  pick.has(id) ? pick.delete(id) : pick.add(id);
+  render();
+}
+
+// «Merk alle»: alle spoler på lager som vises med filtrene nå.
+function pickAll(on = true) {
+  for (const s of filtered()) if (pickable(s)) on ? pick.add(s.id) : pick.delete(s.id);
+  render();
+}
+
+function renderPickBar() {
+  $("#pick-toggle").hidden = !token() && !DEMO;
+  $("#pick-toggle").classList.toggle("active", !!pick);
+  $("#pick-toggle").setAttribute("aria-pressed", String(!!pick));
+  $("#pick-bar").hidden = !pick;
+  if (!pick) return;
+  // Spoler som ikke lenger er på lager (sjekket ut av andre, slettet) fjernes fra utvalget.
+  for (const id of pick) if (!state.spools.some((s) => s.id === id && pickable(s))) pick.delete(id);
+  const visible = filtered().filter(pickable);
+  $("#pick-count").textContent = `${pick.size} valgt`;
+  $("#pick-all").disabled = !visible.length || visible.every((s) => pick.has(s.id));
+  $("#pick-none").disabled = !pick.size;
+  $("#pick-go").disabled = !pick.size;
+  // Samme valg som for én spole: «Sjekk ut til» (standard: deg selv).
+  const sel = $("#pick-to");
+  const chosen = sel.value || userName();
+  sel.innerHTML = users().filter((u) => u.known).map((u) =>
+    `<option value="${esc(u.name)}"${u.name === chosen ? " selected" : ""}>${esc(u.name)}${u.name === userName() ? " – meg" : ""}</option>`).join("");
+  syncPickRefill();
+  $("#pick-test").hidden = DEMO || !token() || !isAdmin();
+}
+
+// Refill-kjøp er bare aktuelt for spoler som går til noen andre enn eieren.
+function syncPickRefill() {
+  const to = $("#pick-to").value;
+  $("#pick-refill-wrap").hidden = ![...pick || []].some((id) => state.spools.find((s) => s.id === id)?.owner !== to);
+}
+
+// Sjekker ut alle valgte spoler med samme steg som for én spole: «Sjekk ut til», eventuelt kjøp
+// (refill), og et lån for hver spole som går til en annen enn eieren. Andre trykk bekrefter.
+async function checkoutPicked(btn) {
+  const msg = $("#pick-msg");
+  const ids = [...pick].filter((id) => state.spools.some((s) => s.id === id && pickable(s)));
+  if (!ids.length) return (msg.textContent = "Velg minst én spole på lager.");
+  const to = $("#pick-to").value || userName();
+  if (!confirmed(btn, `Sjekk ut ${ids.length} til ${to}? Trykk igjen`)) return;
+  const purchase = !$("#pick-refill-wrap").hidden && $("#pick-refill").checked;
+  const left = new Map(ids.map((id) => [id, gramsLeftNow(state.spools.find((s) => s.id === id))]));
+  btn.disabled = true;
+  msg.textContent = "Lagrer…";
+  try {
+    let done = [];
+    await saveDoc((doc) => {
+      done = [];
+      for (const id of ids) {
+        const spool = doc.spools.find((s) => s.id === id);
+        if (!spool || statusOf(spool) !== "in") continue;
+        const g = left.get(id);
+        addEvent(spool, "out", { ...(g ? { g: g.g, src: g.src } : {}), ...(to !== userName() ? { to } : {}) });
+        spool.status = "out";
+        done.push(id);
+      }
+      if (!done.length) return "Spolene er allerede sjekket ut.";
+    }, `Utsjekk av ${ids.length} spoler til ${to} (${userName()})`);
+    const loans = done.map((id) => state.spools.find((s) => s.id === id)).filter((s) => s && s.owner !== to)
+      .map((s) => loanFor(s, to, s.history?.at(-1)?.at || new Date().toISOString(), userName(), left.get(s.id) || undefined, purchase));
+    if (loans.length) {
+      await saveDoc((doc) => {
+        for (const l of loans) if (!doc.loans.some((x) => x.id === l.id)) doc.loans.push(l);
+        trimLoans(doc);
+      }, `Lån: ${loans.length} spoler til ${to} (${userName()})`, "loans");
+    }
+    pick = null;
+    render();
+    setSync(`Sjekket ut ${done.length} til ${to}${loans.length ? `, ${loans.length} som lån` : ""}.`);
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---------- Testruller ----------
+
+// Tolv testruller på lager for å prøve flervalg og utsjekk (bare administrator). Merket test: true,
+// og slettes automatisk (med lånene sine) når de er sjekket ut og deretter inn igjen.
+const TEST_KEYS = ["GFA00-A0", "GFA00-B3", "GFA01-B0", "GFA05-P5", "GFG02-G0", "GFA00-M2",
+  "GFA16-N0", "GFA09-K0", "GFB01-W0", "GFA17-B1", "GFA08-Y1", "GFU02-R0"];
+
+async function makeTestSpools(btn) {
+  if (!confirmed(btn, "Lage 12 testruller? Trykk igjen")) return;
+  const owners = users().filter((u) => u.known).map((u) => u.name);
+  const stamp = Date.now().toString(36).toUpperCase();
+  const at = new Date().toISOString();
+  const fresh = TEST_KEYS.filter((k) => state.colorNames[k]).map((key, i) => {
+    const [materialId, code] = key.split("-");
+    const entry = state.colorNames[key];
+    return {
+      id: `TEST${stamp}${String(i + 1).padStart(2, "0")}`, test: true,
+      owner: owners[i % owners.length] || userName(), status: "in",
+      note: "Testrull – slettes når den sjekkes inn igjen",
+      added: at, lastScan: at, scans: 1, history: [{ at, action: "in", by: userName() }],
+      blocks: buildBlocks({ materialId, variantId: `${materialId.slice(2)}-${code}`, detailedType: entry[1], colors: entry[2] }),
+    };
+  });
+  btn.disabled = true;
+  try {
+    await saveDoc((doc) => { doc.spools.push(...fresh); }, `Testdata: ${fresh.length} ruller (${userName()})`);
+    render();
+    $("#pick-msg").textContent = `Laget ${fresh.length} testruller. De slettes når de sjekkes inn igjen.`;
+  } catch (err) {
+    $("#pick-msg").textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Sletter testruller som er sjekket inn igjen etter en utsjekk, og lånene deres.
+async function purgeTestSpools() {
+  if (DEMO || !token()) return;
+  const ids = new Set(state.spools.filter((s) => s.test && s.status === "in" && (s.history || []).some((e) => e.action === "out")).map((s) => s.id));
+  if (!ids.size) return;
+  try {
+    await saveDoc((doc) => { doc.spools = doc.spools.filter((s) => !(s.test && ids.has(s.id))); }, `Slettet ${ids.size} testruller (${userName()})`);
+    if (state.loans.some((l) => ids.has(l.spool))) {
+      await saveDoc((doc) => { doc.loans = doc.loans.filter((l) => !ids.has(l.spool)); }, `Slettet lån for ${ids.size} testruller`, "loans");
+    }
+    render();
+  } catch (err) {
+    setSync(err.message, true);
   }
 }
 
@@ -3866,7 +4022,16 @@ document.addEventListener("click", (e) => {
     state.filters[c.dataset.group] = state.filters[c.dataset.group] === c.dataset.value ? "" : c.dataset.value;
     return render();
   }
+  if (e.target.closest("#pick-toggle")) return togglePickMode();
+  if (e.target.closest("#pick-cancel")) return togglePickMode(false);
+  if (e.target.closest("#pick-all")) return pickAll(true);
+  if (e.target.closest("#pick-none")) return pickAll(false);
+  const pickGo = e.target.closest("#pick-go");
+  if (pickGo) return checkoutPicked(pickGo);
+  const pickTest = e.target.closest("#pick-test");
+  if (pickTest) return makeTestSpools(pickTest);
   const card = e.target.closest(".card, #activity-list li");
+  if (card && pick && card.matches("#grid .card")) return togglePick(card.dataset.id);
   if (card) return openDetail(card.dataset.id);
   const rm = e.target.closest("[data-remove]");
   if (rm) return removeUser(rm.dataset.remove, rm);
@@ -3927,6 +4092,7 @@ $("#login form").addEventListener("submit", login);
 $("#forgot form").addEventListener("submit", forgot);
 $("#vipps form").addEventListener("submit", vippsSubmit);
 $("#v-return").addEventListener("change", setVippsAmount);
+$("#pick-to").addEventListener("change", syncPickRefill);
 $("#cart-carrier").addEventListener("change", (e) => { state.cartCarrier = e.target.value; store("bf.cartCarrier", e.target.value); renderCart(); });
 saveCart();
 $("#a-phone").addEventListener("change", (e) => savePhone(e.target));

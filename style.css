@@ -1191,3 +1191,21 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 /* Godkjenn bilde rett fra kortet */
 .img-ok { display: flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; border-top: 1px solid var(--border); font-size: 12.5px; font-weight: 600; color: var(--text); background: color-mix(in srgb, var(--out) 10%, var(--surface)); cursor: pointer; }
 .img-ok input { width: auto; margin: 0; }
+
+/* Velg flere spoler (avkrysning på kortene og felles utsjekk) */
+.pick-toggle.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.pick-bar { position: sticky; top: 8px; z-index: 5; display: flex; flex-direction: column; gap: 8px; min-width: 0; border: 2px solid var(--accent); }
+.pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.pick-row .d-borrow { display: flex; align-items: center; gap: 6px; margin: 0; min-width: 0; white-space: nowrap; }
+.pick-row .d-borrow select { min-width: 0; max-width: 100%; }
+.pick-row .d-refill { margin: 0; }
+.pick-count { min-width: 5.5em; }
+.pick-bar .hint, .pick-msg { margin: 0; }
+.pick-msg:empty { display: none; }
+.card.pickable { position: relative; }
+.card.picked { outline: 3px solid var(--accent); outline-offset: -1px; }
+.card.unpickable { opacity: .4; cursor: default; }
+.card.unpickable:hover { transform: none; }
+.pick-box { position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: 6px; border: 2px solid #fff; background: rgba(0, 0, 0, .35); box-shadow: 0 0 0 1px rgba(0, 0, 0, .3); }
+.card.picked .pick-box { background: var(--accent); }
+.card.picked .pick-box::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 15px; font-weight: 700; line-height: 1; }

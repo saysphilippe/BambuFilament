@@ -98,8 +98,26 @@
           <option value="owner">Sorter: eier</option>
           <option value="recent">Sorter: sist skannet</option>
         </select>
+        <button id="pick-toggle" type="button" class="btn pick-toggle" aria-pressed="false">Velg flere</button>
       </div>
       <div class="chip-row"><span class="chip-label">Farge</span><div id="family-chips" class="chips"></div></div>
+    </section>
+
+    <section id="pick-bar" class="panel pick-bar" aria-label="Valgte spoler" hidden>
+      <div class="pick-row">
+        <b id="pick-count" class="pick-count"></b>
+        <button id="pick-all" type="button" class="btn btn-small">Merk alle</button>
+        <button id="pick-none" type="button" class="btn btn-small">Fjern merking</button>
+        <button id="pick-cancel" type="button" class="btn btn-small">Avbryt</button>
+      </div>
+      <div class="pick-row">
+        <label class="d-borrow">Sjekk ut til<select id="pick-to"></select></label>
+        <label id="pick-refill-wrap" class="d-refill"><input id="pick-refill" type="checkbox"> Kjøp: refill uten spole (leveres ikke tilbake)</label>
+        <button id="pick-go" type="button" class="btn btn-out">Sjekk ut valgte</button>
+        <button id="pick-test" type="button" class="btn btn-small" hidden>Lag 12 testruller</button>
+      </div>
+      <p class="hint">Trykk på spolene på lager for å velge dem. Spoler som går til noen andre enn eieren, blir lån, som ved utsjekk av én spole.</p>
+      <p id="pick-msg" class="pick-msg" role="status"></p>
     </section>
 
     <section id="grid" class="grid"></section>
