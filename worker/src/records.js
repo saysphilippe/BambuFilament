@@ -16,8 +16,9 @@ export const FILE_COLLS = {
   // (id = navn) når innboksen sist ble lest og hvilke meldinger som er skjult. presence (id = navn):
   // når brukeren sist hadde siden åpen (oppdateres hvert 2. minutt), for «pålogget nå».
   messages: ["messages", "msgread", "presence"],
-  // Forslag til forbedringer (id = tidspunkt + tilfeldig), se ideas.js.
-  ideas: ["ideas"],
+  // Forslag til forbedringer (id = tidspunkt + tilfeldig), se ideas.js. langreqs (id = språknavn
+  // med små bokstaver): språk brukerne ønsker at siden oversettes til, med stemmer, se i18n.js.
+  ideas: ["ideas", "langreqs"],
 };
 
 const MAX_LOGINS = 500;
@@ -80,6 +81,7 @@ export function toRecords(file, doc) {
     for (const [name, r] of Object.entries(doc.presence || {})) add("presence", name, r);
   } else if (file === "ideas") {
     for (const i of doc.ideas || []) if (i?.id) add("ideas", i.id, i);
+    for (const l of doc.langs || []) if (l?.id) add("langreqs", l.id, l);
   }
   return out;
 }
@@ -104,6 +106,6 @@ export function fromRecords(file, rows) {
   }
   if (file === "parts") return { version: 1, parts: by("parts").map((r) => r.data), requests: by("partreqs").map((r) => r.data), prefs: map("partprefs"), cats: map("partcats"), projects: by("projects").map((r) => r.data) };
   if (file === "messages") return { version: 1, messages: by("messages").map((r) => r.data).sort((a, b) => String(a.at).localeCompare(String(b.at))), read: map("msgread"), presence: map("presence") };
-  if (file === "ideas") return { version: 1, ideas: by("ideas").map((r) => r.data) };
+  if (file === "ideas") return { version: 1, ideas: by("ideas").map((r) => r.data), langs: by("langreqs").map((r) => r.data) };
   throw new Error(`Ukjent fil: ${file}`);
 }

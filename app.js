@@ -1,3 +1,5 @@
+// i18n.js først: den henter oversettelsen før resten av siden tegnes.
+import { initLang, applyUserLang, langSelectHtml, onLangSelect } from "./i18n.js?v=20261009202254";
 import { parseTag, cssColor, buildBlocks } from "./bambu.js?v=20261009202254";
 import { toRecords } from "./worker/src/records.js?v=20261009202254";
 import { encryptToken, decryptToken, randomPassword, passwordProblem, makeKeys, openKeys, sealToken, newKeys, openKeysFull, openPrivate, rewrapKeys } from "./auth.js?v=20261009202254";
@@ -515,6 +517,7 @@ function setDoc(doc) {
     wishes: doc.wishes || {},
   };
   state.spools = state.doc.spools.map(enrich);
+  if (session) applyUserLang();
 }
 
 function addEvent(spool, action, extra = {}) {
@@ -2301,6 +2304,7 @@ function openAccount() {
   $("#a-wakey").value = state.contacts.wakeys?.[session.user] || "";
   $("#a-n-msg").textContent = notifyStatus();
   $("#a-color").value = state.doc.users.find((u) => u.name === session.user)?.color || "#2563eb";
+  $("#a-lang-box").innerHTML = langSelectHtml("a-lang");
   $("#a-msg").textContent = "";
   openQuiet("#account-dialog");
 }
@@ -2763,6 +2767,15 @@ async function markAmsSpools({ clear = false } = {}) {
   } catch (err) {
     console.warn("Kunne ikke merke spoler i AMS:", err.message);
   }
+}
+
+// Språket lagres på brukeren, så det gjelder på alle enheter (se i18n.js).
+async function saveUserLang(code) {
+  await saveDoc((doc) => {
+    const u = doc.users.find((x) => x.name === userName());
+    if (!u) return "Brukeren din finnes ikke.";
+    u.lang = code;
+  }, `Språk ${code} (${userName()})`, "users");
 }
 
 async function setMarkAms(on) {
@@ -4003,6 +4016,13 @@ initIdeas({
   userName: () => userName() || (DEMO ? "Deg" : ""),
   users: () => (DEMO ? users() : state.doc.users),
 });
+initLang({
+  esc, dbCall, token, DEMO, isAdmin,
+  userName: () => userName() || (DEMO ? "Deg" : ""),
+  userLang: () => state.doc.users.find((u) => u.name === userName())?.lang || "",
+  saveUserLang,
+});
+$("#a-lang-box").addEventListener("change", (e) => e.target.id === "a-lang" && onLangSelect(e));
 for (const id of ["a-n-mail", "a-n-wa", "a-wakey"]) $(`#${id}`).addEventListener("change", saveNotify);
 $("#a-n-test").addEventListener("click", testNotify);
 store("bf.hiddenCats", ""); // skjulte kategorier lå tidligere i nettleseren; nå i databasen per eier

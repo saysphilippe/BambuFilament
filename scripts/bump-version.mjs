@@ -6,9 +6,10 @@ import { readFile, writeFile } from "node:fs/promises";
 const v = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
 const files = {
   "index.html": [/(app\.js|style\.css)(\?v=\w+)?"/g, (_, f) => `${f}?v=${v}"`],
-  "app.js": [/from "\.\/((?:worker\/src\/)?(?:bambu|auth|records|parts|messages|ideas))\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
+  "app.js": [/from "\.\/((?:worker\/src\/)?(?:bambu|auth|records|parts|messages|ideas|i18n))\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
   "parts.js": [/from "\.\/((?:worker\/src\/)?(?:circuits|packages|pack|categories|footprints|records))\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
   "circuits.js": [/from "\.\/(footprints)\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
+  "i18n.js": [/import\("\.\/(i18n-\w+)\.js(\?v=\w+)?"\)/g, (_, f) => `import("./${f}.js?v=${v}")`],
   "messages.js": [/from "\.\/(auth)\.js(\?v=\w+)?"/g, (_, f) => `from "./${f}.js?v=${v}"`],
 };
 for (const [file, [re, fn]] of Object.entries(files)) {

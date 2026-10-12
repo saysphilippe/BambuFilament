@@ -424,6 +424,29 @@ body.demo .demo-banner { display: block; }
 .account-btn.logged-in { border-color: var(--accent); }
 .account-btn[hidden] { display: none; }
 
+/* Språkvalg øverst: flagg ved siden av kontoknappen. */
+.lang-switch { display: flex; align-items: center; gap: 4px; }
+.lang-flag { display: grid; place-items: center; width: 30px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; opacity: .55; }
+.lang-flag svg { width: 22px; height: 15px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .15); }
+.lang-flag:hover, .lang-flag:focus-visible { opacity: 1; background: var(--muted-bg); }
+.lang-flag.active { opacity: 1; border-color: var(--border); background: var(--surface); }
+.lang-more { width: 24px; font-weight: 600; }
+@media (max-width: 520px) { .lang-flag:not(.active) { display: none; } }
+.lang-dialog { width: min(520px, calc(100vw - 32px)); }
+.lang-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.lang-choice { display: inline-flex; align-items: center; gap: 8px; }
+.lang-choice.active { border-color: var(--accent); }
+.lang-flag-img svg { display: block; width: 24px; height: 16px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, .15); }
+.lang-reqs { list-style: none; margin: 8px 0; padding: 0; }
+.lang-reqs li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border); min-width: 0; }
+.lang-reqs li:first-child { border-top: 0; }
+.lang-reqs .spacer { flex: 1; }
+.lang-reqs .btn.active { border-color: var(--accent); }
+.lang-voters { flex-basis: 100%; order: 3; font-size: 12px; }
+.lang-add { display: flex; gap: 8px; margin: 8px 0; min-width: 0; }
+.lang-add input { flex: 1 1 0; min-width: 0; margin: 0; }
+.lang-add .btn { flex: none; }
+
 .notice { padding: 10px 12px; border-radius: 9px; background: color-mix(in srgb, var(--out) 15%, transparent); font-size: 14px; }
 .u-fresh table, .pw-table { border-collapse: collapse; margin: 6px 0 12px; }
 .u-fresh td, .pw-table td { padding: 4px 14px 4px 0; }

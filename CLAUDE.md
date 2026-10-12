@@ -8,7 +8,7 @@ AliExpress, Mouser og LCSC) for en lukket vennegjeng. Se `CONTRIBUTING.md` for o
 - `index.html`, `app.js` (filament, innlogging, innstillinger), `parts.js` (komponenter, import,
   handlekurv), `categories.js` (kategorier og poengbasert klassifisering), `circuits.js`
   (datablad, pinner, koblingsskjema), `packages.js` (pakketyper med SVG), `pack.js` (stk per pakke),
-  `auth.js` (kryptert innlogging og meldinger), `messages.js` (meldinger mellom brukere, kryptert
+  `auth.js` (kryptert innlogging og meldinger), `i18n.js` + `i18n-en.js` (språk), `messages.js` (meldinger mellom brukere, kryptert
   til mottakernes nøkler; «pålogget nå» via D1-samlingen presence), `style.css`.
 - `worker/` – Cloudflare Worker: Bambu-proxy, D1-database (`records`: coll/id/data), e-post,
   lesere. `worker/src/records.js` deles med nettsiden.
@@ -24,6 +24,10 @@ AliExpress, Mouser og LCSC) for en lukket vennegjeng. Se `CONTRIBUTING.md` for o
 ## Regler
 
 - All tekst brukerne ser, og kommentarer, skrives på norsk.
+- Flerspråklig (`i18n.js`): siden oversettes i nettleseren fra norsk via ordlisten `i18n-en.js`
+  (norsk tekst -> engelsk, `{*}` for variable deler). Ny eller endret tekst må også legges inn der,
+  ellers vises den på norsk. Brukerdata som ikke skal oversettes, merkes med `translate="no"`.
+  Språkvalget lagres i `users[].lang`; ønskede språk i D1-samlingen `langreqs` (fil «ideas»).
 - Escape data før HTML (`esc`), farger via `safeColor`. Ingen inline-skript (CSP). Bildelenker
   bare fra godkjente verter (`safeImg`).
 - Mobil: siden skal aldri bli bredere enn skjermen (sjekk på ca. 390 px). Rader som rulles
