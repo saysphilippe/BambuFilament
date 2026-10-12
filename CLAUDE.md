@@ -21,6 +21,12 @@ AliExpress, Mouser og LCSC) for en lukket vennegjeng. Se `CONTRIBUTING.md` for o
   `node scripts/lager.mjs` via Claude-nøkkel (`BF_INVENTORY_KEY`, Workerens `/inventory`) eller eksportfil
   (`lager-*.json`, aldri i git). `inventory()` i `worker/src/records.js` lager oversikten.
 
+## Forslag og språkønsker
+
+- `node scripts/forslag.mjs` viser forslag til forbedringer og ønskede språk fra siden (`--alle`, `--json`).
+  Leser D1 direkte med wrangler (bare lesing) når du er logget inn hos Cloudflare, ellers den nattlige
+  sikkerhetskopien `backup/ideas.json` i BambuFilament-data (krever `gh auth login`).
+
 ## Regler
 
 - All tekst brukerne ser, og kommentarer, skrives på norsk.

@@ -1162,17 +1162,39 @@ async function readerScan({ id, blocks, user, owner }, env) {
 }
 
 // Daglig sikkerhetskopi: hele databasen som JSON-filer i BambuFilament-data.
+// Filene skrives over uten å leses først: GitHub gir ikke innholdet i filer over 1 MB (parts.json),
+// bare sha. Hver fil lagres for seg, så én feil ikke stopper resten, og den store komponentfilen tas sist.
+// Claude leser forslag og språkønsker herfra med scripts/forslag.mjs (backup/ideas.json).
 async function backupToGitHub(env) {
   const tok = await env.RESET_KV?.get("github-token");
   if (!tok) return console.warn("Sikkerhetskopi: mangler GitHub-token i KV");
   const docs = await dbLoad({}, env);
-  for (const [file, doc] of Object.entries(docs)) {
-    await updateJson(DATA_REPO, `backup/${file}.json`, tok, () => ({}), (d) => {
-      for (const k of Object.keys(d)) delete d[k];
-      Object.assign(d, doc, { backedUp: new Date().toISOString() });
-    }, `Sikkerhetskopi av databasen: ${file}`);
+  const files = Object.keys(docs).sort((x, y) => (x === "parts") - (y === "parts"));
+  const done = [], failed = [];
+  for (const file of files) {
+    try {
+      await putBackup(tok, file, { ...docs[file], backedUp: new Date().toISOString() });
+      done.push(file);
+    } catch (err) {
+      failed.push(`${file}: ${err.message}`);
+    }
   }
-  console.log("Sikkerhetskopi lagret", Object.keys(docs).join(", "));
+  console.log("Sikkerhetskopi lagret", done.join(", "), failed.length ? `– feilet: ${failed.join("; ")}` : "");
+}
+
+async function putBackup(tok, file, doc) {
+  const path = `/repos/${DATA_REPO}/contents/backup/${file}.json`;
+  for (let attempt = 0; ; attempt++) {
+    const meta = await github(`${path}?ref=main`, tok);
+    if (!meta.ok && meta.status !== 404) throw fail(`GitHub svarte ${meta.status} ved henting`, 502);
+    const sha = meta.ok ? (await meta.json()).sha : undefined;
+    const res = await github(path, tok, {
+      method: "PUT",
+      body: JSON.stringify({ message: `Sikkerhetskopi av databasen: ${file}`, branch: "main", sha, content: toB64(utf8(JSON.stringify(doc, null, 1) + "\n")) }),
+    });
+    if (res.ok) return;
+    if (res.status !== 409 || attempt >= 2) throw fail(`GitHub svarte ${res.status} ved lagring`, 502);
+  }
 }
 
 // ---------- Bambu-butikken i databasen ----------
