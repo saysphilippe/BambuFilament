@@ -46,7 +46,7 @@ const tempCred = async (tok, temp) => ({ ...(await encryptToken(tok, temp)), exp
 const PROXY_URL = ["127.0.0.1", "localhost"].includes(location.hostname) ? "http://127.0.0.1:8787" : "https://bambufilament-proxy.saysphilippe.workers.dev";
 const DEMO = new URLSearchParams(location.search).has("demo");
 
-const STATUS = { in: "På lager", out: "Tatt ut", empty: "Brukt opp" };
+const STATUS = { in: "På lager", out: "Tatt ut", empty: "Brukt opp", pending: "Venter på innsjekk" };
 const ACTION = { in: "Sjekket inn", out: "Sjekket ut", empty: "Brukt opp" };
 const USER_COLORS = ["#2563eb", "#db2777", "#7c3aed", "#0891b2", "#ca8a04", "#dc2626", "#4f46e5", "#0d9488"];
 
@@ -371,7 +371,9 @@ function enrich(spool) {
   return {
     ...spool,
     inAms,
-    status: statusOf(spool),
+    // Rull lest inn av RFID-leseren (ny eller satt tilbake) som ikke er godkjent ennå: «pending».
+    pendingIn: pendingIn(spool),
+    status: pendingIn(spool) ? "pending" : statusOf(spool),
     tag,
     colorName: official?.[0] || "",
     typeName: official?.[1] || tag?.detailedType || "Ukjent type",
@@ -1090,6 +1092,18 @@ const PENDING_SINCE = "2026-10-08T12:20:00.000Z";
 // Leseren merker hendelsene med dev: "reader" (eldre programvare: lastScan = hendelsens tidspunkt).
 const fromReader = (s, e) => e.dev === "reader" || e.at === s.lastScan;
 
+// Innlesning med RFID-leseren (ny rull, eller rull satt tilbake) må også godkjennes før rullen
+// teller som «på lager». Godkjenningen lagres som spool.inOk (tidspunktet). Bare innlesninger
+// etter dette tidspunktet tas med, så gamle ruller ikke plutselig venter på godkjenning.
+const PENDING_IN_SINCE = "2026-10-12T18:00:00.000Z";
+function pendingIn(s) {
+  const e = (s.history || []).at(-1);
+  if (!e || e.action !== "in" || (s.status || "in") !== "in" || e.at < PENDING_IN_SINCE || !fromReader(s, e)) return false;
+  return !(s.inOk && s.inOk >= e.at);
+}
+const canApproveSpool = (s) => !!token() && (s.owner === userName() || isAdmin() || !s.owner);
+const myInTodos = () => state.spools.filter((s) => s.pendingIn && (s.owner === userName() || (!s.owner && isAdmin())));
+
 async function syncReaderCheckouts() {
   if (DEMO || !token()) return;
   const fresh = [];
@@ -1126,13 +1140,44 @@ function updateApprBar() {
   for (const c of boxes) c.closest(".appr-row")?.classList.toggle("picked", c.checked);
 }
 
-// Godkjenner alle valgte utsjekk samlet, med samme steg som for én: mottaker per rad (eller én
+// Godkjenner innsjekk (innlesning fra leseren): rullen teller som på lager. Lagres som spool.inOk.
+async function approveIns(ids) {
+  const now = new Date().toISOString();
+  let done = 0;
+  await saveDoc((doc) => {
+    done = 0;
+    for (const id of ids) {
+      const s = doc.spools.find((x) => x.id === id);
+      if (!s || !pendingIn(s)) continue;
+      s.inOk = now;
+      done++;
+    }
+    if (!done) return "Innlesningene finnes ikke lenger.";
+  }, `Godkjente ${ids.length} innsjekk (${userName()})`);
+  return done;
+}
+
+async function approveInOne(id, btn) {
+  btn.disabled = true;
+  try {
+    await approveIns([id]);
+    render();
+    purgeTestSpools();
+  } catch (err) {
+    note("#appr-msg").textContent = err.message;
+    btn.disabled = false;
+  }
+}
+
+// Godkjenner alle valgte samlet, med samme steg som for én. Utsjekk: mottaker per rad (eller én
 // felles), eget forbruk når mottakeren er eieren, ellers lån, og kjøp (refill) om det er krysset av.
+// Innsjekk (innlesning): rullen legges på lager.
 async function approveMany(btn) {
   const msg = note("#appr-msg");
   const bulkTo = $("#appr-to")?.value || "";
   const bulkRefill = !!$("#appr-refill")?.checked;
-  const picks = [...state.loanPick].map((id) => {
+  const inIds = [...state.loanPick].filter((id) => id.startsWith("in:")).map((id) => id.slice(3));
+  const picks = [...state.loanPick].filter((id) => !id.startsWith("in:")).map((id) => {
     const q = CSS.escape(id);
     return {
       id,
@@ -1140,31 +1185,33 @@ async function approveMany(btn) {
       refill: bulkRefill || !!document.querySelector(`[data-pending-refill="${q}"]`)?.checked,
     };
   });
-  if (!picks.length) return (msg.textContent = "Velg minst én utsjekk.");
+  if (!picks.length && !inIds.length) return (msg.textContent = "Velg minst én rad.");
   const missing = picks.filter((p) => !p.to).length;
   if (missing) return (msg.textContent = `Velg hvem ${missing === 1 ? "én utsjekk" : missing + " utsjekk"} gikk til.`);
-  if (!confirmed(btn, `Godkjenn ${picks.length}? Trykk igjen`)) return;
+  if (!confirmed(btn, `Godkjenn ${picks.length + inIds.length}? Trykk igjen`)) return;
   btn.disabled = true;
   msg.textContent = "Godkjenner…";
   try {
     let done = 0;
-    await saveDoc((doc) => {
-      done = 0;
-      for (const p of picks) {
-        const l = doc.loans.find((x) => x.id === p.id);
-        if (!l || !l.pending) continue;
-        l.pending = false;
-        l.to = p.to;
-        l.approvedBy = userName();
-        if (p.to === l.owner) l.own = true;
-        else if (p.refill) l.purchase = true;
-        done++;
-      }
-      if (!done) return "Utsjekkene finnes ikke lenger.";
-    }, `Godkjente ${picks.length} utsjekk (${userName()})`, "loans");
+    if (picks.length) {
+      await saveDoc((doc) => {
+        for (const p of picks) {
+          const l = doc.loans.find((x) => x.id === p.id);
+          if (!l || !l.pending) continue;
+          l.pending = false;
+          l.to = p.to;
+          l.approvedBy = userName();
+          if (p.to === l.owner) l.own = true;
+          else if (p.refill) l.purchase = true;
+          done++;
+        }
+      }, `Godkjente ${picks.length} utsjekk (${userName()})`, "loans");
+    }
+    if (inIds.length) done += await approveIns(inIds);
     state.loanPick.clear();
     render();
-    note("#appr-msg").textContent = `Godkjente ${done} utsjekk.`;
+    note("#appr-msg").textContent = `Godkjente ${done}.`;
+    purgeTestSpools();
   } catch (err) {
     msg.textContent = err.message;
     btn.disabled = false;
@@ -1293,9 +1340,16 @@ function renderLoans() {
       <span class="loan-actions">${canConfirm ? `<button class="btn btn-primary btn-small" data-spool-received="${esc(l.id)}">Mottatt</button>` : `<span class="muted">venter på at ${esc(l.owner)} bekrefter</span>`}</span>
     </li>`;
   };
-  // Godkjenning: én rad per utsjekk, med avkrysning, så mange kan godkjennes samlet.
-  for (const id of [...state.loanPick]) if (!waiting.some((w) => w.id === id && canApprove(w))) state.loanPick.delete(id);
-  const approvable = waiting.filter(canApprove);
+  // Godkjenning: innlesning (innsjekk) og utsjekk fra leseren i samme tabell, med avkrysning,
+  // så mange kan godkjennes samlet. Valg-id: lånets id (utsjekk) eller «in:» + rullens id (innlesning).
+  const inWaiting = state.spools.filter((s) => s.pendingIn);
+  const inMine = new Set(myInTodos().map((s) => s.id));
+  const inTodos = inWaiting.filter((s) => inMine.has(s.id));
+  const inOthers = inWaiting.filter((s) => !inMine.has(s.id));
+  const waitingAll = waiting.length + inWaiting.length;
+  const approvableIds = new Set([...waiting.filter(canApprove).map((l) => l.id), ...inWaiting.filter(canApproveSpool).map((s) => "in:" + s.id)]);
+  for (const id of [...state.loanPick]) if (!approvableIds.has(id)) state.loanPick.delete(id);
+  const approvable = approvableIds.size;
   const picked = state.loanPick.size;
   const apprRow = (l) => {
     const s = spoolOf(l);
@@ -1311,36 +1365,57 @@ function renderLoans() {
       <span class="appr-check">${can ? `<input type="checkbox" data-appr-pick="${id}" aria-label="Velg ${esc(s ? title(s) : l.title)}"${isPicked ? " checked" : ""}>` : ""}</span>
       <span class="appr-what"><span class="dot" style="background:${s?.tag ? swatch(s.tag) : "var(--muted-bg)"}"></span>
         <span class="loan-what"><b>${esc(s ? title(s) : l.title)}</b><span class="muted">${esc(s?.typeName || l.type)} · eier ${esc(l.owner || "ukjent")}</span></span></span>
-      <span class="appr-by"><b>${l.by ? esc(l.by) : "Ukjent"}</b><span class="muted">${l.by ? "" : "ingen kort tappet · "}${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut}g` : ""}</span></span>
+      <span class="appr-by"><b><span class="appr-kind out">Sjekket ut</span>${l.by ? esc(l.by) : "Ukjent"}</b><span class="muted">${l.by ? "" : "ingen kort tappet · "}${fmtTime(l.at)}${l.gramsOut !== null ? ` · ${l.gramsOut}g` : ""}</span></span>
       <span class="appr-to">${can ? `<select data-pending-to="${id}" aria-label="Sjekket ut til">${l.by ? "" : `<option value="">Velg …</option>`}${opts}</select>` : `<span class="muted">venter på ${esc(l.owner)}</span>`}</span>
       <span class="appr-refill">${can && !ownStock ? `<label class="pending-refill" title="Refill uten spole som ikke leveres tilbake"><input type="checkbox" data-pending-refill="${id}"> Kjøp (refill)</label>` : ""}</span>
       <span class="appr-act">${can ? `<button class="btn btn-primary btn-small" data-approve-out="${id}">${ownStock ? "OK" : "Godkjenn"}</button>` : ""}</span>
     </li>`;
   };
+  // Innlesning: ny rull, eller rull satt tilbake på lager. Godkjent = den teller som på lager.
+  const apprInRow = (s) => {
+    const e = s.history.at(-1);
+    const can = canApproveSpool(s);
+    const key = `in:${s.id}`;
+    const isNewRoll = s.history.length <= 1;
+    const isPicked = state.loanPick.has(key);
+    return `<li class="appr-row${isPicked ? " picked" : ""}">
+      <span class="appr-check">${can ? `<input type="checkbox" data-appr-pick="${esc(key)}" aria-label="Velg ${esc(title(s))}"${isPicked ? " checked" : ""}>` : ""}</span>
+      <span class="appr-what"><span class="dot" style="background:${swatch(s.tag)}"></span>
+        <span class="loan-what"><b>${esc(title(s))}</b><span class="muted">${esc(s.typeName)} · eier ${esc(s.owner || "ukjent")}</span></span></span>
+      <span class="appr-by"><b><span class="appr-kind in">Sjekket inn</span>${e.by ? esc(e.by) : "Ukjent"}</b><span class="muted">${isNewRoll ? "ny rull · " : ""}${fmtTime(e.at)}</span></span>
+      <span class="appr-to"><span class="muted">${isNewRoll ? "Legges på lager" : "Tilbake på lager"}</span></span>
+      <span class="appr-refill"></span>
+      <span class="appr-act">${can ? `<button class="btn btn-primary btn-small" data-approve-in="${esc(s.id)}">Godkjenn</button>` : `<span class="muted">venter på ${esc(s.owner)}</span>`}</span>
+    </li>`;
+  };
+  // Nyeste hendelse øverst, utsjekk og innlesning blandet.
+  const apprItems = (ls, ss) => [...ls.map((l) => [l.at, apprRow(l)]), ...ss.map((s) => [s.history.at(-1).at, apprInRow(s)])]
+    .sort((a, b) => String(b[0]).localeCompare(String(a[0]))).map((x) => x[1]).join("");
 
   // Underfaner. Uten valg åpnes «Godkjenning» når du har utsjekk å godkjenne, ellers «Utestående».
-  const sub = LOAN_SUBS.includes(state.loansSub) ? state.loansSub : todos.length ? "approve" : "open";
+  const sub = LOAN_SUBS.includes(state.loansSub) ? state.loansSub : todos.length + inTodos.length ? "approve" : "open";
   state.loansSub = sub; // blir stående mens du er i fanen, også når listene endrer seg
   const count = (n) => (n ? ` (${n})` : "");
-  const subTabs = [["approve", `Godkjenning${count(waiting.length)}`], ["open", `Utestående${count(open.length + coming.length)}`],
+  const subTabs = [["approve", `Godkjenning${count(waitingAll)}`], ["open", `Utestående${count(open.length + coming.length)}`],
     ["done", "Avsluttet"], ["activity", "Aktivitet"]];
   const content = {
-    approve: `${waiting.length ? `
+    approve: `${waitingAll ? `
       <div class="appr-bar">
-        <label class="appr-all"><input type="checkbox" id="appr-all"${approvable.length && picked === approvable.length ? " checked" : ""}${approvable.length ? "" : " disabled"}> Merk alle (${approvable.length})</label>
+        <label class="appr-all"><input type="checkbox" id="appr-all"${approvable && picked === approvable ? " checked" : ""}${approvable ? "" : " disabled"}> Merk alle (${approvable})</label>
         <b id="appr-count" class="appr-count">${picked} valgt</b>
-        <label class="appr-bulk">Sjekket ut til <select id="appr-to"><option value="">Som i hver rad</option>${users().filter((u) => u.known).map((u) => `<option value="${esc(u.name)}"${u.name === state.apprTo ? " selected" : ""}>${esc(u.name)}</option>`).join("")}</select></label>
-        <label class="pending-refill" title="Gjelder valgte rader der mottakeren ikke er eieren"><input type="checkbox" id="appr-refill"${state.apprRefill ? " checked" : ""}> Kjøp (refill)</label>
+        <label class="appr-bulk" title="Gjelder valgte utsjekk">Sjekket ut til <select id="appr-to"><option value="">Som i hver rad</option>${users().filter((u) => u.known).map((u) => `<option value="${esc(u.name)}"${u.name === state.apprTo ? " selected" : ""}>${esc(u.name)}</option>`).join("")}</select></label>
+        <label class="pending-refill" title="Gjelder valgte utsjekk der mottakeren ikke er eieren"><input type="checkbox" id="appr-refill"${state.apprRefill ? " checked" : ""}> Kjøp (refill)</label>
         <button class="btn btn-primary" id="appr-go"${picked ? "" : " disabled"}>Godkjenn valgte${picked ? ` (${picked})` : ""}</button>
       </div>
       <p id="appr-msg" class="hint" role="status"></p>
-      <div class="appr-head" aria-hidden="true"><span></span><span>Rull</span><span>Tatt ut av</span><span>Sjekket ut til</span><span></span><span></span></div>
-      ${todos.length ? `<h3 class="appr-h">Dine gjøremål (${todos.length})</h3><ul class="appr-list">${todos.map(apprRow).join("")}</ul>` : ""}
-      ${others.length ? `<h3 class="appr-h">Venter på andre (${others.length})</h3><ul class="appr-list">${others.map(apprRow).join("")}</ul>` : ""}
-      <p class="hint">Spolene ble sjekket ut med RFID-leseren. Tok eieren den selv: trykk OK. Ellers velg hvem den gikk til, så blir det et lån. Kryss av flere og trykk «Godkjenn valgte» for å godkjenne samlet.</p>`
-      : `<p id="appr-msg" class="hint" role="status"></p><p class="muted">Ingen utsjekk fra RFID-leseren venter på godkjenning.</p>`}
+      <div class="appr-head" aria-hidden="true"><span></span><span>Rull</span><span>Hendelse</span><span>Sjekket ut til</span><span></span><span></span></div>
+      ${todos.length + inTodos.length ? `<h3 class="appr-h">Dine gjøremål (${todos.length + inTodos.length})</h3><ul class="appr-list">${apprItems(todos, inTodos)}</ul>` : ""}
+      ${others.length + inOthers.length ? `<h3 class="appr-h">Venter på andre (${others.length + inOthers.length})</h3><ul class="appr-list">${apprItems(others, inOthers)}</ul>` : ""}
+      <p class="hint">Rullene ble lest inn eller sjekket ut med RFID-leseren. Innsjekk: trykk Godkjenn, så legges rullen på lager. Utsjekk: tok eieren den selv, trykk OK; ellers velg hvem den gikk til, så blir det et lån. Kryss av flere og trykk «Godkjenn valgte» for å godkjenne samlet.</p>`
+      : `<p id="appr-msg" class="hint" role="status"></p><p class="muted">Ingen innlesninger eller utsjekk fra RFID-leseren venter på godkjenning.</p>`}
       ${isAdmin() && token() && !DEMO ? `<div class="loan-test"><span class="muted">Test:</span>
-        <button class="btn btn-small" data-test-scenario>Lag testdata og simuler RFID-innlesning</button>
+        <button class="btn btn-small" data-test-scenario>Lag testdata (innsjekk og utsjekk)</button>
+        <button class="btn btn-small" data-test-out>Simuler RFID-utsjekk</button>
         <button class="btn btn-small" data-test-nuke>Slett testdata</button></div>` : ""}`,
     open: `<div class="loan-sum">${debtChips || `<span class="loan-debt clear">Ingen skylder filament akkurat nå</span>`}</div>
       <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Sjekk ut til» når du sjekker ut. Utsjekk med RFID-leseren må godkjennes først. Den som har fått en rull, skylder den til den leveres tilbake (sjekkes inn) eller er gjort opp, for eksempel med Vipps.</p>
@@ -1402,13 +1477,13 @@ const spoolsComing = () => state.loans.filter((l) => l.spoolReturn && !l.spoolRe
 const mySpoolsComing = () => spoolsComing().filter((l) => l.owner === userName() || (!l.owner && isAdmin()));
 
 function renderPendingCount() {
-  const n = myTodos().length + mySpoolsComing().length;
+  const n = myTodos().length + myInTodos().length + mySpoolsComing().length;
   const tab = document.querySelector('.tab[data-tab="loans"]');
   tab.innerHTML = `Lånt filament${n ? `<span class="tab-count">${n}</span>` : ""}`;
   const unnamed = token() ? unnamedCards() : 0;
   document.querySelector('.tab[data-tab="cards"]').innerHTML = `RFID-kort${unnamed ? `<span class="tab-count">${unnamed}</span>` : ""}`;
   $("#stock-pending").hidden = !n;
-  const parts = [myTodos().length && `${myTodos().length} utsjekk fra RFID-leseren må godkjennes`, mySpoolsComing().length && `${mySpoolsComing().length} tom${mySpoolsComing().length === 1 ? "" : "me"} spole${mySpoolsComing().length === 1 ? "" : "r"} venter på at du bekrefter mottak`].filter(Boolean);
+  const parts = [myInTodos().length && `${myInTodos().length} innlesing${myInTodos().length === 1 ? "" : "er"} fra RFID-leseren må godkjennes`, myTodos().length && `${myTodos().length} utsjekk fra RFID-leseren må godkjennes`, mySpoolsComing().length && `${mySpoolsComing().length} tom${mySpoolsComing().length === 1 ? "" : "me"} spole${mySpoolsComing().length === 1 ? "" : "r"} venter på at du bekrefter mottak`].filter(Boolean);
   $("#stock-pending").textContent = n ? `Gjøremål: ${parts.join(", ")} – trykk for å se` : "";
 }
 
@@ -1724,7 +1799,7 @@ function openDetail(id) {
   form.elements.owner.innerHTML = `<option value="">Ingen eier</option>` +
     owners.map((n) => `<option${n === s.owner ? " selected" : ""}>${esc(n)}</option>`).join("");
   form.elements.name.value = s.name || "";
-  form.elements.status.value = s.status;
+  form.elements.status.value = s.status === "pending" ? "in" : s.status;
   form.elements.note.value = s.note || "";
   const canEdit = !!token();
   form.querySelectorAll("input, select, textarea, button").forEach((el) => (el.disabled = !canEdit));
@@ -1885,27 +1960,42 @@ const TEST_KEYS = ["GFA00-A0", "GFA00-B3", "GFA01-B0", "GFA05-P5", "GFG02-G0", "
 // Meldingsfelt som slås opp når teksten skrives (listen kan tegnes på nytt underveis).
 const note = (sel) => ({ set textContent(t) { const el = $(sel); if (el) el.textContent = t; } });
 
-async function makeTestSpools(btn, msg = note("#pick-msg")) {
+// mode «stock»: 12 testruller på lager (godkjent). mode «mixed»: 6 innlesninger (ventende innsjekk)
+// og 6 utsjekk (ventende utsjekk) fra leseren, så begge typer godkjenning kan prøves.
+async function makeTestSpools(btn, msg = note("#pick-msg"), mode = "stock") {
   if (btn && !confirmed(btn, "Lage 12 testruller? Trykk igjen")) return;
   const owners = users().filter((u) => u.known).map((u) => u.name);
   const stamp = Date.now().toString(36).toUpperCase();
-  const at = new Date().toISOString();
+  const now = Date.now();
+  const at = new Date(now).toISOString();
+  const earlier = new Date(now - 3.6e6).toISOString();
   const fresh = TEST_KEYS.filter((k) => state.colorNames[k]).map((key, i) => {
     const [materialId, code] = key.split("-");
     const entry = state.colorNames[key];
+    const owner = owners[i % owners.length] || userName();
+    // Annenhver rull leses av en annen enn eieren (kortet til en venn).
+    const by = i % 2 ? owners.find((n) => n !== owner) || owner : owner;
+    const reader = mode === "mixed";
+    const out = reader && i >= 6;
+    const history = !reader ? [{ at, action: "in", by: userName() }]
+      : out ? [{ at: earlier, action: "in", by: owner }, { at, action: "out", by, dev: "reader" }]
+        : [{ at, action: "in", by, dev: "reader" }];
     return {
       id: `TEST${stamp}${String(i + 1).padStart(2, "0")}`, test: true,
-      owner: owners[i % owners.length] || userName(), status: "in",
+      owner, status: out ? "out" : "in",
       note: "Testrull – slettes når den sjekkes inn igjen",
-      added: at, lastScan: at, scans: 1, history: [{ at, action: "in", by: userName() }],
+      added: earlier, lastScan: at, scans: out ? 2 : 1, history,
       blocks: buildBlocks({ materialId, variantId: `${materialId.slice(2)}-${code}`, detailedType: entry[1], colors: entry[2] }),
     };
   });
   if (btn) btn.disabled = true;
   try {
     await saveDoc((doc) => { doc.spools.push(...fresh); }, `Testdata: ${fresh.length} ruller (${userName()})`);
+    if (mode === "mixed") await syncReaderCheckouts();
     render();
-    msg.textContent = `Laget ${fresh.length} testruller. De slettes når de sjekkes inn igjen.`;
+    msg.textContent = mode === "mixed"
+      ? `Laget ${fresh.length} testruller: ${fresh.filter((s) => s.status === "in").length} innsjekk og ${fresh.filter((s) => s.status === "out").length} utsjekk venter på godkjenning.`
+      : `Laget ${fresh.length} testruller. De slettes når de sjekkes inn igjen.`;
   } catch (err) {
     msg.textContent = err.message;
   } finally {
@@ -1913,14 +2003,11 @@ async function makeTestSpools(btn, msg = note("#pick-msg")) {
   }
 }
 
-// Lager testdata for godkjenning i ett trykk (fra «Godkjenning»): testruller om det ikke finnes
-// noen på lager, så simulert RFID-innlesning (utsjekk) som havner som ventende godkjenninger.
+// Testdata for godkjenning i ett trykk (fra «Godkjenning»): innsjekk og utsjekk fra leseren.
 async function testScenario(btn) {
-  const msg = note("#loan-error");
   btn.disabled = true;
   try {
-    if (!state.spools.some((s) => s.test && s.status === "in")) await makeTestSpools(null, msg);
-    await simulateReaderScans(btn, msg);
+    await makeTestSpools(null, note("#loan-error"), "mixed");
   } finally {
     btn.disabled = false;
   }
@@ -1931,7 +2018,9 @@ async function testScenario(btn) {
 // ved en ekte innlesning. Annenhver rull tas av en annen bruker enn eieren.
 async function simulateReaderScans(btn, msg = note("#pick-msg")) {
   const ids = state.spools.filter((s) => s.test && s.status === "in").slice(0, 6).map((s) => s.id);
-  if (!ids.length) return (msg.textContent = "Ingen testruller på lager. Lag testruller først.");
+  if (!ids.length) return (msg.textContent = state.spools.some((s) => s.test && s.pendingIn)
+    ? "Godkjenn innsjekkene av testrullene først."
+    : "Ingen testruller på lager. Lag testruller først.");
   const names = users().filter((u) => u.known).map((u) => u.name);
   btn.disabled = true;
   msg.textContent = "Simulerer…";
@@ -1951,7 +2040,7 @@ async function simulateReaderScans(btn, msg = note("#pick-msg")) {
     }, `Simulert RFID-utsjekk av ${ids.length} testruller (${userName()})`);
     await syncReaderCheckouts();
     render();
-    msg.textContent = `Simulerte ${ids.length} innlesninger fra leseren. De venter på godkjenning under «Lånt filament».`;
+    msg.textContent = `Simulerte ${ids.length} utsjekk fra leseren. De venter på godkjenning under «Lånt filament».`;
   } catch (err) {
     msg.textContent = err.message;
   } finally {
@@ -1959,9 +2048,8 @@ async function simulateReaderScans(btn, msg = note("#pick-msg")) {
   }
 }
 
-// Simulerer at RFID-leseren leser testrullene som er sjekket ut: de sjekkes inn med en
-// leserhendelse (dev: "reader"), som ved en ekte innlesning. Lånene blir levert tilbake, og
-// testrullene slettes av seg selv ved neste oppdatering av siden.
+// Simulerer at RFID-leseren leser testrullene som er sjekket ut inn igjen: innsjekken (dev: "reader")
+// venter på godkjenning under «Lånt filament». Når du har godkjent den, slettes testrullen.
 async function simulateReaderCheckins(btn) {
   const msg = $("#pick-msg");
   const ids = state.spools.filter((s) => s.test && s.status === "out").map((s) => s.id);
@@ -1982,7 +2070,7 @@ async function simulateReaderCheckins(btn) {
       });
     }, `Simulert RFID-innsjekk av ${ids.length} testruller (${userName()})`);
     render();
-    msg.textContent = `Simulerte ${ids.length} innsjekk fra leseren. Testrullene slettes når siden oppdateres (trykk på ↻).`;
+    msg.textContent = `Simulerte ${ids.length} innsjekk fra leseren. De venter på godkjenning under «Lånt filament».`;
   } catch (err) {
     msg.textContent = err.message;
   } finally {
@@ -4307,6 +4395,8 @@ document.addEventListener("click", (e) => {
   if (actDel) return deleteActivity(actDel);
   const testGo = e.target.closest("[data-test-scenario]");
   if (testGo) return testScenario(testGo);
+  const testOut = e.target.closest("[data-test-out]");
+  if (testOut) return simulateReaderScans(testOut, note("#loan-error"));
   const testNuke = e.target.closest("[data-test-nuke]");
   if (testNuke) return nukeTestData(testNuke, note("#loan-error"));
   const pickSim = e.target.closest("#pick-sim");
@@ -4334,6 +4424,8 @@ document.addEventListener("click", (e) => {
   if (stat) return statFilter(stat.dataset.stat);
   const goto = e.target.closest("[data-goto]");
   if (goto) return showTab(goto.dataset.goto);
+  const approveIn = e.target.closest("[data-approve-in]");
+  if (approveIn) return approveInOne(approveIn.dataset.approveIn, approveIn);
   const approveBtn = e.target.closest("[data-approve-out]");
   if (approveBtn) {
     const id = CSS.escape(approveBtn.dataset.approveOut);

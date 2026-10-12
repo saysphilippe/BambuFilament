@@ -88,6 +88,7 @@
         <input id="q" type="search" placeholder="Søk etter farge, type, eier, plassering…" aria-label="Søk">
         <select id="status" aria-label="Status">
           <option value="in">På lager</option>
+          <option value="pending">Venter på innsjekk</option>
           <option value="out">Tatt ut</option>
           <option value="empty">Brukt opp</option>
           <option value="">Alle</option>
@@ -115,7 +116,7 @@
         <label id="pick-refill-wrap" class="d-refill"><input id="pick-refill" type="checkbox"> Kjøp: refill uten spole (leveres ikke tilbake)</label>
         <button id="pick-go" type="button" class="btn btn-out">Sjekk ut valgte</button>
         <button id="pick-test" type="button" class="btn btn-small" hidden>Lag 12 testruller</button>
-        <button id="pick-sim" type="button" class="btn btn-small" hidden>Simuler RFID-innlesning</button>
+        <button id="pick-sim" type="button" class="btn btn-small" hidden>Simuler RFID-utsjekk</button>
         <button id="pick-simin" type="button" class="btn btn-small" hidden>Simuler RFID-innsjekk</button>
         <button id="pick-nuke" type="button" class="btn btn-small" hidden>Slett testdata</button>
       </div>

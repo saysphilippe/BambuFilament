@@ -1249,3 +1249,10 @@ dialog.fp-zoom-dialog[open] { display: flex; }
   .appr-to select { max-width: 100%; }
 }
 .appr-bar .pending-refill, .appr-refill .pending-refill { white-space: nowrap; }
+
+/* Rull som venter på godkjent innsjekk, og hendelsesmerke i Godkjenning */
+.card.status-pending { opacity: .75; outline: 2px dashed var(--out); outline-offset: -2px; }
+.badge-pending { color: var(--out); }
+.appr-kind { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 700; }
+.appr-kind.in { color: var(--in); background: color-mix(in srgb, var(--in) 14%, transparent); }
+.appr-kind.out { color: var(--out); background: color-mix(in srgb, var(--out) 16%, transparent); }
