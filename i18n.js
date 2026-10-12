@@ -37,8 +37,8 @@ function cleanTexts(list) {
   for (const t of Array.isArray(list) ? list : []) {
     if (!t || typeof t.key !== "string" || !t.key || t.key.length > 2000) continue;
     const r = {};
-    for (const l of ["no", "en"]) if (typeof t[l] === "string" && t[l].length <= 2000) r[l] = t[l];
-    if (r.no !== undefined || r.en !== undefined) out[t.key] = { ...r, by: String(t.by || "").slice(0, 40), at: String(t.at || "").slice(0, 30) };
+    for (const { code } of LANGS) if (typeof t[code] === "string" && t[code].length <= 2000) r[code] = t[code];
+    if (Object.keys(r).length) out[t.key] = { ...r, by: String(t.by || "").slice(0, 40), at: String(t.at || "").slice(0, 30) };
   }
   return out;
 }
@@ -60,7 +60,7 @@ function effective() {
   }
   Object.assign(out, dict);
   for (const [k, t] of Object.entries(texts)) {
-    if (t.en !== undefined) out[k] = t.en;
+    if (t[lang] !== undefined) out[k] = t[lang];
     else if (!(k in dict) && t.no !== undefined) out[k] = t.no;
   }
   return out;
@@ -199,9 +199,15 @@ function retranslate() {
   if (active || started) start();
 }
 
+// Ordlisten for et språk (gruppert etter område og flatet ut). Et språk uten egen fil har tom
+// ordliste; da kommer all teksten fra Innstillinger → Oversettelser.
+const dictCache = {};
 async function loadDict(code) {
-  const mod = (await DICTS[code]()).default;
-  return { groups: mod, flat: Object.assign({}, ...Object.values(mod)) };
+  if (!dictCache[code]) {
+    const mod = DICTS[code] ? (await DICTS[code]()).default : {};
+    dictCache[code] = { groups: mod, flat: Object.assign({}, ...Object.values(mod)) };
+  }
+  return dictCache[code];
 }
 
 if (lang !== "no") {
@@ -393,14 +399,21 @@ async function onDialogClick(e) {
   }
 }
 
+
 // ---------- Innstillinger → Oversettelser ----------
 
-// Alle tekstene i ordlisten, norsk og engelsk ved siden av hverandre, med en underfane per område.
-// Begge kan endres; endringen lagres i D1 (texts) og gjelder for alle med en gang.
+// Alle tekstene side om side i to valgfrie språk («fra» og «til»), med en underfane per område.
+// Norsk er teksten i koden; den engelske ordlisten gir lista over tekster og områdene. Begge
+// kolonnene kan endres; endringen lagres i D1 (texts) og gjelder for alle med en gang.
 const ED_ALL = "Alle";
 const ED_CHANGED = "Endret";
-const ed = { groups: null, area: ED_ALL, q: "", shown: 60, list: [], msg: "" };
-try { ed.area = localStorage.getItem("bf.textArea") || ED_ALL; } catch { /* ingen lagring */ }
+const ED_MISSING = "Mangler oversettelse";
+const ed = { keys: null, dicts: {}, area: ED_ALL, from: "no", to: lang === "no" ? "en" : lang, q: "", shown: 60, list: [], msg: "" };
+try {
+  ed.area = localStorage.getItem("bf.textArea") || ED_ALL;
+  const f = localStorage.getItem("bf.textFrom"), t = localStorage.getItem("bf.textTo");
+  if (known(f) && known(t) && f !== t) Object.assign(ed, { from: f, to: t });
+} catch { /* ingen lagring */ }
 
 const stars = (s) => (String(s).match(/\{\*\}/g) || []).length;
 const hashKey = (s) => {
@@ -410,34 +423,55 @@ const hashKey = (s) => {
 };
 const canEditTexts = () => !!ctx && (ctx.DEMO || (!!ctx.token() && ctx.isAdmin()));
 const rowsFor = (s) => Math.min(8, Math.max(1, Math.ceil(String(s).length / 55)));
+const langName = (code) => LANGS.find((l) => l.code === code)?.name || code;
+
+// Standardteksten (uten endringer) for en nøkkel på et språk.
+const baseText = (key, code) => (code === "no" ? key : ed.dicts[code]?.[key] ?? "");
+// Det som vises nå (med endringer).
+const shownText = (key, code) => texts[key]?.[code] ?? baseText(key, code);
 
 function edItems() {
   const items = [];
-  for (const [area, entries] of Object.entries(ed.groups || {})) for (const [key, en] of Object.entries(entries)) items.push({ area, key, en });
+  for (const [area, entries] of Object.entries(ed.keys || {})) for (const key of Object.keys(entries)) items.push({ area, key });
   return items;
+}
+
+async function ensureDicts() {
+  if (!ed.keys) ed.keys = (await loadDict("en")).groups;
+  for (const code of [ed.from, ed.to]) if (code !== "no" && !ed.dicts[code]) ed.dicts[code] = (await loadDict(code)).flat;
 }
 
 export async function renderTextsEditor(box) {
   if (!box) return;
-  if (!ed.groups) {
+  const first = !ed.keys;
+  if (first || [ed.from, ed.to].some((c) => c !== "no" && !ed.dicts[c])) {
     box.innerHTML = `<p class="hint">Henter tekstene…</p>`;
     try {
-      ed.groups = groups || (await loadDict("en")).groups;
+      await ensureDicts();
     } catch (err) {
       box.innerHTML = `<p class="notice">${ctx.esc(err.message)}</p>`;
       return;
     }
-    loadTexts(true).then(() => box.isConnected && renderTextsList(box));
+    if (first) loadTexts(true).then(() => box.isConnected && renderTextsList(box));
   }
   const e = ctx.esc;
   const items = edItems();
-  const areas = [ED_ALL, ...Object.keys(ed.groups), ED_CHANGED];
+  const areas = [ED_ALL, ...Object.keys(ed.keys), ED_CHANGED, ED_MISSING];
   if (!areas.includes(ed.area)) ed.area = ED_ALL;
-  const n = (a) => (a === ED_ALL ? items.length : a === ED_CHANGED ? items.filter((i) => texts[i.key]).length : items.filter((i) => i.area === a).length);
+  const count = (a) => items.filter((i) => inArea(i, a)).length;
+  const select = (id, val) => `<select id="${id}" translate="no">${LANGS.map((l) => `<option value="${l.code}"${l.code === val ? " selected" : ""}>${e(l.name)}</option>`).join("")}</select>`;
   box.innerHTML = `<h3>Oversettelser</h3>
-    <p class="hint">Norsk og engelsk tekst ved siden av hverandre. Endringer lagres når du går ut av feltet, og gjelder for alle med en gang. {*} er en variabel del (tall, navn osv.) og må stå like mange ganger som i den opprinnelige teksten. Tøm et felt for å gå tilbake til den opprinnelige teksten.${canEditTexts() ? "" : " Bare administrator kan endre tekstene."}</p>
-    <nav class="chips tx-areas" aria-label="Område">${areas.map((a) => `<button type="button" class="chip${a === ed.area ? " active" : ""}" data-txarea="${e(a)}" aria-pressed="${a === ed.area}">${e(a)} <span class="chip-n">${n(a)}</span></button>`).join("")}</nav>
-    <input id="tx-q" type="search" placeholder="Søk i norsk og engelsk tekst…" aria-label="Søk i tekstene" value="${e(ed.q)}">
+    <p class="hint">Velg hvilke to språk som skal stå ved siden av hverandre. Endringer lagres når du går ut av feltet, og gjelder for alle med en gang. {*} er en variabel del (tall, navn osv.) og må stå like mange ganger som i den opprinnelige teksten. Tøm et felt for å gå tilbake til den opprinnelige teksten.${canEditTexts() ? "" : " Bare administrator kan endre tekstene."}</p>
+    <div class="tx-langs">
+      <label>Fra ${select("tx-from", ed.from)}</label>
+      <button type="button" class="btn btn-small" data-txswap title="Bytt om" aria-label="Bytt om">⇄</button>
+      <label>Til ${select("tx-to", ed.to)}</label>
+    </div>
+    <nav class="chips tx-areas" aria-label="Område">${areas.map((a) => {
+      const n = count(a);
+      return a === ED_MISSING && !n && ed.area !== a ? "" : `<button type="button" class="chip${a === ed.area ? " active" : ""}" data-txarea="${e(a)}" aria-pressed="${a === ed.area}">${e(a)} <span class="chip-n">${n}</span></button>`;
+    }).join("")}</nav>
+    <input id="tx-q" type="search" placeholder="Søk i tekstene…" aria-label="Søk i tekstene" value="${e(ed.q)}">
     <div id="tx-list"></div>
     <p id="tx-msg" class="hint" role="status">${e(ed.msg)}</p>`;
   if (!box.dataset.txBound) {
@@ -454,36 +488,42 @@ export async function renderTextsEditor(box) {
   renderTextsList(box);
 }
 
+// Underfanene: område, endret (i ett av de to valgte språkene) eller mangler i «til»-språket.
+function inArea(item, a) {
+  if (a === ED_ALL) return true;
+  if (a === ED_CHANGED) return [ed.from, ed.to].some((c) => texts[item.key]?.[c] !== undefined);
+  if (a === ED_MISSING) return !shownText(item.key, ed.to);
+  return item.area === a;
+}
+
 function renderTextsList(box) {
   const out = box.querySelector("#tx-list");
   if (!out) return;
   const e = ctx.esc;
   const q = ed.q.trim().toLowerCase();
   const edit = canEditTexts();
-  ed.list = edItems().filter((i) => {
-    if (ed.area === ED_CHANGED ? !texts[i.key] : ed.area !== ED_ALL && i.area !== ed.area) return false;
-    if (!q) return true;
-    const t = texts[i.key] || {};
-    return [i.key, i.en, t.no, t.en].some((s) => s && s.toLowerCase().includes(q));
-  });
+  ed.list = edItems().filter((i) => inArea(i, ed.area) && (!q || [i.key, shownText(i.key, ed.from), shownText(i.key, ed.to)].some((s) => s && s.toLowerCase().includes(q))));
   const ro = edit ? "" : " readonly";
-  const stamp = (iso) => (iso ? new Date(iso).toLocaleDateString(LOCALE[lang], { day: "numeric", month: "short", year: "numeric" }) : "");
-  const rows = ed.list.slice(0, ed.shown).map((item, i) => {
+  const stamp = (iso) => (iso ? new Date(iso).toLocaleDateString(LOCALE[lang] || "en-GB", { day: "numeric", month: "short", year: "numeric" }) : "");
+  const cell = (item, code) => {
     const t = texts[item.key] || {};
-    const no = t.no ?? item.key;
-    const en = t.en ?? item.en;
-    return `<div class="tx-row${texts[item.key] ? " changed" : ""}" data-txi="${i}">
-      <label class="tx-cell"><span class="tx-lang" translate="no">Norsk</span>
-        <textarea data-tx="no" rows="${rowsFor(no)}"${ro}>${e(no)}</textarea>
-        ${t.no !== undefined ? `<span class="hint tx-orig">Opprinnelig: <span translate="no">${e(item.key)}</span></span>` : ""}</label>
-      <label class="tx-cell"><span class="tx-lang" translate="no">English</span>
-        <textarea data-tx="en" rows="${rowsFor(en)}"${ro}>${e(en)}</textarea>
-        ${t.en !== undefined ? `<span class="hint tx-orig">Opprinnelig: <span translate="no">${e(item.en)}</span></span>` : ""}</label>
-      ${texts[item.key] ? `<p class="tx-meta"><span class="hint">Endret av <span translate="no">${e(t.by || "?")}</span> ${e(stamp(t.at))}</span>${edit ? ` <button type="button" class="btn btn-small" data-txreset>Tilbakestill</button>` : ""}</p>` : ""}
+    const val = shownText(item.key, code);
+    const base = baseText(item.key, code);
+    return `<label class="tx-cell"><span class="tx-lang" translate="no">${e(langName(code))}</span>
+      <textarea data-tx="${code}" rows="${rowsFor(val || item.key)}"${ro} placeholder="${e(code === "no" ? "" : "Mangler oversettelse")}">${e(val)}</textarea>
+      ${t[code] !== undefined && base ? `<span class="hint tx-orig">Opprinnelig: <span translate="no">${e(base)}</span></span>` : ""}</label>`;
+  };
+  const rows = ed.list.slice(0, ed.shown).map((item, i) => {
+    const t = texts[item.key];
+    const changed = [ed.from, ed.to].some((c) => t?.[c] !== undefined);
+    return `<div class="tx-row${changed ? " changed" : ""}" data-txi="${i}">
+      ${cell(item, ed.from)}${cell(item, ed.to)}
+      ${ed.from !== "no" && ed.to !== "no" ? `<p class="tx-src hint">Norsk: <span translate="no">${e(shownText(item.key, "no"))}</span></p>` : ""}
+      ${changed ? `<p class="tx-meta"><span class="hint">Endret av <span translate="no">${e(t.by || "?")}</span> ${e(stamp(t.at))}</span>${edit ? ` <button type="button" class="btn btn-small" data-txreset>Tilbakestill</button>` : ""}</p>` : ""}
     </div>`;
   }).join("");
   out.innerHTML = `<p class="count">${ed.list.length.toLocaleString("nb-NO")} tekster${ed.list.length > ed.shown ? `, viser ${ed.shown}` : ""}</p>
-    ${ed.list.length ? `<div class="tx-head" aria-hidden="true"><span translate="no">Norsk</span><span translate="no">English</span></div>${rows}` : `<p class="hint">Ingen tekster passer.</p>`}
+    ${ed.list.length ? `<div class="tx-head" aria-hidden="true"><span translate="no">${e(langName(ed.from))}</span><span translate="no">${e(langName(ed.to))}</span></div>${rows}` : `<p class="hint">Ingen tekster passer.</p>`}
     ${ed.list.length > ed.shown ? `<p><button type="button" class="btn" data-txmore>Vis flere (${(ed.list.length - ed.shown).toLocaleString("nb-NO")} til)</button></p>` : ""}`;
 }
 
@@ -491,6 +531,13 @@ function setEdMsg(box, msg) {
   ed.msg = msg;
   const el = box.querySelector("#tx-msg");
   if (el) el.textContent = msg;
+}
+
+function setLangs(box, from, to) {
+  if (from === to) return setEdMsg(box, "Velg to forskjellige språk.");
+  Object.assign(ed, { from, to, shown: 60, msg: "" });
+  try { localStorage.setItem("bf.textFrom", from); localStorage.setItem("bf.textTo", to); } catch { /* ingen lagring */ }
+  renderTextsEditor(box);
 }
 
 function onEditorClick(ev, box) {
@@ -501,40 +548,51 @@ function onEditorClick(ev, box) {
     ed.shown = 60;
     try { localStorage.setItem("bf.textArea", ed.area); } catch { /* ingen lagring */ }
     renderTextsEditor(box);
+  } else if (t.hasAttribute("data-txswap")) {
+    setLangs(box, ed.to, ed.from);
   } else if (t.hasAttribute("data-txmore")) {
     ed.shown += 120;
     renderTextsList(box);
   } else if (t.hasAttribute("data-txreset")) {
     const item = ed.list[Number(t.closest("[data-txi]")?.dataset.txi)];
-    if (item) saveText(box, item.key, {});
+    if (!item) return;
+    // Tilbakestiller de to språkene som vises; andre språk beholder sine endringer.
+    const cur = { ...(texts[item.key] || {}) };
+    for (const c of [ed.from, ed.to]) delete cur[c];
+    saveText(box, item.key, cur);
   }
 }
 
 function onEditorChange(ev, box) {
+  if (ev.target.id === "tx-from" || ev.target.id === "tx-to") {
+    const from = ev.target.id === "tx-from" ? ev.target.value : ed.from;
+    const to = ev.target.id === "tx-to" ? ev.target.value : ed.to;
+    // Velges samme språk på begge sider, byttes de om.
+    return from === to ? setLangs(box, ed.to, ed.from) : setLangs(box, from, to);
+  }
   const ta = ev.target.closest("textarea[data-tx]");
   if (!ta || !canEditTexts()) return;
   const item = ed.list[Number(ta.closest("[data-txi]")?.dataset.txi)];
   if (!item) return;
-  const l = ta.dataset.tx;
+  const code = ta.dataset.tx;
   const val = ta.value.replace(/\s+/g, " ").trim();
-  const def = l === "no" ? item.key : item.en;
-  const cur = { ...(texts[item.key] || {}) };
-  delete cur.by;
-  delete cur.at;
   if (val && stars(val) !== stars(item.key)) {
     setEdMsg(box, `Teksten må ha ${stars(item.key)} × {*}, som den opprinnelige. Ikke lagret.`);
     ta.focus();
     return;
   }
-  if (!val || val === def) delete cur[l];
-  else cur[l] = val;
+  const cur = { ...(texts[item.key] || {}) };
+  if (!val || val === baseText(item.key, code)) delete cur[code];
+  else cur[code] = val;
   saveText(box, item.key, cur);
 }
 
 async function saveText(box, key, cur) {
+  delete cur.by;
+  delete cur.at;
   const id = hashKey(key);
-  const has = cur.no !== undefined || cur.en !== undefined;
-  const rec = has ? { id, key, ...(cur.no !== undefined ? { no: cur.no } : {}), ...(cur.en !== undefined ? { en: cur.en } : {}), by: me(), at: new Date().toISOString() } : null;
+  const langs = Object.fromEntries(LANGS.map((l) => l.code).filter((c) => cur[c] !== undefined).map((c) => [c, cur[c]]));
+  const rec = Object.keys(langs).length ? { id, key, ...langs, by: me(), at: new Date().toISOString() } : null;
   setEdMsg(box, "Lagrer…");
   try {
     if (!ctx.DEMO) await ctx.dbCall("/db/patch", { ops: [{ coll: "texts", id, data: rec }] });

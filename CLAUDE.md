@@ -29,7 +29,9 @@ AliExpress, Mouser og LCSC) for en lukket vennegjeng. Se `CONTRIBUTING.md` for o
   ellers vises den på norsk. Brukerdata som ikke skal oversettes, merkes med `translate="no"`.
   Språkvalget lagres i `users[].lang`; ønskede språk i D1-samlingen `langreqs` (fil «ideas»).
   Ordlisten er gruppert etter område (underfanene i Innstillinger → Oversettelser). Tekster endret
-  der (norsk og engelsk) ligger i D1-samlingen `texts` (fil «i18n») og går foran ordlisten.
+  der ligger i D1-samlingen `texts` (fil «i18n») og går foran ordlisten. Nytt språk: legg det i
+  `LANGS` i `i18n.js` (med flagg). En egen ordlistefil (`i18n-<kode>.js` i `DICTS`) er valgfri; teksten kan
+  fylles ut i Innstillinger → Oversettelser med Fra/Til-språk og fanen «Mangler oversettelse».
 - Escape data før HTML (`esc`), farger via `safeColor`. Ingen inline-skript (CSP). Bildelenker
   bare fra godkjente verter (`safeImg`).
 - Mobil: siden skal aldri bli bredere enn skjermen (sjekk på ca. 390 px). Rader som rulles

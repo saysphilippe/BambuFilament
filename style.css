@@ -458,6 +458,10 @@ body.demo .demo-banner { display: block; }
 .tx-cell textarea[readonly] { background: var(--muted-bg); }
 .tx-lang { display: none; font-size: 12px; font-weight: 600; color: var(--muted); }
 .tx-orig { font-size: 12px; }
+.tx-langs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.tx-langs label { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--muted); }
+.tx-langs select { margin: 0; width: auto; }
+.tx-src { grid-column: 1 / -1; margin: 0; font-size: 12px; }
 .tx-meta { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
 @media (max-width: 640px) {
   .tx-head { display: none; }
