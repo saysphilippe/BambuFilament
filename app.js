@@ -79,6 +79,7 @@ const state = {
   newsStock: store("bf.newsStock") || "",
   openTypes: new Set(),
   newsSub: store("bf.newsSub") || "new",
+  loansSub: null,
   store: null,
   shop: { q: "", cat: "", status: store("bf.shopStatus") || "", sort: store("bf.shopSort") || "name", limit: 60 },
   filters: { q: "", owner: "", type: "", family: "", status: "in", sort: "type", ams: false, kind: "" },
@@ -1203,20 +1204,32 @@ function renderLoans() {
     </li>`;
   };
 
-  box.innerHTML = `<section class="panel loans">
-    ${todos.length ? `<div class="pending-box"><h2>Dine gjøremål: utsjekk å godkjenne (${todos.length})</h2>
-      <p class="hint">Spolene dine ble sjekket ut med RFID-leseren. Tok du den selv: trykk OK. Ellers velg hvem den gikk til og trykk Godkjenn, så blir det et lån.</p>
-      <ul class="loan-list">${todos.map(pendingRow).join("")}</ul></div>` : ""}
-    ${others.length ? `<h2>Venter på godkjenning hos andre (${others.length})</h2><ul class="loan-list">${others.map(pendingRow).join("")}</ul>` : ""}
-    <div class="loan-sum">${debtChips || `<span class="loan-debt clear">Ingen skylder filament akkurat nå</span>`}</div>
-    <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Sjekk ut til» når du sjekker ut. Utsjekk med RFID-leseren må godkjennes her først. Den som har fått en rull, skylder den til den leveres tilbake (sjekkes inn) eller er gjort opp, for eksempel med Vipps.</p>
-    <p id="loan-error" class="error"></p>
-    ${section("Utestående", open, "Ingen skylder filament.")}
-    ${coming.length ? `<h2>Tomme spoler på vei tilbake (${coming.length})</h2><ul class="loan-list">${coming.map(spoolRow).join("")}</ul>` : ""}
-    ${section("Avsluttet", done, "Ingen avsluttede lån ennå.")}
-  </section>
-  ${activityHtml()}`;
+  // Underfaner. Uten valg åpnes «Godkjenning» når du har utsjekk å godkjenne, ellers «Utestående».
+  const sub = LOAN_SUBS.includes(state.loansSub) ? state.loansSub : todos.length ? "approve" : "open";
+  state.loansSub = sub; // blir stående mens du er i fanen, også når listene endrer seg
+  const count = (n) => (n ? ` (${n})` : "");
+  const subTabs = [["approve", `Godkjenning${count(waiting.length)}`], ["open", `Utestående${count(open.length + coming.length)}`],
+    ["done", "Avsluttet"], ["activity", "Aktivitet"]];
+  const content = {
+    approve: `${todos.length ? `<div class="pending-box"><h2>Dine gjøremål: utsjekk å godkjenne (${todos.length})</h2>
+        <p class="hint">Spolene dine ble sjekket ut med RFID-leseren. Tok du den selv: trykk OK. Ellers velg hvem den gikk til og trykk Godkjenn, så blir det et lån.</p>
+        <ul class="loan-list">${todos.map(pendingRow).join("")}</ul></div>` : ""}
+      ${others.length ? `<h2>Venter på godkjenning hos andre (${others.length})</h2><ul class="loan-list">${others.map(pendingRow).join("")}</ul>` : ""}
+      ${waiting.length ? "" : `<p class="muted">Ingen utsjekk fra RFID-leseren venter på godkjenning.</p>`}`,
+    open: `<div class="loan-sum">${debtChips || `<span class="loan-debt clear">Ingen skylder filament akkurat nå</span>`}</div>
+      <p class="hint">Et lån registreres når en spole sjekkes ut til noen andre enn eieren: velg det i «Sjekk ut til» når du sjekker ut. Utsjekk med RFID-leseren må godkjennes først. Den som har fått en rull, skylder den til den leveres tilbake (sjekkes inn) eller er gjort opp, for eksempel med Vipps.</p>
+      ${section("Utestående", open, "Ingen skylder filament.")}
+      ${coming.length ? `<h2>Tomme spoler på vei tilbake (${coming.length})</h2><ul class="loan-list">${coming.map(spoolRow).join("")}</ul>` : ""}`,
+    done: section("Avsluttet", done, "Ingen avsluttede lån ennå."),
+  };
+  box.innerHTML = `<nav id="loan-tabs" class="sub-tabs" aria-label="Lånt filament">
+      ${subTabs.map(([k, l]) => `<button class="sub-tab${sub === k ? " active" : ""}" data-lsub="${k}">${l}</button>`).join("")}
+    </nav>
+    ${sub === "activity" ? activityHtml() || `<section class="panel"><p class="muted">Ingen aktivitet ennå.</p></section>`
+      : `<section class="panel loans"><p id="loan-error" class="error"></p>${content[sub]}</section>`}`;
 }
+
+const LOAN_SUBS = ["approve", "open", "done", "activity"];
 
 // Første del (hvem som gjorde det) i fet skrift, resten som vanlig tekst.
 function actDetail(e) {
@@ -1683,7 +1696,7 @@ function renderPickBar() {
   sel.innerHTML = users().filter((u) => u.known).map((u) =>
     `<option value="${esc(u.name)}"${u.name === chosen ? " selected" : ""}>${esc(u.name)}${u.name === userName() ? " – meg" : ""}</option>`).join("");
   syncPickRefill();
-  for (const b of ["#pick-test", "#pick-sim", "#pick-nuke"]) $(b).hidden = DEMO || !token() || !isAdmin();
+  for (const b of ["#pick-test", "#pick-sim", "#pick-simin", "#pick-nuke"]) $(b).hidden = DEMO || !token() || !isAdmin();
 }
 
 // Refill-kjøp er bare aktuelt for spoler som går til noen andre enn eieren.
@@ -1798,6 +1811,37 @@ async function simulateReaderScans(btn) {
     await syncReaderCheckouts();
     render();
     msg.textContent = `Simulerte ${ids.length} innlesninger fra leseren. De venter på godkjenning under «Lånt filament».`;
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Simulerer at RFID-leseren leser testrullene som er sjekket ut: de sjekkes inn med en
+// leserhendelse (dev: "reader"), som ved en ekte innlesning. Lånene blir levert tilbake, og
+// testrullene slettes av seg selv ved neste oppdatering av siden.
+async function simulateReaderCheckins(btn) {
+  const msg = $("#pick-msg");
+  const ids = state.spools.filter((s) => s.test && s.status === "out").map((s) => s.id);
+  if (!ids.length) return (msg.textContent = "Ingen testruller er sjekket ut. Simuler en utsjekk først.");
+  btn.disabled = true;
+  msg.textContent = "Simulerer…";
+  try {
+    const now = Date.now();
+    await saveDoc((doc) => {
+      ids.forEach((id, i) => {
+        const s = doc.spools.find((x) => x.id === id);
+        if (!s || statusOf(s) !== "out") return;
+        const at = new Date(now + i).toISOString();
+        s.history = [...(s.history || []), { at, action: "in", by: s.history?.at(-1)?.by || s.owner || "", dev: "reader" }].slice(-10);
+        s.status = "in";
+        s.lastScan = at;
+        s.scans = (num(s.scans) || 0) + 1;
+      });
+    }, `Simulert RFID-innsjekk av ${ids.length} testruller (${userName()})`);
+    render();
+    msg.textContent = `Simulerte ${ids.length} innsjekk fra leseren. Testrullene slettes når siden oppdateres (trykk på ↻).`;
   } catch (err) {
     msg.textContent = err.message;
   } finally {
@@ -3949,7 +3993,10 @@ function showSection(section) {
 }
 
 function showTab(tab) {
+  const prevTab = state.tab;
   state.tab = TABS.includes(tab) ? tab : "stock";
+  // «Lånt filament» åpnes på «Godkjenning» når du har utsjekk å godkjenne, ellers «Utestående».
+  if (state.tab === "loans" && prevTab !== "loans") state.loansSub = null;
   store("bf.tab", state.tab);
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === state.tab));
   for (const t of TABS) $(`#tab-${t}`).hidden = state.tab !== t;
@@ -4048,6 +4095,11 @@ document.addEventListener("click", (e) => {
   if (tab) return showTab(tab.dataset.tab);
   const uTab = e.target.closest("#u-tabs .sub-tab");
   if (uTab) return showUsersTab(uTab.dataset.utab);
+  const lTab = e.target.closest("#loan-tabs .sub-tab");
+  if (lTab) {
+    state.loansSub = lTab.dataset.lsub;
+    return renderLoans();
+  }
   const subTab = e.target.closest(".sub-tab");
   if (subTab) {
     state.newsSub = subTab.dataset.sub;
@@ -4098,6 +4150,8 @@ document.addEventListener("click", (e) => {
   if (pickTest) return makeTestSpools(pickTest);
   const pickSim = e.target.closest("#pick-sim");
   if (pickSim) return simulateReaderScans(pickSim);
+  const pickSimIn = e.target.closest("#pick-simin");
+  if (pickSimIn) return simulateReaderCheckins(pickSimIn);
   const pickNuke = e.target.closest("#pick-nuke");
   if (pickNuke) return nukeTestData(pickNuke);
   const card = e.target.closest(".card, #activity-list li");
