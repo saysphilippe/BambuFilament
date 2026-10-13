@@ -1256,3 +1256,8 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .appr-kind { display: inline-block; margin-right: 6px; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 700; }
 .appr-kind.in { color: var(--in); background: color-mix(in srgb, var(--in) 14%, transparent); }
 .appr-kind.out { color: var(--out); background: color-mix(in srgb, var(--out) 16%, transparent); }
+
+/* Pil til toppen: fast på høyre side, utenfor innholdet når det er plass. */
+.to-top { position: fixed; bottom: 20px; right: max(12px, calc((100vw - 1200px) / 2 - 60px)); z-index: 40; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface, var(--bg)); color: var(--text); font-size: 22px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px #0003; }
+.to-top[hidden] { display: none; }
+.to-top:hover { border-color: var(--accent); color: var(--accent); }

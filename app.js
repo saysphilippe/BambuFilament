@@ -4610,3 +4610,14 @@ fetch("data/colors.json")
       if (bambuToken() && state.tab !== "ams") refreshAms();
     });
   });
+
+// Pil til toppen: vises når man har scrollet litt, på alle sider.
+{
+  const up = document.getElementById("to-top");
+  if (up) {
+    const check = () => { up.hidden = window.scrollY < 300; };
+    window.addEventListener("scroll", check, { passive: true });
+    up.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+    check();
+  }
+}

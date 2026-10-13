@@ -725,6 +725,7 @@ export default {
     "Zenerdiode: leder bakover ved zenerspenningen. Stripen er katoden, og den vender mot pluss.": "Zener diode: conducts in reverse at the zener voltage. The stripe is the cathode, and it faces positive.",
   },
   "Filament og felles": {
+    "Til toppen": "Back to top",
     "Sjekket ut til {*}": "Checked out to {*}",
     "Sjekket ut til {*} (eier)": "Checked out to {*} (owner)",
     "Godkjenn som": "Approve as",
