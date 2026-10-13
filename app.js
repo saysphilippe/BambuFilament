@@ -2183,7 +2183,6 @@ function renderUsers() {
       ${own ? `<input type="email" class="u-email" data-email="${esc(u.name)}" value="${esc(email)}" placeholder="E-post" maxlength="100" aria-label="E-post for ${esc(u.name)}">
         <input type="tel" class="u-phone" data-phone="${esc(u.name)}" value="${esc(fmtPhone(phone))}" placeholder="Mobil" inputmode="tel" maxlength="20" aria-label="Mobilnummer for ${esc(u.name)}">`
         : `${email && isAdmin() ? `<span class="u-email-text muted">${esc(email)}</span>` : ""}${phone ? `<span class="u-email-text muted">${esc(fmtPhone(phone))}</span>` : ""}`}
-      <span class="muted">${count} ${count === 1 ? "spole" : "spoler"}</span>
       ${u.known ? `
         ${email
           ? `<button type="button" class="btn btn-small" data-send="${esc(u.name)}" ${canEdit ? "" : "disabled"} title="Send midlertidig passord til ${esc(email)}">Send passord</button>`
