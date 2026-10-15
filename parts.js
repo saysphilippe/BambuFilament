@@ -1626,6 +1626,7 @@ function openPart(id) {
       ${ELECTRONICS.has(p.category) || p.source === "mouser" || p.source === "lcsc" ? componentHtml(p) : ""}
     </div>
     <div class="part-detail-text">
+      ${(() => { const k = kitOf(p); return k ? `<button type="button" class="btn btn-small kit-back" data-sibling="${ctx.esc(k.id)}" title="${ctx.esc(k.title)}">← Tilbake til hovedprodukt</button>` : ""; })()}
       <h2>${ctx.esc(p.title)}</h2>
       ${p.variant ? `<p class="part-variant">${ctx.esc(p.variant)}</p>` : ""}
       <table class="part-facts${orderOpen ? " order-open" : ""}">

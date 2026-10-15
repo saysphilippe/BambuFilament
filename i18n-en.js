@@ -122,6 +122,7 @@ export default {
     "Opprett {*} delprodukter fra tittelen × {*} stk": "Create {*} sub-products from the title × {*} pcs",
     "{*} delprodukter opprettet": "{*} sub-products created",
     "Del av sett": "Part of kit",
+    "← Tilbake til hovedprodukt": "← Back to main product",
     "Sett · {*} delprodukter": "Kit · {*} sub-products",
     "Innhold i settet": "Kit contents",
     "({*} delprodukter)": "({*} sub-products)",
