@@ -1301,7 +1301,7 @@ function parseKitLines(text, defQty) {
 }
 // Leser delenumrene ut av tittelen på et sett: «BC337 BC327 2N2222 … Assortment Kit 10value 200PCS».
 // Antall per type = totalt antall («200PCS») delt på antall typer («10value», ellers antall delenumre).
-function deriveKit(title) {
+function deriveKit(title, bought = 0) {
   const t = String(title || "");
   const skip = /^\d+(pcs?|pieces?|values?|kinds?|types?|pack|sets?|v|mm|cm|w|a|k|r|uf|nf|pf|ohms?)$/i;
   const mpns = [];
@@ -1321,7 +1321,8 @@ function deriveKit(title) {
   if (mpns.length < 2) return null;
   const total = /\d+(?:\/\d+)+\s*(?:pcs?|pieces?|stk)\b/i.test(t) ? 0 : Number((t.match(/(\d{1,6})\s*(?:pcs?|pieces?|stk)\b/i) || [])[1]) || 0;
   const kinds = Number((t.match(/(\d{1,4})\s*(?:values?|kinds?|types?)\b/i) || [])[1]) || mpns.length;
-  const each = total ? Math.max(1, Math.floor(total / kinds)) : 0;
+  const sum = bought > 1 ? bought : total;
+  const each = sum ? Math.max(1, Math.floor(sum / kinds)) : 0;
   return { mpns, each, total, kinds };
 }
 // Et sett med én pakketype i tittelen (f.eks. «180PCS SOT-23 Transistor Kit») har samme fotavtrykk på alle delprodukter,
@@ -1901,7 +1902,7 @@ function proposeChanges(p, r) {
   const withTol = (d) => (tol && !String(d).replace(/\s/g, "").includes(tol.replace(/\s/g, "")) ? `${String(d).trim()} Toleranse ${tol}.`.trim() : String(d || "").trim());
   one("description", "Beskrivelse", p.description, withTol(p.description || (listing ? vs.desc : "") || r?.description || ""), !p.description || (!!tol && !p.description.includes(tol)));
   if (r?.category && CAT_NAME[r.category] && r.category !== p.category) rows.push({ key: "category", label: "Kategori", now: CAT_NAME[p.category], next: r.category, checked: p.category === "other" && !p.catManual });
-  const kit = p.parent || !kitLike ? null : deriveKit(title);
+  const kit = p.parent || !kitLike ? null : deriveKit(title, units(p));
   const have = new Set(kitParts(p).map((k) => k.mpn.toUpperCase()));
   const fresh = kit ? kit.mpns.filter((m) => !have.has(m.toUpperCase())) : [];
   // Delprodukter med verdier skrevet med feil liten/stor bokstav (1UH i stedet for 1uH, MH i stedet for mH).
@@ -2043,7 +2044,7 @@ function openPart(id) {
             const ds = datasheetLinks(c.mpn || c.title)[0];
             return `<li class="kit-tile${r === 0 ? " empty" : ""}"><button type="button" class="kit-tile-main" data-sibling="${ctx.esc(c.id)}" title="${ctx.esc(c.description || "")}"><span class="kit-name">${ctx.esc(c.mpn || c.title)}</span><span class="kit-stock">${r} av ${u} stk</span><span class="kit-bar"><i style="width:${pct}%"></i></span>${c.description ? `<span class="kit-desc">${ctx.esc(c.description)}</span>` : ""}</button>${ds ? `<a class="kit-ds" href="${ctx.esc(ds.url)}" target="_blank" rel="noopener">Datablad ↗</a>` : ""}</li>`;
           }).join("")}</ul>` : `<p class="hint">Ingen delprodukter ennå. Legg inn innholdet i settet, så får hver type eget kort, datablad og lagerstatus.</p>`}
-          ${mine && !kids.length && deriveKit(p.title) ? (() => { const d = deriveKit(p.title); return `<p class="kit-derive"><button type="button" class="btn btn-primary" data-derivekit>Opprett ${d.mpns.length} delprodukter fra tittelen${d.each ? ` × ${d.each} stk` : ""}</button> <span class="hint">${ctx.esc(d.mpns.join(", "))}</span></p>`; })() : ""}
+          ${mine && !kids.length && deriveKit(p.title) ? (() => { const d = deriveKit(p.title, units(p)); return `<p class="kit-derive"><button type="button" class="btn btn-primary" data-derivekit>Opprett ${d.mpns.length} delprodukter fra tittelen${d.each ? ` × ${d.each} stk` : ""}</button> <span class="hint">${ctx.esc(d.mpns.join(", "))}</span></p>`; })() : ""}
           ${mine ? `<details class="kit-add-box"${kids.length ? "" : " open"}><summary>Legg til delprodukter</summary><div class="kit-add"><label class="grow">Delenummer, ett per linje eller skilt med komma; «BC547 20» gir eget antall<textarea id="pd-kit" rows="3" maxlength="2000" placeholder="BC327, BC337, BC517, BC547"></textarea></label>
             <label>Antall hver<input id="pd-kitqty" type="number" min="1" max="100000" value="20"></label>
             <button type="button" class="btn" data-addkit>Legg til</button></div><p class="hint kit-msg" role="status"></p></details>` : ""}
@@ -2164,7 +2165,7 @@ function openPart(id) {
     const ap = e.target.closest("[data-aiapply]");
     if (ap && mine) { await applyProposal(dlg, p, ap); return; }
     if (e.target.closest("[data-derivekit]") && mine) {
-      const d = deriveKit(p.title), msg = dlg.querySelector(".kit-msg");
+      const d = deriveKit(p.title, units(p)), msg = dlg.querySelector(".kit-msg");
       if (!d) return;
       try { await addKitParts(p, d.mpns.map((m) => [m, d.each || 1])); ctx.setSync(`${d.mpns.length} delprodukter opprettet`); dlg.close(""); openPart(p.id); }
       catch (err) { msg.textContent = err.message; }
