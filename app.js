@@ -2427,6 +2427,7 @@ function renderSettings() {
     <div id="invkey-out"></div>` : ""}`,
   };
   box.innerHTML = `<section class="panel settings-panel">
+    ${state.settingsFromParts && document.body.dataset.section === "parts" ? `<p><button type="button" class="btn" data-setaction="backparts">← Tilbake til Komponenter</button></p>` : ""}
     <h2>Innstillinger</h2>
     <nav class="chips settings-tabs" aria-label="Innstillinger">${SETTING_TABS.map(([id, label]) => `<button type="button" class="chip${id === tab ? " active" : ""}" data-settab="${id}" aria-pressed="${id === tab}">${label}</button>`).join("")}</nav>
     <div class="settings-body">${sections[tab]}</div>
@@ -2434,7 +2435,7 @@ function renderSettings() {
   </section>`;
   if (tab === "texts") renderTextsEditor($("#texts-editor"));
   // Antall per kategori: hent komponentene og tegn på nytt når de er klare.
-  if (tab === "parts") loadParts()?.then?.(() => state.tab === "settings" && settingsTab() === "parts" && document.body.dataset.section !== "parts" && renderSettings());
+  if (tab === "parts") loadParts()?.then?.(() => state.tab === "settings" && settingsTab() === "parts" && renderSettings());
 }
 
 async function saveSetting(key, input) {
@@ -4219,6 +4220,8 @@ const TABS = ["stock", "loans", "ams", "news", "shop", "cards", "settings"];
 // To hoveddeler: filamentet (fanene under) og komponentbiblioteket (parts.js).
 function showSection(section) {
   const parts = section === "parts";
+  // Innstillinger åpnet fra Komponenter er ferdig når man bytter del.
+  if (state.settingsFromParts && state.tab === "settings" && !state.openingSettings) { state.settingsFromParts = false; state.tab = state.tabBefore || "stock"; }
   store("bf.section", parts ? "parts" : "filament");
   document.body.dataset.section = parts ? "parts" : "filament";
   document.querySelectorAll(".section-btn").forEach((b) => b.classList.toggle("active", b.dataset.section === (parts ? "parts" : "filament")));
@@ -4540,17 +4543,31 @@ document.querySelector(".sections").addEventListener("click", (e) => {
   if (b) showSection(b.dataset.section);
 });
 // Innstillinger fra komponentdelen: bytt til fanen Innstillinger og hopp til komponentvalgene.
+// Innstillinger åpnes i den delen du står i: Komponenter forblir valgt øverst, med en knapp tilbake.
 const openSettings = () => {
   store("bf.setTab", "parts");
+  state.tabBefore = state.tab === "settings" ? "stock" : state.tab;
+  state.settingsFromParts = true;
+  state.openingSettings = true;
+  showSection("parts");
+  state.openingSettings = false;
+  $("#parts-root").hidden = true;
   state.tab = "settings";
-  showSection("filament");
+  $("#tab-settings").hidden = false;
+  renderSettings();
 };
+function leaveSettingsToParts() {
+  state.settingsFromParts = false;
+  state.tab = state.tabBefore || "stock";
+  showSection("parts");
+}
 $("#tab-settings").addEventListener("click", (e) => {
   const t = e.target.closest("[data-settab], [data-setaction]");
   if (!t) return;
   if (t.dataset.settab) { store("bf.setTab", t.dataset.settab); return renderSettings(); }
   const a = t.dataset.setaction;
-  if (a === "account") openAccount();
+  if (a === "backparts") leaveSettingsToParts();
+  else if (a === "account") openAccount();
   else if (a === "notify") openNotifySettings();
   else if (a === "password") openChangePassword(false);
   else if (a === "login") openLogin();

@@ -1601,6 +1601,7 @@ export default {
     "Skriv en tittel.": "Enter a title.",
     "Analyser bilde og overskrift": "Analyse image and title",
     "Analyser overskrift": "Analyse title",
+    "← Tilbake til Komponenter": "← Back to Components",
     "Foreslår rettelser av overskrift, delenummer, pakke, kategori og delprodukter. Ingenting endres før du godkjenner.": "Suggests corrections to the title, part number, package, category and sub-products. Nothing changes until you approve.",
     "Forslag til endringer": "Suggested changes",
     "Felt": "Field",
