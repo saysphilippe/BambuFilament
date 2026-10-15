@@ -1302,7 +1302,7 @@ async function fetchImageDataUrl(url) {
   const full = u.replace(/_\d+x\d+\.(jpg|png|webp)$/i, "");
   const tries = [full, ...(/alicdn\.com|aliexpress-media\.com/.test(full) ? [`${full}_640x640.jpg`] : []), u];
   for (const t of [...new Set(tries)]) {
-    const res = await fetch(t, { headers: { Accept: "image/jpeg,image/png,image/webp" }, redirect: "error" }).catch(() => null);
+    const res = await fetch(t, { headers: { Accept: "image/jpeg,image/png,image/webp,*/*;q=0.5", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36" } }).catch(() => null);
     const type = (res?.headers.get("content-type") || "").split(";")[0].trim();
     if (!res?.ok || !/^image\/(jpeg|png|webp)$/.test(type)) continue;
     const buf = new Uint8Array(await res.arrayBuffer());

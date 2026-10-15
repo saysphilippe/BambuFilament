@@ -1805,6 +1805,18 @@ async function readImageWithAi(p) {
     const image = await shrinkImage(dataUrlToBlob(p.image), 1400, 600000).catch(() => p.image);
     return ctx.dbCall("/ai/describe", { image, cats });
   }
+  // Butikkbilder tillater lesing fra andre sider (CORS). Nettleseren laster dem som bilde (CSP tillater det, ikke fetch),
+  // krymper dem og sender dem selv. Workeren henter bildet bare hvis det ikke går.
+  let image = "";
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.referrerPolicy = "no-referrer";
+    img.src = p.image.replace(/_\d+x\d+\.(jpg|png|webp)$/i, "");
+    await img.decode();
+    image = await shrinkImage(img, 1400, 600000);
+  } catch { /* faller tilbake til Workeren */ }
+  if (image) return ctx.dbCall("/ai/describe", { image, cats });
   return ctx.dbCall("/ai/describe", { imageUrl: p.image, cats });
 }
 // r: svaret fra bildetolkningen (eller null). Returnerer rader {key, label, now, next, checked} og eventuelle nye delprodukter.
