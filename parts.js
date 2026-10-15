@@ -1758,7 +1758,7 @@ function openNewPart() {
       const missing = names.filter((n) => !title.toUpperCase().includes(n.toUpperCase()));
       if (names.length >= 2 && missing.length) title = `${title} ${names.join(",")}`.trim();
       if (title) $("#np-title").value = title;
-      if (names.length < 2) put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-desc", r.description);
+      if (names.length < 2) put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-desc", [r.description, r.tolerance ? `Toleranse ${r.tolerance}.` : ""].filter(Boolean).join(" "));
       // Pakke: fra modellen, ellers fra tittelen («SOT-23 Transistor Kit») eller fra kjente delenumre (BC547 → TO-92).
       put("#np-pkg", findPackage(r.pkg) || r.pkg || findPackage(title) || names.map((n) => String(findPart(n, n)?.pkg || "").split("/")[0]).find(Boolean) || "");
       if (r.category) $("#np-cat").value = r.category;
@@ -1859,7 +1859,10 @@ function proposeChanges(p, r) {
   one("maker", "Produsent", p.maker, r?.maker, !p.maker);
   const pkg = findPackage(r?.pkg) || r?.pkg || (names.length >= 2 ? findPackage(title) : "");
   one("pkgFixed", "Pakke", p.pkg, pkg, !p.pkg);
-  one("description", "Beskrivelse", p.description, r?.description, !p.description);
+  const tol = String(r?.tolerance || "").trim();
+  // Toleransen (±10 %) er nyttig produktinformasjon og tas med i beskrivelsen.
+  const withTol = (d) => (tol && !String(d).replace(/\s/g, "").includes(tol.replace(/\s/g, "")) ? `${String(d).trim()} Toleranse ${tol}.`.trim() : String(d || "").trim());
+  one("description", "Beskrivelse", p.description, withTol(p.description || r?.description || ""), !p.description || (!!tol && !p.description.includes(tol)));
   if (r?.category && CAT_NAME[r.category] && r.category !== p.category) rows.push({ key: "category", label: "Kategori", now: CAT_NAME[p.category], next: r.category, checked: p.category === "other" && !p.catManual });
   const kit = p.parent || !kitLike ? null : deriveKit(title);
   const have = new Set(kitParts(p).map((k) => k.mpn.toUpperCase()));

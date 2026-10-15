@@ -1328,6 +1328,7 @@ async function aiDescribe({ image: imageIn, imageUrl, cats, tiles: tilesIn }, en
 "maker": the manufacturer if readable, else "".
 "package": the package type if you can tell (e.g. SOT-23, TO-92, DIP-8, 0805), else "".
 "category": the id of the best matching category from this list, else "": ${JSON.stringify(list)}
+"tolerance": the tolerance if printed (e.g. "±10%", "±5%", "±1%"), else "".
 "description": one short sentence about what it is.
 Only use text you can actually read in the photo. Do not guess part numbers.`;
   const run = (input) => env.AI.run(AI_MODEL, { ...input, max_tokens: 400, temperature: 0.2 });
@@ -1368,5 +1369,5 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
     }
   }
   const partList = [...new Set(found)].sort((a, b) => a.localeCompare(b, "en", { numeric: true })).slice(0, 40);
-  return { parts: partList, title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), raw: j ? "" : s(text, 300) };
+  return { parts: partList, title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), tolerance: s(r.tolerance, 20).replace(/[^\d.,%±+\- ]/g, "").trim(), raw: j ? "" : s(text, 300) };
 }
