@@ -1675,13 +1675,13 @@ async function shrinkImage(file, maxSide = 800, maxLen = OWN_IMG_MAX) {
   }
   throw new Error("Bildet ble for stort selv etter krymping. Prøv et enklere bilde.");
 }
-// Fire overlappende, forstørrede utsnitt (2 × 2) til bildetolkningen. Små tabeller på settets eske leses mye bedre slik.
+// Seks overlappende, forstørrede utsnitt (2 × 3) til bildetolkningen. Små tabeller på settets eske leses mye bedre slik.
 async function imageTiles(source) {
   const bmp = await createImageBitmap(source);
-  const tw = Math.round(bmp.width * 0.58), th = Math.round(bmp.height * 0.58);
-  const k = Math.min(2, 900 / Math.max(tw, th));
+  const tw = Math.round(bmp.width * 0.58), th = Math.round(bmp.height * 0.4);
+  const k = Math.min(3, 1000 / Math.max(tw, th));
   const out = [];
-  for (const [fx, fy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+  for (const [fx, fy] of [[0, 0], [1, 0], [0, 0.5], [1, 0.5], [0, 1], [1, 1]]) {
     const cv = document.createElement("canvas");
     cv.width = Math.round(tw * k);
     cv.height = Math.round(th * k);
@@ -1874,7 +1874,7 @@ function proposeChanges(p, r) {
   const kit = p.parent || !kitLike ? null : deriveKit(title);
   const have = new Set(kitParts(p).map((k) => k.mpn.toUpperCase()));
   const fresh = kit ? kit.mpns.filter((m) => !have.has(m)) : [];
-  return { rows, kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size } : null };
+  return { rows, kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null };
 }
 function renderProposal(dlg, p, prop, note) {
   const box = dlg.querySelector(".ai-box");
@@ -1882,7 +1882,7 @@ function renderProposal(dlg, p, prop, note) {
     ? `<select data-aival="category">${sortedCats().map(([cid, name]) => `<option value="${ctx.esc(cid)}"${cid === r.next ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select>`
     : `<input type="text" data-aival="${r.key}" value="${ctx.esc(r.next)}" maxlength="${r.key === "description" ? 600 : 300}">`;
   const body = prop.rows.map((r) => `<tr><td><label><input type="checkbox" data-aikey="${r.key}"${r.checked ? " checked" : ""}> ${ctx.esc(r.label)}</label></td><td class="ai-now">${ctx.esc(r.now || "(tomt)")}</td><td>${cell(r)}</td></tr>`).join("");
-  const kit = prop.kit ? `<tr><td><label><input type="checkbox" data-aikey="kit" checked> Delprodukter</label></td><td class="ai-now">${prop.kit.had ? `${prop.kit.had} fra før` : "(ingen)"}</td><td>${ctx.esc(prop.kit.mpns.join(", "))} <span class="hint">× <input type="number" data-aikitqty min="1" max="100000" value="${prop.kit.each}"> stk hver</span></td></tr>` : "";
+  const kit = prop.kit ? `<tr><td><label><input type="checkbox" data-aikey="kit" checked> Delprodukter</label></td><td class="ai-now">${prop.kit.had ? `${prop.kit.had} fra før` : "(ingen)"}</td><td><input type="text" data-aikitlist maxlength="1500" value="${ctx.esc(prop.kit.mpns.join(", "))}"> <span class="hint">× <input type="number" data-aikitqty min="1" max="100000" value="${prop.kit.each}"> stk hver</span>${prop.kit.kinds && prop.kit.had + prop.kit.mpns.length < prop.kit.kinds ? `<br><span class="hint ai-missing">Overskriften sier ${prop.kit.kinds} typer, men bare ${prop.kit.had + prop.kit.mpns.length} er funnet. Legg til resten for hånd i feltet.</span>` : ""}</td></tr>` : "";
   box.innerHTML = `<h3>Forslag til endringer</h3>${note ? `<p class="hint">${ctx.esc(note)}</p>` : ""}
     ${body || kit ? `<table class="ai-table"><thead><tr><th>Felt</th><th>Nå</th><th>Forslag</th></tr></thead><tbody>${body}${kit}</tbody></table>
     <p><button type="button" class="btn btn-primary" data-aiapply>Bruk valgte</button> <span class="hint ai-apply-msg" role="status"></span></p>` : `<p class="hint">Ingen endringer å foreslå.</p>`}`;
@@ -1918,7 +1918,8 @@ async function applyProposal(dlg, p, btn) {
     await saveOne(p);
     if (on.has("kit") && prop.kit) {
       const each = Math.max(1, Math.round(Number(box.querySelector("[data-aikitqty]")?.value) || 1));
-      await addKitParts(p, prop.kit.mpns.map((m) => [m, each]));
+      const typed = parseKitLines(box.querySelector("[data-aikitlist]")?.value || "", each);
+      await addKitParts(p, typed);
     }
     ctx.setSync("Endringene er lagret");
     dlg.close("");
