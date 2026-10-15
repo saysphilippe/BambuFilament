@@ -1601,5 +1601,8 @@ export default {
     "Skriv en tittel.": "Enter a title.",
     "Produktet er lagret": "Product saved",
     "Eget opplastet bilde (la stå tom for å beholde)": "Own uploaded image (leave empty to keep)",
+    "✎ Opprettet for hånd · M-{*}": "✎ Created by hand · M-{*}",
+    "Opprettelsesnr.": "Creation no.",
+    "opprettet for hånd": "created by hand",
   },
 };

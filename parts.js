@@ -140,6 +140,8 @@ function cleanPart(p) {
     category: p.catManual && CAT_NAME[p.category] ? p.category : CAT_NAME[p.catHint] ? p.catHint : classify(p.title, [p.variant, p.shopCat].filter(Boolean).join(" ")), catManual: !!p.catManual,
     // Delprodukt i et sett: id-en til hovedproduktet (settet).
     parent: clip(p.parent, 200),
+    // Løpenummer på produkter opprettet for hånd (vises som M-12).
+    manualNo: Math.max(0, Math.round(num(p.manualNo) ?? 0)),
     location: clip(p.location, 80), note: clip(p.note, 400),
     added: clip(p.added, 30), updated: clip(p.updated, 30),
   };
@@ -209,7 +211,14 @@ async function loadNow() {
     const raw = parts?.parts || [];
     pstate.deleted = new Set(raw.filter((p) => p?.deleted && p.id).map((p) => String(p.id)));
     pstate.parts = raw.filter((p) => !p?.deleted).map(cleanPart).filter(Boolean);
+    // Delprodukter som har fått kopiert settets bilde i databasen (eldre lagring) ryddes, og eldre produkter
+    // opprettet for hånd får løpenummer. Gjelder bare mine egne varer.
+    const bloated = pstate.parts.filter((c) => c.parent && c.image.startsWith("data:") && c.owner === meName() && pstate.parts.find((x) => x.id === c.parent)?.image === c.image);
+    const legacy = pstate.parts.filter((c) => c.source === "manual" && !c.parent && !c.manualNo && c.owner === meName()).sort((a, b) => (a.added || "").localeCompare(b.added || ""));
+    let nextNo = Math.max(0, ...pstate.parts.map((x) => x.manualNo || 0));
+    for (const c of legacy) c.manualNo = ++nextNo;
     inheritKitPkg(pstate.parts);
+    if (!ctx.DEMO && ctx.token() && (bloated.length || legacy.length)) savePatch([...new Set([...bloated, ...legacy])].map((c) => ({ id: c.id, data: c }))).catch(() => {});
     pstate.reqs = (parts?.requests || []).map(cleanReq).filter(Boolean);
     pstate.projects = (parts?.projects || []).map(cleanProject).filter(Boolean);
     pstate.prefs = Object.fromEntries(Object.entries(parts?.prefs || {})
@@ -373,9 +382,16 @@ async function exportInventory() {
   }
 }
 
+// Bildet et delprodukt arver fra settet lagres ikke på delproduktet (ellers kopieres hele bildet til hvert delprodukt).
+function withoutInheritedImg(o) {
+  const d = o.data;
+  if ((o.coll || "parts") !== "parts" || !d || !d.parent || !d.image) return d;
+  const kit = pstate.parts.find((x) => x.id === d.parent);
+  return kit && kit.image === d.image ? { ...d, image: "", imgSearch: false, imgWeb: false, imgWebSrc: "" } : d;
+}
 async function savePatch(ops, onProgress) {
   for (let i = 0; i < ops.length; i += PATCH_CHUNK) {
-    await ctx.dbCall("/db/patch", { ops: ops.slice(i, i + PATCH_CHUNK).map((o) => ({ coll: o.coll || "parts", id: o.id, data: o.data })) });
+    await ctx.dbCall("/db/patch", { ops: ops.slice(i, i + PATCH_CHUNK).map((o) => ({ coll: o.coll || "parts", id: o.id, data: withoutInheritedImg(o) })) });
     onProgress?.(Math.min(ops.length, i + PATCH_CHUNK), ops.length);
   }
 }
@@ -1193,7 +1209,7 @@ const visibleParts = () => {
   return Object.values(hidden).some((h) => h.size) ? pstate.parts.filter((p) => !hidden[p.owner]?.has(p.category)) : pstate.parts;
 };
 
-const matchesQ = (p, q) => !q || [p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, p.pkg, CAT_NAME[p.category], p.owner].join(" ").toLowerCase().includes(q);
+const matchesQ = (p, q) => !q || [p.manualNo ? `m-${p.manualNo}` : "", p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, p.pkg, CAT_NAME[p.category], p.owner].join(" ").toLowerCase().includes(q);
 
 // Søketreff som filtrene (kategori, eier, butikk, pakke, «Har igjen») skjuler.
 function hiddenMatches(shownCount) {
@@ -1341,6 +1357,7 @@ function partCard(group) {
     <span class="part-body">
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
+      ${p.manualNo ? `<span class="kit-tag manual-no" title="Opprettet for hånd, løpenummer M-${p.manualNo}">✎ Opprettet for hånd · M-${p.manualNo}</span>` : ""}
       ${p.parent ? `<span class="kit-tag kit-child" title="${ctx.esc(kitOf(p)?.title || "")}">📦 Del av samling${kitOf(p) ? `: ${ctx.esc(kitOf(p).title)}` : ""}</span>` : kitParts(p).length ? `<span class="kit-tag">Sett · ${kitParts(p).length} delprodukter</span>` : ""}
       <span class="part-meta"><b>${ctx.esc(qty)}</b>${fmtMoney(p) ? ` · ${ctx.esc(fmtMoney(p))}/stk` : ""}</span>
       ${p.pkg ? `<span class="part-pkg" title="${ctx.esc(packageInfo(p.pkg))}">${footprintSvg(p.pkg, 24) || packageSvg(p.pkg, 22)}${ctx.esc(p.pkg)}</span>` : ""}
@@ -1720,6 +1737,7 @@ function openNewPart() {
       qty: Math.max(1, Math.round(Number($("#np-qty").value) || 1)), pack: 1, packManual: true, location: $("#np-loc").value,
       image, imgManual: !!image, imgBy: image ? meName() : "", imgUpdated: image ? today : "",
       category: $("#np-cat").value, catManual: true, orderDate: today.slice(0, 10), added: today, updated: today,
+      manualNo: Math.max(0, ...pstate.parts.map((x) => x.manualNo || 0)) + 1,
     });
     try {
       pstate.parts.push(c);
@@ -1770,6 +1788,7 @@ function openPart(id) {
         ${hasOrder ? `<tr class="order-toggle-row"><th></th><td><button type="button" class="linkbtn order-toggle" data-ordertoggle aria-expanded="${orderOpen}"><span class="order-show">Vis ordredetaljer ▾</span><span class="order-hide">Skjul ordredetaljer ▴</span></button> <span class="hint">eier, dato, butikk, ordrenummer, status</span></td></tr>` : ""}
         ${row("Eier", `<span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span> ${ctx.esc(p.owner || "Ukjent")}`, "order-row")}
         ${row("Dato", ctx.esc(fmtDate(p.orderDate)), "order-row")}
+        ${row("Opprettelsesnr.", p.manualNo ? `<b>M-${p.manualNo}</b> <span class="hint">opprettet for hånd</span>` : "")}
         ${(() => {
           const sib = siblings(p).sort((a, b) => b.orderDate.localeCompare(a.orderDate));
           if (sib.length < 2) return "";

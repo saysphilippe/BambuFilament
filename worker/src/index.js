@@ -1311,16 +1311,19 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
   const run = (input) => env.AI.run(AI_MODEL, { ...input, max_tokens: 400, temperature: 0.2 });
   let out;
   try {
-    out = await run({ messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image } }] }] });
+    out = await run({ prompt, image: m[2] });
   } catch (err) {
-    // Eldre skjema: bilde som eget felt.
-    out = await run({ prompt, image: m[2] }).catch(() => { throw fail(`Bildetolkningen feilet: ${String(err?.message || err).slice(0, 200)}`, 502); });
+    // Reserve: meldingsformat med bilde-URL.
+    out = await run({ messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image } }] }] }).catch(() => { throw fail(`Bildetolkningen feilet: ${String(err?.message || err).slice(0, 200)}`, 502); });
   }
-  const text = String(out?.response ?? out?.result?.response ?? out?.choices?.[0]?.message?.content ?? "");
+  // Modellen svarer ofte med et ferdig JSON-objekt i «response» (ikke tekst).
+  const resp = out?.response ?? out?.result?.response ?? out?.choices?.[0]?.message?.content ?? "";
+  const text = typeof resp === "string" ? resp : JSON.stringify(resp);
   const j = /\{[\s\S]*\}/.exec(text);
   let r = {};
-  try { r = JSON.parse(j ? j[0] : "{}"); } catch { /* ukjent svarformat */ }
-  const s = (v, n) => String(v ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
+  if (resp && typeof resp === "object") r = resp;
+  else try { r = JSON.parse(j ? j[0] : "{}"); } catch { /* ukjent svarformat */ }
+  const s = (v, n) => String(Array.isArray(v) ? v.join(" ") : v ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
   const catId = list.some((c) => c.id === r.category) ? r.category : "";
   return { title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), raw: j ? "" : s(text, 300) };
 }
