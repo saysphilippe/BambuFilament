@@ -1297,3 +1297,4 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .np-actions { display: grid; gap: 8px; justify-items: start; flex: 1 1 220px; }
 .np-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .np-msg.bad { color: var(--danger, #c0392b); }
+.ai-table td > .hint { display: block; margin-top: 6px; white-space: nowrap; }
