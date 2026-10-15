@@ -66,11 +66,14 @@ const pstate = {
 const clip = (s, n) => String(s ?? "").trim().slice(0, n);
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 // AliExpress sitt grå plassholderbilde (gamle ordre og varer som er fjernet har ikke bilde lenger).
-const ALI_PLACEHOLDER = /Sf5a31ce867174aa7bf499352d6875ddcs/;
+const OWN_IMG_MAX = 100000;
+const ALI_PLACEHOLDER =/Sf5a31ce867174aa7bf499352d6875ddcs/;
 const safeImg = (u) => {
   u = String(u || "").trim();
   if (ALI_PLACEHOLDER.test(u)) return "";
   if (u.startsWith("//")) u = "https:" + u;
+  // Eget bilde tatt eller lastet opp i appen (lite JPEG, se openNewPart).
+  if (u.length <= OWN_IMG_MAX && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(u)) return u;
   // Egne bilder i repoet (img/parts/C233265.png) for deler butikken ikke har bilde av lenger.
   if (/^img\/parts\/[A-Za-z0-9_-]+\.(png|jpe?g|webp)$/.test(u)) return u;
   return IMG_HOSTS.test(u) ? u.split(/[?#]/)[0] : "";
@@ -1520,6 +1523,7 @@ function renderView() {
         <section class="panel filters">
           <div class="filter-row">
             <input id="parts-q" type="search" placeholder="Søk etter navn, variant, butikk, ordrenummer, plassering…" aria-label="Søk i komponenter" value="${ctx.esc(pstate.q)}">
+            ${ctx.token() || ctx.DEMO ? `<button type="button" class="btn btn-primary" data-newpart>+ Nytt produkt</button>` : ""}
             <select id="parts-show" aria-label="Vis">
               <option value="have"${pstate.show === "have" ? " selected" : ""}>Har igjen</option>
               <option value="used"${pstate.show === "used" ? " selected" : ""}>Brukt opp</option>
@@ -1619,6 +1623,121 @@ export function mouserRows(text) {
   }).filter((r) => r.mpn || r.title);
 }
 
+// ---------- Nytt produkt for hånd, med bildetolkning ----------
+//
+// Bildet krympes i nettleseren til et lite JPEG (data-URL) og sendes til Workeren (/ai/describe), som
+// foreslår tittel, delenummer, produsent, pakketype og kategori. Forslagene fylles inn i skjemaet og kan rettes.
+async function shrinkImage(file, maxSide = 480) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement("canvas");
+  cv.width = Math.max(1, Math.round(bmp.width * k));
+  cv.height = Math.max(1, Math.round(bmp.height * k));
+  const g = cv.getContext("2d");
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, cv.width, cv.height);
+  g.drawImage(bmp, 0, 0, cv.width, cv.height);
+  for (const q of [0.78, 0.68, 0.58, 0.48]) {
+    const url = cv.toDataURL("image/jpeg", q);
+    if (url.length <= OWN_IMG_MAX) return url;
+  }
+  throw new Error("Bildet ble for stort selv etter krymping. Prøv et enklere bilde.");
+}
+
+function openNewPart() {
+  let dlg = ctx.$("#newpart-dialog");
+  if (!dlg) {
+    dlg = document.createElement("dialog");
+    dlg.id = "newpart-dialog";
+    dlg.className = "wide-dialog part-dialog";
+    document.body.appendChild(dlg);
+  }
+  let image = "";
+  dlg.innerHTML = `<button type="button" class="dlg-close" aria-label="Lukk" title="Lukk (Esc)">×</button>
+  <form class="newpart" method="dialog">
+    <h2>Nytt produkt</h2>
+    <p class="hint">Ta eller velg et bilde, så foreslår appen tittel, delenummer, pakke og kategori. Du kan rette alt før du lagrer. Delprodukter legger du til etterpå.</p>
+    <div class="np-img">
+      <div class="np-preview"><span class="hint">Ingen bilde</span></div>
+      <div class="np-actions">
+        <label class="btn">Velg eller ta bilde<input id="np-file" type="file" accept="image/*" hidden></label>
+        <button type="button" class="btn btn-primary" data-npsuggest disabled>Foreslå overskrift fra bildet</button>
+        <p class="hint np-msg" role="status"></p>
+      </div>
+    </div>
+    <label>Tittel<input id="np-title" type="text" maxlength="300" placeholder="F.eks. 180PCS SOT-23 Transistor Kit" required></label>
+    <div class="np-row">
+      <label>Delenummer<input id="np-mpn" type="text" maxlength="80"></label>
+      <label>Produsent<input id="np-maker" type="text" maxlength="80"></label>
+      <label>Pakke<input id="np-pkg" type="text" maxlength="30" placeholder="SOT-23, TO-92 …"></label>
+    </div>
+    <div class="np-row">
+      <label>Kategori<select id="np-cat">${sortedCats().map(([cid, name]) => `<option value="${cid}"${cid === "other" ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
+      <label>Antall (stk)<input id="np-qty" type="number" min="1" max="1000000" value="1"></label>
+      <label>Plassering<input id="np-loc" type="text" maxlength="80" placeholder="F.eks. Skuff 3"></label>
+    </div>
+    <label>Beskrivelse<textarea id="np-desc" rows="2" maxlength="600"></textarea></label>
+    <div class="part-actions">
+      <button class="btn" value="cancel" type="submit" formnovalidate>Avbryt</button>
+      <button class="btn btn-primary" type="button" data-npsave>Lagre produkt</button>
+    </div>
+  </form>`;
+  const $ = (s) => dlg.querySelector(s);
+  const msg = (t, bad) => { const m = $(".np-msg"); m.textContent = t; m.classList.toggle("bad", !!bad); };
+  $("#np-file").onchange = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      image = await shrinkImage(f);
+      $(".np-preview").innerHTML = `<img src="${ctx.esc(image)}" alt="Forhåndsvisning">`;
+      $("[data-npsuggest]").disabled = false;
+      msg(`Bildet er klart (${Math.round(image.length / 1024)} kB).`);
+    } catch (err) { image = ""; $("[data-npsuggest]").disabled = true; msg(err.message, true); }
+  };
+  $("[data-npsuggest]").onclick = async (ev) => {
+    const btn = ev.currentTarget;
+    btn.disabled = true;
+    msg("Leser bildet …");
+    try {
+      if (ctx.DEMO) throw new Error("Bildetolkning er ikke tilgjengelig i demoen.");
+      const r = await ctx.dbCall("/ai/describe", { image, cats: sortedCats().map(([id, name]) => ({ id, name })) });
+      const put = (sel, v) => { if (v && !$(sel).value.trim()) $(sel).value = v; };
+      if (r.title) $("#np-title").value = r.title;
+      put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-pkg", r.pkg); put("#np-desc", r.description);
+      if (r.category) $("#np-cat").value = r.category;
+      msg(r.title ? "Forslag fylt inn. Sjekk og rett det som er feil." : "Fant ikke noe tydelig i bildet. Fyll inn for hånd.", !r.title);
+    } catch (err) { msg(err.message, true); }
+    btn.disabled = false;
+  };
+  $("[data-npsave]").onclick = async (ev) => {
+    const title = $("#np-title").value.trim();
+    if (!title) { $("#np-title").focus(); msg("Skriv en tittel.", true); return; }
+    ev.currentTarget.disabled = true;
+    const today = new Date().toISOString();
+    const c = cleanPart({
+      id: `manual:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, source: "manual", owner: meName(),
+      title, mpn: $("#np-mpn").value, maker: $("#np-maker").value, pkgFixed: $("#np-pkg").value, description: $("#np-desc").value,
+      qty: Math.max(1, Math.round(Number($("#np-qty").value) || 1)), pack: 1, packManual: true, location: $("#np-loc").value,
+      image, imgManual: !!image, imgBy: image ? meName() : "", imgUpdated: image ? today : "",
+      category: $("#np-cat").value, catManual: true, orderDate: today.slice(0, 10), added: today, updated: today,
+    });
+    try {
+      pstate.parts.push(c);
+      if (!ctx.DEMO) await savePatch([{ id: c.id, data: c }]);
+      render();
+      dlg.close("");
+      ctx.setSync("Produktet er lagret");
+      openPart(c.id);
+    } catch (err) {
+      pstate.parts = pstate.parts.filter((x) => x.id !== c.id);
+      msg(err.message, true);
+      ev.currentTarget.disabled = false;
+    }
+  };
+  dlg.querySelector(".dlg-close").onclick = () => dlg.close("");
+  dlg.showModal();
+}
+
 // ---------- Detaljvindu ----------
 
 function openPart(id) {
@@ -1691,7 +1810,7 @@ function openPart(id) {
         ${p.imgWeb ? `<div class="img-web-box"><b>Bildet er funnet på nettet</b>, ikke hos AliExpress${p.imgWebSrc ? ` (<a href="${ctx.esc(p.imgWebSrc)}" target="_blank" rel="noopener">kilde ↗</a>)` : ""}. Stemmer det?
           ${mine ? `<span class="img-web-actions"><button type="button" class="btn btn-small btn-primary" data-imgweb="ok">Godkjenn</button><button type="button" class="btn btn-small btn-danger" data-imgweb="no">Feil bilde</button></span>` : ""}</div>` : ""}
         <label class="cat-toggle pd-imgwrong"><input type="checkbox" id="pd-imgwrong"${p.imgWrong ? " checked" : ""}${mine ? "" : " disabled"}> Feil bilde – finn riktig bilde ved neste bildesøk${p.imgWrong ? ` <span class="hint">(merket ${ctx.esc(fmtStamp(p.imgWrongAt))}${imgFixed(p) ? `; bildet ble byttet ${ctx.esc(fmtStamp(p.imgUpdated))}${p.imgBy ? ` av ${ctx.esc(p.imgBy)}` : ""} – fjern krysset hvis det nå er riktig` : "; ikke byttet ennå"})</span>` : ""}</label>
-        <label class="pd-note">Bilde (lenke fra AliExpress, LCSC eller Mouser; tom = ingen bilde)<input id="pd-img" type="url" maxlength="400" value="${ctx.esc(p.image)}" placeholder="https://ae-pic-a1.aliexpress-media.com/kf/….jpg" ${mine ? "" : "disabled"}></label>
+        <label class="pd-note">Bilde (lenke fra AliExpress, LCSC eller Mouser; tom = ingen bilde)<input id="pd-img" type="url" maxlength="400" value="${ctx.esc(p.image.startsWith("data:") ? "" : p.image)}" placeholder="${p.image.startsWith("data:") ? "Eget opplastet bilde (la stå tom for å beholde)" : "https://ae-pic-a1.aliexpress-media.com/kf/….jpg"}" ${mine ? "" : "disabled"}></label>
       </div>
       ${mine ? "" : `<p class="hint">Bare ${ctx.esc(p.owner)} kan endre denne varen.</p>`}
       ${ctx.token() || ctx.DEMO ? `<div class="cart-add">
@@ -1731,7 +1850,7 @@ function openPart(id) {
     p.location = clip(dlg.querySelector("#pd-loc").value, 80);
     p.note = clip(dlg.querySelector("#pd-note").value, 400);
     const imgIn = dlg.querySelector("#pd-img").value.trim();
-    if (imgIn !== p.image) {
+    if (imgIn !== p.image && !(p.image.startsWith("data:") && !imgIn)) {
       const img = safeImg(imgIn.replace(/_\d+x\d+\.(jpg|png|webp)$/i, ""));
       if (imgIn && !img) { ctx.setSync("Bildelenken må være fra AliExpress, LCSC eller Mouser.", true); }
       else { p.image = img; p.imgSearch = false; p.imgManual = true; p.imgUpdated = new Date().toISOString(); p.imgBy = meName(); }
@@ -1862,6 +1981,7 @@ export function initParts(context) {
       return;
     }
     if (e.target.closest("[data-pexport]")) { exportInventory(); return; }
+    if (e.target.closest("[data-newpart]")) { openNewPart(); return; }
     const pj = e.target.closest("[data-projopen], [data-projshow], [data-projact]");
     if (pj) {
       if (pj.dataset.projopen !== undefined) { pstate.project = pj.dataset.projopen; pstate.bomPreview = null; render(); window.scrollTo({ top: 0 }); return; }

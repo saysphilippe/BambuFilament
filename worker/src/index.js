@@ -67,7 +67,7 @@ const LIMITS = {
   "/sitemap": "STORE_LIMIT", "/store-product": "STORE_LIMIT",
   "/reset": "AUTH_LIMIT", "/register": "AUTH_LIMIT", "/whois": "AUTH_LIMIT", "/msg-notify": "DATA_LIMIT", "/reset-token": "AUTH_LIMIT", "/approve": "AUTH_LIMIT",
   "/inventory-key": "AUTH_LIMIT",
-  "/db/load": "DB_LIMIT", "/db/patch": "DB_LIMIT", "/store/load": "DB_LIMIT", "/store/history": "DB_LIMIT", "/reader/card": "DB_LIMIT", "/reader/scan": "DB_LIMIT",
+  "/ai/describe": "AI_LIMIT", "/db/load": "DB_LIMIT", "/db/patch": "DB_LIMIT", "/store/load": "DB_LIMIT", "/store/history": "DB_LIMIT", "/reader/card": "DB_LIMIT", "/reader/scan": "DB_LIMIT",
 };
 
 export default {
@@ -139,6 +139,9 @@ export default {
         case "/inventory-key":
           await requireUser(token, env);
           return json(await inventoryKey(body, env), 200, origin);
+        case "/ai/describe":
+          await requireUser(token, env);
+          return json(await aiDescribe(body, env), 200, origin);
         case "/db/load":
           await requireUser(token, env);
           return json(await dbLoad(body, env), 200, origin);
@@ -1283,4 +1286,41 @@ async function storeHistory({ handle }, env) {
   if (typeof handle !== "string" || !handle) throw fail("Mangler produkt");
   const { results } = await env.DB.prepare("SELECT variant, at, price FROM price_history WHERE handle = ? ORDER BY at").bind(handle).all();
   return { handle, history: results };
+}
+
+// ---------- Bildetolkning (Workers AI) ----------
+//
+// Siden sender et lite JPEG-bilde (data-URL) av en komponent eller pose, og får tilbake forslag til
+// tittel, delenummer, produsent, pakketype og kategori. Brukeren godkjenner eller retter før lagring.
+const AI_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
+
+async function aiDescribe({ image, cats }, env) {
+  if (!env.AI) throw fail("Bildetolkning er ikke slått på (mangler AI-binding).", 503);
+  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(image || ""));
+  if (!m || m[2].length > 900000) throw fail("Ugyldig eller for stort bilde.");
+  const list = (Array.isArray(cats) ? cats : []).slice(0, 60)
+    .map((c) => ({ id: String(c?.id || "").slice(0, 40), name: String(c?.name || "").slice(0, 60) })).filter((c) => c.id && c.name);
+  const prompt = `This is a photo of an electronic component, a pack of components or a component kit that a hobbyist bought online. Reply with ONE JSON object only, no other text, with these keys:
+"title": a short product title in English like an online shop listing (e.g. "180PCS SOT-23 Transistor Kit Assorted Set", "10pcs TL082CP Dual JFET Op-Amp DIP-8"). Include quantity if it is printed or clearly countable.
+"mpn": the main manufacturer part number if it is readable, else "".
+"maker": the manufacturer if readable, else "".
+"package": the package type if you can tell (e.g. SOT-23, TO-92, DIP-8, 0805), else "".
+"category": the id of the best matching category from this list, else "": ${JSON.stringify(list)}
+"description": one short sentence about what it is.
+Only use text you can actually read in the photo. Do not guess part numbers.`;
+  const run = (input) => env.AI.run(AI_MODEL, { ...input, max_tokens: 400, temperature: 0.2 });
+  let out;
+  try {
+    out = await run({ messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image } }] }] });
+  } catch (err) {
+    // Eldre skjema: bilde som eget felt.
+    out = await run({ prompt, image: m[2] }).catch(() => { throw fail(`Bildetolkningen feilet: ${String(err?.message || err).slice(0, 200)}`, 502); });
+  }
+  const text = String(out?.response ?? out?.result?.response ?? out?.choices?.[0]?.message?.content ?? "");
+  const j = /\{[\s\S]*\}/.exec(text);
+  let r = {};
+  try { r = JSON.parse(j ? j[0] : "{}"); } catch { /* ukjent svarformat */ }
+  const s = (v, n) => String(v ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
+  const catId = list.some((c) => c.id === r.category) ? r.category : "";
+  return { title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), raw: j ? "" : s(text, 300) };
 }

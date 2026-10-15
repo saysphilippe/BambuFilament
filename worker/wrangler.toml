@@ -29,6 +29,12 @@ name = "PUBLIC_LIMIT"
 namespace_id = "1006"
 simple = { limit = 10, period = 60 }
 
+# Bildetolkning med Workers AI (/ai/describe).
+[[ratelimits]]
+name = "AI_LIMIT"
+namespace_id = "1007"
+simple = { limit = 10, period = 60 }
+
 [[ratelimits]]
 name = "EMAIL_LIMIT"
 namespace_id = "1004"
@@ -50,3 +56,7 @@ database_id = "b37e1663-4cfc-4b40-9533-96952e18092c"
 # Daglig sikkerhetskopi av databasen til BambuFilament-data (JSON), kl. 03:00 UTC.
 [triggers]
 crons = ["0 3 * * *"]
+
+# Workers AI: tolker bilder av komponenter og foreslår tittel (/ai/describe).
+[ai]
+binding = "AI"
