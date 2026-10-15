@@ -1270,6 +1270,14 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .kit-back-box .kit-back { margin: 0 0 4px; }
 .kit-back-img { flex: none; width: 56px; height: 56px; padding: 0; border: 1px solid var(--border, rgba(128,128,128,.35)); border-radius: 8px; overflow: hidden; background: #fff; cursor: pointer; }
 .kit-back-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ai-row { margin: 10px 0; }
+.ai-box { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border, rgba(128,128,128,.35)); border-radius: 8px; max-width: 100%; box-sizing: border-box; overflow-x: auto; }
+.ai-box h3 { margin: 0 0 6px; font-size: 14px; }
+.ai-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ai-table th, .ai-table td { text-align: left; padding: 4px 8px 4px 0; vertical-align: top; }
+.ai-table td input[type="text"], .ai-table td select { width: 100%; min-width: 160px; box-sizing: border-box; }
+.ai-table .ai-now { color: var(--muted, #888); overflow-wrap: anywhere; }
+.ai-table input[data-aikitqty] { width: 4.5em; }
 .kit-box { margin: 14px 0; padding: 10px 12px; border: 1px solid var(--border, rgba(128,128,128,.35)); border-radius: 8px; }
 .kit-box h3 { margin: 0 0 6px; font-size: 14px; }
 .kit-list { width: 100%; border-collapse: collapse; font-size: 13px; }

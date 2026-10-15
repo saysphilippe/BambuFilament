@@ -1294,9 +1294,30 @@ async function storeHistory({ handle }, env) {
 // tittel, delenummer, produsent, pakketype og kategori. Brukeren godkjenner eller retter før lagring.
 const AI_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
 
-async function aiDescribe({ image, cats }, env) {
+// Bilder på eksisterende produkter ligger hos butikken (AliExpress, Mouser, LCSC). Workeren henter dem selv og gjør dem om til data-URL.
+const AI_IMG_HOSTS = /^https:\/\/([a-z0-9-]+\.)*(alicdn\.com|aliexpress-media\.com|mouser\.com|lcsc\.com)\//;
+async function fetchImageDataUrl(url) {
+  const u = String(url || "").slice(0, 600);
+  if (!AI_IMG_HOSTS.test(u)) throw fail("Bildelenken må være fra AliExpress, LCSC eller Mouser.");
+  const full = u.replace(/_\d+x\d+\.(jpg|png|webp)$/i, "");
+  const tries = [full, ...(/alicdn\.com|aliexpress-media\.com/.test(full) ? [`${full}_640x640.jpg`] : []), u];
+  for (const t of [...new Set(tries)]) {
+    const res = await fetch(t, { headers: { Accept: "image/jpeg,image/png,image/webp" }, redirect: "error" }).catch(() => null);
+    const type = (res?.headers.get("content-type") || "").split(";")[0].trim();
+    if (!res?.ok || !/^image\/(jpeg|png|webp)$/.test(type)) continue;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.length > 650000) continue;
+    let bin = "";
+    for (let i = 0; i < buf.length; i += 8192) bin += String.fromCharCode(...buf.subarray(i, i + 8192));
+    return `data:${type};base64,${btoa(bin)}`;
+  }
+  throw fail("Fant ikke bildet, eller det er for stort.", 502);
+}
+
+async function aiDescribe({ image: imageIn, imageUrl, cats }, env) {
   if (!env.AI) throw fail("Bildetolkning er ikke slått på (mangler AI-binding).", 503);
-  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(image || ""));
+  const image = imageUrl ? await fetchImageDataUrl(imageUrl) : imageIn;
+  const m =/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(image || ""));
   if (!m || m[2].length > 900000) throw fail("Ugyldig eller for stort bilde.");
   const list = (Array.isArray(cats) ? cats : []).slice(0, 60)
     .map((c) => ({ id: String(c?.id || "").slice(0, 40), name: String(c?.name || "").slice(0, 60) })).filter((c) => c.id && c.name);

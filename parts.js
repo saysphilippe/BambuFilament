@@ -143,9 +143,13 @@ function cleanPart(p) {
     // Løpenummer på produkter opprettet for hånd (vises som M-12).
     manualNo: Math.max(0, Math.round(num(p.manualNo) ?? 0)),
     location: clip(p.location, 80), note: clip(p.note, 400),
+    // Felt rettet etter bildeanalysen. Lagres her også, så en ny import fra butikken ikke skriver dem over.
+    ov: cleanOv(p.ov),
     added: clip(p.added, 30), updated: clip(p.updated, 30),
   };
 }
+const OV_KEYS = ["title", "mpn", "maker", "pkgFixed", "description"];
+const cleanOv = (o) => Object.fromEntries(OV_KEYS.filter((k) => o && typeof o[k] === "string" && o[k].trim()).map((k) => [k, clip(o[k], k === "description" ? 600 : 300)]));
 
 // Antall stk: kjøpt antall × stk per pakke. «Igjen» regnes også i stk.
 const units = (p) => p.qty * (p.pack || 1);
@@ -917,9 +921,9 @@ function mergeImport(rows, source) {
     if (pstate.deleted.has(id)) continue;
     const price = r.priceText ? parsePrice(r.priceText) : { amount: r.unitPrice, currency: r.currency };
     const catHint = r.catHint || (r.shopCat ? mouserCategory(String(r.shopCat).split(" › ")) : "");
-    const fresh = cleanPart({ ...r, catHint, unitPrice: price.amount, currency: price.currency || r.currency, id, source, owner, added: now, updated: now });
-    if (!fresh) continue;
     const old = byId.get(id);
+    const fresh = cleanPart({ ...r, ...(old?.ov || {}), ov: old?.ov, catHint, unitPrice: price.amount, currency: price.currency || r.currency, id, source, owner, added: now, updated: now });
+    if (!fresh) continue;
     if (old) {
       const keep = { category: old.catManual ? old.category : fresh.category, catManual: old.catManual, location: old.location, note: old.note, left: old.left, added: old.added, owner: old.owner };
       const next = { ...fresh, ...keep };
@@ -1782,6 +1786,102 @@ function openNewPart() {
   dlg.showModal();
 }
 
+// ---------- Analyser bilde og overskrift på eksisterende produkter ----------
+//
+// Samme bildetolkning som ved «Nytt produkt», men for varer som allerede ligger i biblioteket. Resultatet vises som et
+// forslag (nå -> forslag) med avkrysning, og ingenting endres før eieren trykker «Bruk valgte». Mønsteret i overskriften
+// leses også (sett med flere delenumre, «200PCS … Kit»), også når varen ikke har bilde. Rettelsene lagres i p.ov, så
+// en ny import fra butikken ikke skriver dem over.
+function dataUrlToBlob(url) {
+  const m = /^data:([^;,]+);base64,(.*)$/.exec(url);
+  if (!m) throw new Error("Ugyldig bilde.");
+  const bin = atob(m[2]), buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type: m[1] });
+}
+async function readImageWithAi(p) {
+  const cats = sortedCats().map(([id, name]) => ({ id, name }));
+  if (p.image.startsWith("data:")) {
+    const image = await shrinkImage(dataUrlToBlob(p.image), 1400, 600000).catch(() => p.image);
+    return ctx.dbCall("/ai/describe", { image, cats });
+  }
+  return ctx.dbCall("/ai/describe", { imageUrl: p.image, cats });
+}
+// r: svaret fra bildetolkningen (eller null). Returnerer rader {key, label, now, next, checked} og eventuelle nye delprodukter.
+function proposeChanges(p, r) {
+  const rows = [];
+  const own = deriveKit(p.title)?.mpns || [];
+  const fromImg = r?.parts?.length ? r.parts : String(r?.mpn || "").split(/[\s,;]+/).filter((x) => x.length >= 3).length > 1 ? String(r.mpn).split(/[\s,;]+/).filter((x) => x.length >= 3) : [];
+  const names = [...new Set([...own, ...fromImg.map((x) => x.toUpperCase())])];
+  // Alle delenumre i et sett skal stå i overskriften (som i butikklistinger), så delproduktene kan utledes fra den.
+  let title = p.title;
+  if (!title && r?.title) title = r.title;
+  const missing = names.length >= 2 ? names.filter((n) => !title.toUpperCase().includes(n)) : [];
+  if (missing.length) title = `${title} ${missing.join(",")}`.trim();
+  title = clip(title, 300);
+  if (title && title !== p.title) rows.push({ key: "title", label: "Overskrift", now: p.title, next: title, checked: true });
+  const one = (key, label, now, next, checked) => { next = String(next || "").trim(); if (next && next.toLowerCase() !== String(now || "").toLowerCase()) rows.push({ key, label, now, next, checked }); };
+  if (names.length < 2) one("mpn", "Delenummer", p.mpn, r?.mpn, !p.mpn);
+  one("maker", "Produsent", p.maker, r?.maker, !p.maker);
+  const pkg = findPackage(r?.pkg) || r?.pkg || (names.length >= 2 ? findPackage(title) : "");
+  one("pkgFixed", "Pakke", p.pkg, pkg, !p.pkg);
+  one("description", "Beskrivelse", p.description, r?.description, !p.description);
+  if (r?.category && CAT_NAME[r.category] && r.category !== p.category) rows.push({ key: "category", label: "Kategori", now: CAT_NAME[p.category], next: r.category, checked: p.category === "other" && !p.catManual });
+  const kit = p.parent ? null : deriveKit(title);
+  const have = new Set(kitParts(p).map((k) => k.mpn.toUpperCase()));
+  const fresh = kit ? kit.mpns.filter((m) => !have.has(m)) : [];
+  return { rows, kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size } : null };
+}
+function renderProposal(dlg, p, prop, note) {
+  const box = dlg.querySelector(".ai-box");
+  const cell = (r) => r.key === "category"
+    ? `<select data-aival="category">${sortedCats().map(([cid, name]) => `<option value="${ctx.esc(cid)}"${cid === r.next ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select>`
+    : `<input type="text" data-aival="${r.key}" value="${ctx.esc(r.next)}" maxlength="${r.key === "description" ? 600 : 300}">`;
+  const body = prop.rows.map((r) => `<tr><td><label><input type="checkbox" data-aikey="${r.key}"${r.checked ? " checked" : ""}> ${ctx.esc(r.label)}</label></td><td class="ai-now">${ctx.esc(r.now || "(tomt)")}</td><td>${cell(r)}</td></tr>`).join("");
+  const kit = prop.kit ? `<tr><td><label><input type="checkbox" data-aikey="kit" checked> Delprodukter</label></td><td class="ai-now">${prop.kit.had ? `${prop.kit.had} fra før` : "(ingen)"}</td><td>${ctx.esc(prop.kit.mpns.join(", "))} <span class="hint">× <input type="number" data-aikitqty min="1" max="100000" value="${prop.kit.each}"> stk hver</span></td></tr>` : "";
+  box.innerHTML = `<h3>Forslag til endringer</h3>${note ? `<p class="hint">${ctx.esc(note)}</p>` : ""}
+    ${body || kit ? `<table class="ai-table"><thead><tr><th>Felt</th><th>Nå</th><th>Forslag</th></tr></thead><tbody>${body}${kit}</tbody></table>
+    <p><button type="button" class="btn btn-primary" data-aiapply>Bruk valgte</button> <span class="hint ai-apply-msg" role="status"></span></p>` : `<p class="hint">Ingen endringer å foreslå.</p>`}`;
+  box.hidden = false;
+  dlg._ai = prop;
+}
+async function analysePart(dlg, p, btn) {
+  const msg = dlg.querySelector(".ai-msg");
+  btn.disabled = true;
+  let r = null, note = "";
+  try {
+    if (p.image) {
+      if (ctx.DEMO) note = "Bildetolkning er ikke tilgjengelig i demoen. Forslaget bygger bare på overskriften.";
+      else { msg.textContent = "Leser bildet …"; r = await readImageWithAi(p); }
+    } else note = "Varen har ikke bilde. Forslaget bygger bare på overskriften.";
+  } catch (err) { note = `Bildet kunne ikke leses (${err.message}). Forslaget bygger bare på overskriften.`; }
+  msg.textContent = "";
+  renderProposal(dlg, p, proposeChanges(p, r), note || (r && !r.title && !r.parts?.length ? "Fant ikke noe tydelig i bildet." : ""));
+  btn.disabled = false;
+}
+async function applyProposal(dlg, p, btn) {
+  const prop = dlg._ai, box = dlg.querySelector(".ai-box"), out = box.querySelector(".ai-apply-msg");
+  const on = new Set([...box.querySelectorAll("[data-aikey]:checked")].map((i) => i.dataset.aikey));
+  if (!on.size) { out.textContent = "Velg minst én endring."; return; }
+  const val = (k) => box.querySelector(`[data-aival="${k}"]`)?.value.trim() || "";
+  btn.disabled = true;
+  const ov = { ...(p.ov || {}) };
+  for (const k of OV_KEYS) if (on.has(k) && val(k)) { p[k] = val(k); ov[k] = val(k); }
+  p.ov = ov;
+  if (on.has("category") && CAT_NAME[val("category")]) { p.category = val("category"); p.catManual = true; }
+  Object.assign(p, cleanPart(p));
+  try {
+    await saveOne(p);
+    if (on.has("kit") && prop.kit) {
+      const each = Math.max(1, Math.round(Number(box.querySelector("[data-aikitqty]")?.value) || 1));
+      await addKitParts(p, prop.kit.mpns.map((m) => [m, each]));
+    }
+    ctx.setSync("Endringene er lagret");
+    dlg.close("");
+    openPart(p.id);
+  } catch (err) { out.textContent = err.message; btn.disabled = false; }
+}
+
 // ---------- Detaljvindu ----------
 
 function openPart(id) {
@@ -1834,6 +1934,7 @@ function openPart(id) {
         ${row("Kategori hos butikken", ctx.esc(p.shopCat))}
         ${row("Datablad", p.datasheet ? `<a href="${ctx.esc(p.datasheet)}" target="_blank" rel="noopener">Åpne PDF ↗</a>` : "")}
       </table>
+      ${mine && (ctx.token() || ctx.DEMO) ? `<p class="ai-row"><button type="button" class="btn" data-aianalyse>${p.image ? "Analyser bilde og overskrift" : "Analyser overskrift"}</button> <span class="hint ai-msg" role="status">Foreslår rettelser av overskrift, delenummer, pakke, kategori og delprodukter. Ingenting endres før du godkjenner.</span></p><div class="ai-box" hidden></div>` : ""}
       ${p.parent ? "" : (() => {
         const kids = kitParts(p);
         if (!kids.length && !mine) return "";
@@ -1955,6 +2056,10 @@ function openPart(id) {
       const [title, caption] = [...fig.querySelectorAll("figcaption")].map((f) => f.textContent.trim());
       return openZoom(`<b>${ctx.esc(title || "Koblingsskjema")}</b>`, sch.innerHTML, caption ? `<p class="hint">${ctx.esc(caption)}</p>` : "", false);
     }
+    const an = e.target.closest("[data-aianalyse]");
+    if (an && mine) { await analysePart(dlg, p, an); return; }
+    const ap = e.target.closest("[data-aiapply]");
+    if (ap && mine) { await applyProposal(dlg, p, ap); return; }
     if (e.target.closest("[data-derivekit]") && mine) {
       const d = deriveKit(p.title), msg = dlg.querySelector(".kit-msg");
       if (!d) return;
