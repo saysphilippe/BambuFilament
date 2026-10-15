@@ -1274,6 +1274,8 @@ function normValue(t) {
   else if (/[mM]/.test(pre)) pre = unit === "H" || unit === "F" ? "m" : pre;
   return m[1] + pre + unit;
 }
+// Står delenummeret som eget ord i tittelen? («1UH» står ikke i «1UH-4.7MH», som er et område.)
+const titleHas = (title, n) => String(title).split(/[\s,;/]+/).some((w) => w.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase() === String(n).toUpperCase());
 const partCase = (t) => normValue(t) || String(t).toUpperCase();
 // Sorteringsnøkkel for verdier: 1uH før 100uH før 1mH (størrelsen, ikke teksten). Delenumre har ingen nøkkel.
 const valueKey = (t) => {
@@ -1763,7 +1765,7 @@ function openNewPart() {
       // Alle delenumre i et sett skal stå i tittelen (som i butikklistinger), så delproduktene kan utledes fra den.
       const names = r.parts?.length ? r.parts : String(r.mpn).split(/[\s,;]+/).filter(Boolean).length > 1 ? String(r.mpn).split(/[\s,;]+/).filter(Boolean) : [];
       let title = String(r.title || "").trim();
-      const missing = names.filter((n) => !title.toUpperCase().includes(n.toUpperCase()));
+      const missing = names.filter((n) => !titleHas(title, n));
       if (names.length >= 2 && missing.length) title = `${title} ${names.join(",")}`.trim();
       if (title) $("#np-title").value = title;
       if (names.length < 2) put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-desc", [r.description, r.tolerance ? `Toleranse ${r.tolerance}.` : ""].filter(Boolean).join(" "));
@@ -1857,7 +1859,7 @@ function proposeChanges(p, r) {
   let title = p.title;
   if (!title && r?.title) title = r.title;
   const kitLike = names.length >= 3 || fromImg.length >= 2 || /\b(kit|assort\w*|sets?|\d+\s*values?|\d+\s*kinds?|\d+\s*types?)\b/i.test(p.title);
-  const missing = names.length >= 2 && kitLike ? names.filter((n) => !title.toUpperCase().includes(n.toUpperCase())) : [];
+  const missing = names.length >= 2 && kitLike ? names.filter((n) => !titleHas(title, n)) : [];
   if (missing.length) title = `${title} ${missing.join(",")}`.trim();
   title = clip(title, 300);
   if (title && title !== p.title) rows.push({ key: "title", label: "Overskrift", now: p.title, next: title, checked: true });
