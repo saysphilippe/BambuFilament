@@ -1364,14 +1364,15 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
   else try { r = JSON.parse(j ? j[0] : "{}"); } catch { /* ukjent svarformat */ }
   const s = (v, n) => String(Array.isArray(v) ? v.join(" ") : v ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
   const catId = list.some((c) => c.id === r.category) ? r.category : "";
-  const toList = (v) => (Array.isArray(v) ? v : String(v || "").split(/[\s,;]+/)).map((x) => { const c = s(x, 30).replace(/[µμ]/g, "u").replace(/[^\w.+,Ω\u2126-]/g, ""); return normValue(c) || c.toUpperCase(); }).filter((x) => x.length >= 3 && !/^\d+(PCS?|PIECES?|VALUES?|KINDS?|TYPES?|STK)$/.test(x));
+  const toList = (v) => (Array.isArray(v) ? v : String(v || "").split(/[\s,;]+/)).map((x) => { const c = s(x, 30).replace(/[µμ]/g, "u").replace(/[^\w.+,*Ω\u2126-]/g, ""); return normValue(c) || c.toUpperCase(); }).filter((x) => x.length >= 3 && !/^\d+(PCS?|PIECES?|VALUES?|KINDS?|TYPES?|STK)$/.test(x));
   // Modellen overser ofte ett eller to delenumre per runde (ulike hver gang). For sett leses bildet derfor to ganger til
   // med egne «list opp alt»-spørsmål, og delenumrene slås sammen.
   let found = toList(r.parts);
+  const qty = {};
   if (found.length >= 2 || /kit|assort|set\b/i.test(String(r.title))) {
     const passes = [
       "Look carefully at all printed text in this photo of a component kit. List EVERY distinct component part number printed on it, in the order they appear, including ones in small print. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
-      "This photo shows a kit with a printed table or list of component types or values. Transcribe each entry (part number or value such as 2.2uH or 100nF), written without spaces, one by one, column by column. Do not skip any and do not invent any. Ignore quantities like '10 Pcs', tolerances like '10%', barcodes and serial numbers. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
+      "This photo shows a kit with a printed table or list of component types or values. Transcribe each entry (part number or value such as 2.2uH or 100nF), written without spaces, one by one, column by column. Keep any * signs exactly as printed (M2*3*3.5 is ONE entry). Do not skip any and do not invent any. Ignore quantities like '10 Pcs', tolerances like '10%', barcodes and serial numbers. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
     ];
     const more = await Promise.all(passes.map((p) => run(p).then((o) => o?.response ?? o?.result?.response ?? o?.choices?.[0]?.message?.content ?? "").catch(() => "")));
     for (const x of more) {
@@ -1379,7 +1380,17 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
       if (typeof x === "string") { const jj = /\{[\s\S]*\}/.exec(x); try { o = JSON.parse(jj ? jj[0] : "{}"); } catch { o = {}; } }
       found = found.concat(toList(o?.parts));
     }
+    // Settene har ofte ulikt antall per type («25pcs» / «10pcs»): leses i en egen runde.
+    const qtyPrompt = "This photo shows a kit with a printed table or list of component types, each with a quantity such as '25pcs'. For each entry give the entry text exactly as printed, written without spaces (keep any * signs, e.g. M2*3*3.5, and values such as 2.2uH), and its quantity as a number. Reply with ONE JSON object only: {\"items\": [{\"part\": \"...\", \"qty\": 25}]}";
+    let qo = await run(qtyPrompt).then((o) => o?.response ?? o?.result?.response ?? o?.choices?.[0]?.message?.content ?? "").catch(() => "");
+    if (typeof qo === "string") { const jj = /\{[\s\S]*\}/.exec(qo); try { qo = JSON.parse(jj ? jj[0] : "{}"); } catch { qo = {}; } }
+    for (const it of Array.isArray(qo?.items) ? qo.items : []) {
+      const name = toList([it?.part])[0], n = Math.round(Number(String(it?.qty ?? "").replace(/\D/g, "")));
+      if (name && n >= 1 && n <= 100000) { qty[name] = n; found.push(name); }
+    }
   }
+  // Størrelser som M2*3*3.5 går foran løse ord fra overskriften på esken (M2, M2.5 …).
+  if (found.filter((x) => x.includes("*")).length >= 3) found = found.filter((x) => x.includes("*"));
   // Settet er en verdiliste (2.2UH, 100NF, 4K7): da er alt annet (strekkodetekst, serienummer) støy som skal bort.
   const valueRe = /^\d+[RKMPNUrkmpnu]\d+$/;
   found = [...new Set(found)];
@@ -1387,5 +1398,5 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
   // Induktanser oppgis i henry (uH, mH, H): en lest «nF» eller «uF» i et induktorsett er en feillesing av H.
   if (/induct/i.test(String(r.title) + " " + String(r.description))) found = found.map((x) => (normValue(x) ? x.replace(/F$/, "H") : x));
   const partList = [...new Set(found)].sort(byValue).slice(0, 40);
-  return { parts: partList, title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), tolerance: s(r.tolerance, 20).replace(/[^\d.,%±+\- ]/g, "").trim(), raw: j ? "" : s(text, 300) };
+  return { parts: partList, qty: Object.fromEntries(partList.filter((k) => qty[k]).map((k) => [k, qty[k]])), title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), tolerance: s(r.tolerance, 20).replace(/[^\d.,%±+\- ]/g, "").trim(), raw: j ? "" : s(text, 300) };
 }

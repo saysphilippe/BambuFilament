@@ -1290,10 +1290,10 @@ function parseKitLines(text, defQty) {
   for (const raw of String(text || "").split(/[\n,;]+/)) {
     const t = raw.trim();
     if (!t) continue;
-    const m = t.match(/^(\S+)(?:\s*[x×*:]\s*|\s+)(\d{1,6})$/i);
+    const m = t.match(/^(\S+)(?:\s*[x×:]\s*|\s+)(\d{1,6})$/i);
     const items = m ? [[m[1], Number(m[2])]] : t.split(/\s+/).map((x) => [x, defQty]);
     for (const [mpn, n] of items) {
-      const k = partCase(clip(mpn.replace(/[µμ]/g, "u").replace(/[^\w.+Ω\u2126-]/g, ""), 60));
+      const k = partCase(clip(mpn.replace(/[µμ]/g, "u").replace(/[^\w.+*Ω\u2126-]/g, ""), 60));
       if (k) out.set(k, Math.max(1, n || defQty));
     }
   }
@@ -1308,12 +1308,15 @@ function deriveKit(title) {
   for (const w of t.split(/[\s,;/]+/)) {
     const k = partCase(w.replace(/[µμ]/g, "u").replace(/^[^\w]+|[^\w\u03a9\u2126]+$/g, "")), K = k.toUpperCase();
     const isVal = !!normValue(k);
-    if (k.length < 3 || k.length > 14 || (!isVal && (!/^[A-Z0-9][A-Z0-9.-]*$/.test(K) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(K) || !/[A-Z]/.test(K) || !/\d/.test(K) || skip.test(K))) || mpns.includes(k)) continue;
+    if (k.length < 3 || k.length > 14 || (!isVal && (!/^[A-Z0-9][A-Z0-9.*-]*$/.test(K) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(K) || !/[A-Z]/.test(K) || !/\d/.test(K) || skip.test(K))) || mpns.includes(k)) continue;
     // 10K (uten enhet) og 10KΩ er samme verdi: behold varianten med Ω.
     const bare = k.replace(/Ω$/, ""), at = mpns.findIndex((x) => x.replace(/Ω$/, "") === bare);
     if (at >= 0) { if (k.endsWith("Ω")) mpns[at] = k; continue; }
     mpns.push(k);
   }
+  // Størrelser som M2*3*3.5 går foran løse ord som M2.5 i tittelen («M2 M2.5 M3 … Kit»).
+  const sized = mpns.filter((x) => x.includes("*"));
+  if (sized.length >= 2) mpns.splice(0, mpns.length, ...sized);
   if (mpns.length < 2) return null;
   const total = Number((t.match(/(\d{1,6})\s*(?:pcs?|pieces?|stk)\b/i) || [])[1]) || 0;
   const kinds = Number((t.match(/(\d{1,4})\s*(?:values?|kinds?|types?)\b/i) || [])[1]) || mpns.length;
@@ -1335,6 +1338,12 @@ function inheritKitPkg(list) {
     for (const f of ["shopCat", "catHint", "maker", "url", "store", "storeUrl", "orderId", "orderDate", "status", "location", "owner"]) if (!c[f] && k[f]) c[f] = k[f];
   }
 }
+// M2*3*3.5 = gjenge M2, høyde 3 mm, ytre diameter 3,5 mm (innsatsmutter og lignende).
+const sizeInfo = (mpn) => {
+  const m = /^M(\d+(?:\.\d+)?)\*(\d+(?:\.\d+)?)\*(\d+(?:\.\d+)?)$/i.exec(String(mpn || ""));
+  const c = (x) => x.replace(".", ",");
+  return m ? `Gjenge M${c(m[1])}, høyde ${c(m[2])} mm, ytre diameter ${c(m[3])} mm.` : "";
+};
 async function addKitParts(kit, entries, description = "") {
   const now = new Date().toISOString(), made = [];
   for (const [mpn, n] of entries) {
@@ -1345,7 +1354,7 @@ async function addKitParts(kit, entries, description = "") {
     const c = cleanPart({
       id, parent: kit.id, source: kit.source, owner: kit.owner, title: mpn, mpn, qty: n, pack: 1, packManual: true,
       orderId: kit.orderId, orderDate: kit.orderDate, status: kit.status, store: kit.store, storeUrl: kit.storeUrl,
-      location: kit.location, description, added: now, updated: now,
+      location: kit.location, description: [sizeInfo(mpn), description].filter(Boolean).join(" "), added: now, updated: now,
     });
     pstate.parts.push(c);
     made.push(c);
@@ -1885,7 +1894,8 @@ function proposeChanges(p, r) {
   // Toleransen (fra bildet, ellers fra beskrivelsen) gjelder alle delproduktene i settet.
   const tolAll = tol || (/Toleranse\s+(\S+(?:\s*%)?)/.exec(p.description || "")?.[1] || "").replace(/[.,]$/, "");
   const tolKids = tolAll && !p.parent ? kitParts(p).filter((k) => !String(k.description || "").includes(tolAll)) : [];
-  return { rows, fix, tol: p.parent ? "" : tolAll, tolKids: tolKids.map((k) => k.id), kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null };
+  const qtys = r?.qty && typeof r.qty === "object" ? r.qty : {};
+  return { rows, fix, tol: p.parent ? "" : tolAll, tolKids: tolKids.map((k) => k.id), kit: fresh.length ? { qtys: Object.fromEntries(fresh.filter((m) => qtys[m]).map((m) => [m, qtys[m]])), mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null };
 }
 function renderProposal(dlg, p, prop, note) {
   const box = dlg.querySelector(".ai-box");
@@ -1893,7 +1903,9 @@ function renderProposal(dlg, p, prop, note) {
     ? `<select data-aival="category">${sortedCats().map(([cid, name]) => `<option value="${ctx.esc(cid)}"${cid === r.next ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select>`
     : `<textarea data-aival="${r.key}" rows="${Math.min(8, Math.max(2, Math.ceil(r.next.length / 45)))}" maxlength="${r.key === "description" ? 600 : 300}">${ctx.esc(r.next)}</textarea>`;
   const body = prop.rows.map((r) => `<tr><td><label><input type="checkbox" data-aikey="${r.key}"${r.checked ? " checked" : ""}> ${ctx.esc(r.label)}</label></td><td class="ai-now">${ctx.esc(r.now || "(tomt)")}</td><td>${cell(r)}</td></tr>`).join("");
-  const kit = prop.kit ? `<tr><td><label><input type="checkbox" data-aikey="kit" checked> Delprodukter</label></td><td class="ai-now">${prop.kit.had ? `${prop.kit.had} fra før` : "(ingen)"}</td><td><textarea data-aikitlist rows="${Math.min(12, Math.max(4, Math.ceil(prop.kit.mpns.join(", ").length / 40)))}" maxlength="1500">${ctx.esc(prop.kit.mpns.join(", "))}</textarea><span class="hint">× <input type="number" data-aikitqty min="1" max="100000" value="${prop.kit.each}"> stk hver${prop.tol ? `, toleranse ${ctx.esc(prop.tol)}` : ""}</span>${prop.kit.kinds && prop.kit.had + prop.kit.mpns.length < prop.kit.kinds ? `<br><span class="hint ai-missing">Overskriften sier ${prop.kit.kinds} typer, men bare ${prop.kit.had + prop.kit.mpns.length} er funnet. Legg til resten for hånd i feltet.</span>` : ""}</td></tr>` : "";
+  // Med antall fra bildet: én linje per type («M2*3*3.5 25»), ellers en kommaseparert liste.
+  const kitText = !prop.kit ? "" : Object.keys(prop.kit.qtys || {}).length ? prop.kit.mpns.map((m) => (prop.kit.qtys[m] ? `${m} ${prop.kit.qtys[m]}` : m)).join("\n") : prop.kit.mpns.join(", ");
+  const kit = prop.kit ? `<tr><td><label><input type="checkbox" data-aikey="kit" checked> Delprodukter</label></td><td class="ai-now">${prop.kit.had ? `${prop.kit.had} fra før` : "(ingen)"}</td><td><textarea data-aikitlist rows="${Math.min(12, Math.max(4, Math.ceil(kitText.length / 40)))}" maxlength="1500">${ctx.esc(kitText)}</textarea><span class="hint">× <input type="number" data-aikitqty min="1" max="100000" value="${prop.kit.each}"> stk hver${prop.tol ? `, toleranse ${ctx.esc(prop.tol)}` : ""}</span>${prop.kit.kinds && prop.kit.had + prop.kit.mpns.length < prop.kit.kinds ? `<br><span class="hint ai-missing">Overskriften sier ${prop.kit.kinds} typer, men bare ${prop.kit.had + prop.kit.mpns.length} er funnet. Legg til resten for hånd i feltet.</span>` : ""}</td></tr>` : "";
   const fix = prop.fix?.length ? `<tr><td><label><input type="checkbox" data-aikey="fixcase" checked> Skrivemåte</label></td><td class="ai-now">${ctx.esc(prop.fix.slice(0, 8).map((x) => x[1]).join(", "))}${prop.fix.length > 8 ? " …" : ""}</td><td>${ctx.esc(prop.fix.slice(0, 8).map((x) => x[2]).join(", "))}${prop.fix.length > 8 ? " …" : ""} <span class="hint">(${prop.fix.length} delprodukter, m = milli, M = mega, u = mikro)</span></td></tr>` : "";
   const tolRow = prop.tolKids?.length ? `<tr><td><label><input type="checkbox" data-aikey="tolkids" checked> Toleranse på delprodukter</label></td><td class="ai-now">${prop.tolKids.length} uten toleranse</td><td>Toleranse ${ctx.esc(prop.tol)} <span class="hint">(legges i beskrivelsen)</span></td></tr>` : "";
   box.innerHTML = `<h3>Forslag til endringer</h3>${note ? `<p class="hint">${ctx.esc(note)}</p>` : ""}
