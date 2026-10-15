@@ -127,6 +127,7 @@ export default {
     "Hydroponi og hage": "Hydroponics and garden",
     "Lodding": "Soldering",
     "PCB & Breakout": "PCB & Breakout",
+    "Reed & magneter": "Reed and magnets",
     "· {*} kjøp": "· {*} purchases",
     "· {*}/stk": "· {*}/pc",
     "· ordre {*}": "· order {*}",
