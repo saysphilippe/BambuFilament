@@ -1326,6 +1326,22 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
   else try { r = JSON.parse(j ? j[0] : "{}"); } catch { /* ukjent svarformat */ }
   const s = (v, n) => String(Array.isArray(v) ? v.join(" ") : v ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
   const catId = list.some((c) => c.id === r.category) ? r.category : "";
-  const partList = [...new Set((Array.isArray(r.parts) ? r.parts : String(r.parts || "").split(/[\s,;]+/)).map((x) => s(x, 30).toUpperCase().replace(/[^\w.+-]/g, "")).filter((x) => x.length >= 3))].slice(0, 40);
+  const toList = (v) => (Array.isArray(v) ? v : String(v || "").split(/[\s,;]+/)).map((x) => s(x, 30).toUpperCase().replace(/[^\w.+-]/g, "")).filter((x) => x.length >= 3);
+  // Modellen overser ofte ett eller to delenumre per runde (ulike hver gang). For sett leses bildet derfor to ganger til
+  // med egne «list opp alt»-spørsmål, og delenumrene slås sammen.
+  let found = toList(r.parts);
+  if (found.length >= 2 || /kit|assort|set\b/i.test(String(r.title))) {
+    const passes = [
+      "Look carefully at all printed text in this photo of a component kit. List EVERY distinct component part number printed on it, in the order they appear, including ones in small print. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
+      "This photo shows a kit with a printed table or list of component types. Transcribe each part number, one by one, left to right and top to bottom. Do not skip any and do not invent any. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
+    ];
+    const more = await Promise.all(passes.map((p) => run({ prompt: p, image: m[2] }).then((o) => o?.response ?? o?.result?.response ?? "").catch(() => "")));
+    for (const x of more) {
+      let o = x;
+      if (typeof x === "string") { const jj = /\{[\s\S]*\}/.exec(x); try { o = JSON.parse(jj ? jj[0] : "{}"); } catch { o = {}; } }
+      found = found.concat(toList(o?.parts));
+    }
+  }
+  const partList = [...new Set(found)].sort((a, b) => a.localeCompare(b, "en", { numeric: true })).slice(0, 40);
   return { parts: partList, title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), raw: j ? "" : s(text, 300) };
 }

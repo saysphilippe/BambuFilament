@@ -1648,7 +1648,7 @@ export function mouserRows(text) {
 //
 // Bildet krympes i nettleseren til et lite JPEG (data-URL) og sendes til Workeren (/ai/describe), som
 // foreslår tittel, delenummer, produsent, pakketype og kategori. Forslagene fylles inn i skjemaet og kan rettes.
-async function shrinkImage(file, maxSide = 800) {
+async function shrinkImage(file, maxSide = 800, maxLen = OWN_IMG_MAX) {
   const bmp = await createImageBitmap(file);
   const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
   const cv = document.createElement("canvas");
@@ -1660,7 +1660,7 @@ async function shrinkImage(file, maxSide = 800) {
   g.drawImage(bmp, 0, 0, cv.width, cv.height);
   for (const q of [0.78, 0.68, 0.58, 0.48, 0.4, 0.32]) {
     const url = cv.toDataURL("image/jpeg", q);
-    if (url.length <= OWN_IMG_MAX) return url;
+    if (url.length <= maxLen) return url;
   }
   throw new Error("Bildet ble for stort selv etter krymping. Prøv et enklere bilde.");
 }
@@ -1673,7 +1673,7 @@ function openNewPart() {
     dlg.className = "wide-dialog part-dialog";
     document.body.appendChild(dlg);
   }
-  let image = "";
+  let image = "", aiImage = ""; // aiImage: større utgave bare til bildetolkningen (liten skrift leses bedre), lagres ikke
   dlg.innerHTML = `<button type="button" class="dlg-close" aria-label="Lukk" title="Lukk (Esc)">×</button>
   <form class="newpart" method="dialog">
     <h2>Nytt produkt</h2>
@@ -1715,6 +1715,7 @@ function openNewPart() {
     if (!f) return;
     try {
       image = await shrinkImage(f);
+      aiImage = await shrinkImage(f, 1400, 600000).catch(() => image);
       $(".np-preview").innerHTML = `<img src="${ctx.esc(image)}" alt="Forhåndsvisning">`;
       $("[data-npsuggest]").disabled = false;
       msg(`Bildet er klart (${Math.round(image.length / 1024)} kB).`);
@@ -1726,7 +1727,7 @@ function openNewPart() {
     msg("Leser bildet …");
     try {
       if (ctx.DEMO) throw new Error("Bildetolkning er ikke tilgjengelig i demoen.");
-      const r = await ctx.dbCall("/ai/describe", { image, cats: sortedCats().map(([id, name]) => ({ id, name })) });
+      const r = await ctx.dbCall("/ai/describe", { image: aiImage || image, cats: sortedCats().map(([id, name]) => ({ id, name })) });
       const put = (sel, v) => { if (v && !$(sel).value.trim()) $(sel).value = v; };
       // Alle delenumre i et sett skal stå i tittelen (som i butikklistinger), så delproduktene kan utledes fra den.
       const names = r.parts?.length ? r.parts : String(r.mpn).split(/[\s,;]+/).filter(Boolean).length > 1 ? String(r.mpn).split(/[\s,;]+/).filter(Boolean) : [];
