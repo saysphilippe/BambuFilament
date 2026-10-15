@@ -6,7 +6,7 @@
 // dem hit med postMessage (siden åpnes i et nytt vindu). Ingen passord forlater nettleseren.
 
 import { CATEGORIES, CAT_NAME, classify } from "./categories.js?v=20261009202254";
-import { componentHtml, findPart, semiType, SEMI_TYPES } from "./circuits.js?v=20261009202254";
+import { componentHtml, findPart, semiType, SEMI_TYPES, datasheetLinks } from "./circuits.js?v=20261009202254";
 import { detectPack } from "./pack.js?v=20261009202254";
 import { inventory } from "./worker/src/records.js?v=20261009202254";
 import { footprintSvg, footprintCaption, kicadName } from "./footprints.js?v=20261009202254";
@@ -135,6 +135,8 @@ function cleanPart(p) {
     mpn: clip(p.mpn, 80), maker: clip(p.maker, 80), description: clip(p.description, 600),
     // Kategorien regnes ut på nytt med de nyeste reglene, med mindre den er satt for hånd.
     category: p.catManual && CAT_NAME[p.category] ? p.category : CAT_NAME[p.catHint] ? p.catHint : classify(p.title, [p.variant, p.shopCat].filter(Boolean).join(" ")), catManual: !!p.catManual,
+    // Delprodukt i et sett: id-en til hovedproduktet (settet).
+    parent: clip(p.parent, 200),
     location: clip(p.location, 80), note: clip(p.note, 400),
     added: clip(p.added, 30), updated: clip(p.updated, 30),
   };
@@ -925,7 +927,7 @@ async function importRows(rows, source, label, replaceOrders = []) {
   try {
     const { changed, added, updated, ids } = mergeImport(rows, source);
     const replace = new Set(replaceOrders.map(String));
-    const gone = pstate.parts.filter((p) => p.source === source && p.owner === ctx.userName() && replace.has(p.orderId) && !ids.has(p.id));
+    const gone = pstate.parts.filter((p) => p.source === source && p.owner === ctx.userName() && replace.has(p.orderId) && !p.parent && !ids.has(p.id));
     pstate.parts = pstate.parts.filter((p) => !gone.includes(p));
     log(`${label}: ${rows.length} varer lest, ${added} nye, ${updated} oppdatert${gone.length ? `, ${gone.length} plassholdere fjernet` : ""}.`);
     const ops = changed.map((p) => ({ id: p.id, data: p })).concat(gone.map((p) => ({ id: p.id, data: null })));
@@ -1221,6 +1223,60 @@ function filtered() {
 // Nøkkel: eier + butikk + produkt (AliExpress-varenummer, ellers delenummer eller tittel) + variant.
 const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const groupKey = (p) => [p.owner, p.source, p.itemId || norm(p.mpn) || norm(p.title), norm(p.variant)].join("|");
+// Sett (hovedprodukt) og delprodukter. Delprodukter er egne varer med lagerstatus og datablad.
+const kitParts = (p) => pstate.parts.filter((x) => x.parent === p.id).sort((a, b) => a.mpn.localeCompare(b.mpn, "en", { numeric: true }));
+const kitOf = (p) => (p.parent ? pstate.parts.find((x) => x.id === p.parent) || null : null);
+// «BC547 20», «BC547 x 20», «BC547» (antall fra feltet), eller en liste skilt med komma/linjeskift/mellomrom.
+function parseKitLines(text, defQty) {
+  const out = new Map();
+  for (const raw of String(text || "").split(/[\n,;]+/)) {
+    const t = raw.trim();
+    if (!t) continue;
+    const m = t.match(/^(\S+)(?:\s*[x×*:]\s*|\s+)(\d{1,6})$/i);
+    const items = m ? [[m[1], Number(m[2])]] : t.split(/\s+/).map((x) => [x, defQty]);
+    for (const [mpn, n] of items) {
+      const k = clip(mpn.replace(/[^\w.+-]/g, ""), 60).toUpperCase();
+      if (k) out.set(k, Math.max(1, n || defQty));
+    }
+  }
+  return [...out];
+}
+// Leser delenumrene ut av tittelen på et sett: «BC337 BC327 2N2222 … Assortment Kit 10value 200PCS».
+// Antall per type = totalt antall («200PCS») delt på antall typer («10value», ellers antall delenumre).
+function deriveKit(title) {
+  const t = String(title || "");
+  const skip = /^\d+(pcs?|pieces?|values?|kinds?|types?|pack|sets?|v|mm|cm|w|a|k|r|uf|nf|pf|ohms?)$/i;
+  const mpns = [];
+  for (const w of t.split(/[\s,;/]+/)) {
+    const k = w.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase();
+    if (k.length < 3 || k.length > 14 || !/^[A-Z0-9][A-Z0-9-]*$/.test(k) || !/[A-Z]/.test(k) || !/\d/.test(k) || skip.test(k) || mpns.includes(k)) continue;
+    mpns.push(k);
+  }
+  if (mpns.length < 2) return null;
+  const total = Number((t.match(/(\d{1,6})\s*(?:pcs?|pieces?|stk)\b/i) || [])[1]) || 0;
+  const kinds = Number((t.match(/(\d{1,4})\s*(?:values?|kinds?|types?)\b/i) || [])[1]) || mpns.length;
+  const each = total ? Math.max(1, Math.floor(total / kinds)) : 0;
+  return { mpns, each, total, kinds };
+}
+async function addKitParts(kit, entries) {
+  const now = new Date().toISOString(), made = [];
+  for (const [mpn, n] of entries) {
+    const id = `${kit.id}>${mpn}`;
+    pstate.deleted.delete(id);
+    const old = pstate.parts.find((x) => x.id === id);
+    if (old) { old.qty = n; old.left = null; old.updated = now; made.push(old); continue; }
+    const c = cleanPart({
+      id, parent: kit.id, source: kit.source, owner: kit.owner, title: mpn, mpn, qty: n, pack: 1, packManual: true,
+      orderId: kit.orderId, orderDate: kit.orderDate, status: kit.status, store: kit.store, storeUrl: kit.storeUrl,
+      location: kit.location, added: now, updated: now,
+    });
+    pstate.parts.push(c);
+    made.push(c);
+  }
+  render();
+  if (!ctx.DEMO) await savePatch(made.map((p) => ({ id: p.id, data: p })));
+  return made;
+}
 const siblings = (p) => { const k = groupKey(p); return visibleParts().filter((x) => groupKey(x) === k); };
 function groupParts(list) {
   const g = new Map();
@@ -1265,6 +1321,7 @@ function partCard(group) {
     <span class="part-body">
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
+      ${p.parent ? `<span class="kit-tag">Del av sett</span>` : kitParts(p).length ? `<span class="kit-tag">Sett · ${kitParts(p).length} delprodukter</span>` : ""}
       <span class="part-meta"><b>${ctx.esc(qty)}</b>${fmtMoney(p) ? ` · ${ctx.esc(fmtMoney(p))}/stk` : ""}</span>
       ${p.pkg ? `<span class="part-pkg" title="${ctx.esc(packageInfo(p.pkg))}">${footprintSvg(p.pkg, 24) || packageSvg(p.pkg, 22)}${ctx.esc(p.pkg)}</span>` : ""}
       <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(newest))}</span></span>
@@ -1582,6 +1639,7 @@ function openPart(id) {
           const left = sib.reduce((n, x) => n + remaining(x), 0), total = sib.reduce((n, x) => n + units(x), 0);
           return row("Alle kjøp", `<b>${total} stk</b> i ${sib.length} kjøp, ${left} igjen<ul class="buy-list">${sib.map((x) => `<li><button type="button" class="linkbtn${x.id === p.id ? " current" : ""}" data-sibling="${ctx.esc(x.id)}">${ctx.esc(fmtDate(x.orderDate) || "uten dato")} · ${units(x)} stk${fmtMoney(x) ? ` à ${ctx.esc(fmtMoney(x))}` : ""}${x.orderId ? ` · ordre ${ctx.esc(x.orderId)}` : ""}</button> <span class="hint">${remaining(x)} igjen</span></li>`).join("")}</ul>`);
         })()}
+        ${(() => { const k = kitOf(p); return k ? row("Del av sett", `<button type="button" class="linkbtn" data-sibling="${ctx.esc(k.id)}">${ctx.esc(k.title)}</button>${k.orderId ? ` <span class="hint">ordre ${ctx.esc(k.orderId)}</span>` : ""}`) : ""; })()}
         ${row("Butikk", `${ctx.esc(SOURCE_LABEL[p.source])}${p.store && p.store !== "Mouser" ? ` · ${p.storeUrl ? `<a href="${ctx.esc(p.storeUrl)}" target="_blank" rel="noopener">${ctx.esc(p.store)}</a>` : ctx.esc(p.store)}` : ""}`, "order-row")}
         ${row("Ordrenummer", ctx.esc(p.orderId), "order-row")}
         ${row("Status", ctx.esc(p.status), "order-row")}
@@ -1594,6 +1652,17 @@ function openPart(id) {
         ${row("Kategori hos butikken", ctx.esc(p.shopCat))}
         ${row("Datablad", p.datasheet ? `<a href="${ctx.esc(p.datasheet)}" target="_blank" rel="noopener">Åpne PDF ↗</a>` : "")}
       </table>
+      ${p.parent ? "" : (() => {
+        const kids = kitParts(p);
+        if (!kids.length && !mine) return "";
+        return `<section class="kit-box"><h3>Innhold i settet${kids.length ? ` <span class="hint">(${kids.length} delprodukter)</span>` : ""}</h3>
+          ${kids.length ? `<table class="kit-list"><thead><tr><th>Delprodukt</th><th>Igjen</th><th>Datablad</th></tr></thead><tbody>${kids.map((c) => `<tr><td><button type="button" class="linkbtn" data-sibling="${ctx.esc(c.id)}">${ctx.esc(c.mpn || c.title)}</button>${c.pkg ? ` <span class="hint">${ctx.esc(c.pkg)}</span>` : ""}</td><td>${remaining(c)} av ${units(c)} stk</td><td>${datasheetLinks(c.mpn || c.title).slice(0, 2).map((d) => `<a href="${ctx.esc(d.url)}" target="_blank" rel="noopener">${ctx.esc(d.label)} ↗</a>`).join(" · ")}</td></tr>`).join("")}</tbody></table>` : `<p class="hint">Ingen delprodukter ennå. Legg inn innholdet i settet, så får hver type eget kort, datablad og lagerstatus.</p>`}
+          ${mine && !kids.length && deriveKit(p.title) ? (() => { const d = deriveKit(p.title); return `<p class="kit-derive"><button type="button" class="btn btn-primary" data-derivekit>Opprett ${d.mpns.length} delprodukter fra tittelen${d.each ? ` × ${d.each} stk` : ""}</button> <span class="hint">${ctx.esc(d.mpns.join(", "))}</span></p>`; })() : ""}
+          ${mine ? `<div class="kit-add"><label class="grow">Legg til delprodukter (delenummer, ett per linje eller skilt med komma; «BC547 20» gir eget antall)<textarea id="pd-kit" rows="3" maxlength="2000" placeholder="BC327, BC337, BC517, BC547"></textarea></label>
+            <label>Antall hver<input id="pd-kitqty" type="number" min="1" max="100000" value="20"></label>
+            <button type="button" class="btn" data-addkit>Legg til</button></div><p class="hint kit-msg" role="status"></p>` : ""}
+        </section>`;
+      })()}
       <div class="part-edit">
         <label>Kategori<select id="pd-cat" ${mine ? "" : "disabled"}>${sortedCats().map(([cid, name]) => `<option value="${cid}"${cid === p.category ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select></label>
         <label>Stk per pakke<input id="pd-pack" type="number" min="1" max="100000" value="${p.pack}" ${mine ? "" : "disabled"}></label>
@@ -1669,7 +1738,8 @@ function openPart(id) {
     }
     const del = e.target.closest("[data-delconfirm]");
     if (del) {
-      const list = del.dataset.delconfirm === "all" ? siblings(p) : [p];
+      let list = del.dataset.delconfirm === "all" ? siblings(p) : [p];
+      list = list.concat(list.flatMap(kitParts));
       try {
         await deleteParts(list);
         dlg.close("");
@@ -1701,6 +1771,21 @@ function openPart(id) {
       const fig = sch.closest(".schematic-fig");
       const [title, caption] = [...fig.querySelectorAll("figcaption")].map((f) => f.textContent.trim());
       return openZoom(`<b>${ctx.esc(title || "Koblingsskjema")}</b>`, sch.innerHTML, caption ? `<p class="hint">${ctx.esc(caption)}</p>` : "", false);
+    }
+    if (e.target.closest("[data-derivekit]") && mine) {
+      const d = deriveKit(p.title), msg = dlg.querySelector(".kit-msg");
+      if (!d) return;
+      try { await addKitParts(p, d.mpns.map((m) => [m, d.each || 1])); ctx.setSync(`${d.mpns.length} delprodukter opprettet`); dlg.close(""); openPart(p.id); }
+      catch (err) { msg.textContent = err.message; }
+      return;
+    }
+    if (e.target.closest("[data-addkit]") && mine) {
+      const msg = dlg.querySelector(".kit-msg");
+      const entries = parseKitLines(dlg.querySelector("#pd-kit").value, Math.max(1, Math.round(Number(dlg.querySelector("#pd-kitqty").value) || 1)));
+      if (!entries.length) { msg.textContent = "Skriv inn minst ett delenummer."; return; }
+      try { await addKitParts(p, entries); ctx.setSync(`${entries.length} delprodukter lagret`); dlg.close(""); openPart(p.id); }
+      catch (err) { msg.textContent = err.message; }
+      return;
     }
     const sib = e.target.closest("[data-sibling]");
     if (sib) { dlg.close(""); openPart(sib.dataset.sibling); return; }

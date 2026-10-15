@@ -35,7 +35,7 @@ export const CATEGORIES = [
   ]],
   ["semi", "Halvledere", [
     [/\b(transistors?|mosfets?|igbt|darlington|thyristors?|triac|scr)\b/, 6], [/\b(diodes?|zener|schottky|rectifiers?|bridge rectifier|tvs)\b/, 5],
-    [/\b(\dn\d{4}a?|bc[58]\d\d[a-c]?|s80[0-9]{2}|s90[0-9]{2}|ss8050|2sc\d+|2sa\d+|tip1\d\d|tip[34]\d[a-c]?|irf\w+|irl\w+|ao3\d{3}|si23\d\d|si4\d{3}|bs170|2n700\d|mmbt\w+|1n4\d{3}|1n58\d\d|ss[1-5]4)\b/, 6],
+    [/\b(\dn\d{4}a?|bc[3458]\d\d[a-c]?|s80[0-9]{2}|s90[0-9]{2}|ss8050|2sc\d+|2sa\d+|tip1\d\d|tip[34]\d[a-c]?|irf\w+|irl\w+|ao3\d{3}|si23\d\d|si4\d{3}|bs170|2n700\d|mmbt\w+|1n4\d{3}|1n58\d\d|ss[1-5]4)\b/, 6],
     [/\b(ic|ics|chip|chips|integrated circuits?|op-?amp|opamp|comparator|regulator|ldo|ams1117\S*|lm\d{3,4}\w*|ne555|na555|74hc\d+\w*|74ls\d+|sn74\w+|cd4\d{3}\w*|uln2[08]03\w*|max\d{3,5}\w*|pcf\d+\w*|ch340\w*|cp210\d|optocouplers?|pc817\w*|el817|eeprom|at24c\d+|w25q\d+|tl431|tl0[78]\d\w*|lm358|lm393|l78\d\d|78\d\d|79\d\d|mt\d{4}\w*|cn\d{4}\w*|tm16\d\d\w*|tp\d{4}\w*|tps\d{4,6}\w*|tlv\d+\w*|ap\d{4}\w*|xc6206\w*|ht7\d{3}\w*|ms\d{4}\w*)\b/, 4],
     [/\b(sop|ssop|tssop|msop|soic|sot|qfn|qfp|lqfp|dip|to-?92|to-?220|to-?252|to-?263|sod)-?\d*\b|\bsma\b|\bsmb\b/, 2],
   ]],

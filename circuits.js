@@ -17,7 +17,8 @@ const PARTS = [
   // NPN
   [/\b(PN2222A?|2N2222A?|MMBT2222A?)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], alt: [{ re: /^MMBT/i, pkg: "SOT-23", pins: ["B", "E", "C"] }], note: "Opptil 600 mA." }],
   [/\b(2N3904|MMBT3904)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], alt: [{ re: /^MMBT/i, pkg: "SOT-23", pins: ["B", "E", "C"] }], note: "Opptil 200 mA." }],
-  [/\b(BC54[6-9][A-C]?|BC33[78](-\d+)?)\b/i, { kind: "npn", pkg: "TO-92", pins: ["C", "B", "E"], note: "Opptil 100 mA (BC337: 800 mA). Merk: C-B-E, motsatt av 2N2222." }],
+  [/\bBC517\b/i, { kind: "npn", pkg: "TO-92", pins: ["C", "B", "E"], note: "Darlington-transistor: 30 V, opptil 1,2 A, forsterkning over 30 000. Merk: C-B-E." }],
+  [/\b(BC54[6-9][A-C]?|BC550[A-C]?|BC33[78](-\d+)?)\b/i, { kind: "npn", pkg: "TO-92", pins: ["C", "B", "E"], note: "Opptil 100 mA (BC337: 800 mA). Merk: C-B-E, motsatt av 2N2222." }],
   [/\b(S8050|S9013|S9014|S9018|SS8050)\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "B", "C"], note: "S8050: opptil 500 mA." }],
   [/\b(TIP12[0-2]|TIP3[15][A-C]?|TIP41[A-C]?|BD13[5-9]|MJE13005)\b/i, { kind: "npn", pkg: "TO-220", pins: ["B", "C", "E"], note: "Effekttransistor. TIP120–122 er Darlington (ca. 1,4 V fall B–E)." }],
   [/\b2SC\d{3,4}\b/i, { kind: "npn", pkg: "TO-92", pins: ["E", "C", "B"], note: "Japanske 2SC-transistorer har ofte E-C-B. Sjekk databladet." }],

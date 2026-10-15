@@ -1261,3 +1261,12 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .to-top { position: fixed; bottom: 20px; right: max(12px, calc((100vw - 1200px) / 2 - 60px)); z-index: 40; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface, var(--bg)); color: var(--text); font-size: 22px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 10px #0003; }
 .to-top[hidden] { display: none; }
 .to-top:hover { border-color: var(--accent); color: var(--accent); }
+
+.kit-tag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--accent); margin: 2px 0; }
+.kit-box { margin: 14px 0; padding: 10px 12px; border: 1px solid var(--border, rgba(128,128,128,.35)); border-radius: 8px; }
+.kit-box h3 { margin: 0 0 6px; font-size: 14px; }
+.kit-list { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kit-list th, .kit-list td { text-align: left; padding: 3px 8px 3px 0; vertical-align: top; }
+.kit-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
+.kit-add .grow { flex: 1 1 240px; min-width: 0; }
+.kit-add textarea { width: 100%; box-sizing: border-box; }
