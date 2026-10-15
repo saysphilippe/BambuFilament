@@ -1284,7 +1284,7 @@ function deriveKit(title) {
   const mpns = [];
   for (const w of t.split(/[\s,;/]+/)) {
     const k = w.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase();
-    if (k.length < 3 || k.length > 14 || !/^[A-Z0-9][A-Z0-9-]*$/.test(k) || !/[A-Z]/.test(k) || !/\d/.test(k) || skip.test(k) || mpns.includes(k)) continue;
+    if (k.length < 3 || k.length > 14 || !/^[A-Z0-9][A-Z0-9.-]*$/.test(k) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(k) || !/[A-Z]/.test(k) || !/\d/.test(k) || skip.test(k) || mpns.includes(k)) continue;
     mpns.push(k);
   }
   if (mpns.length < 2) return null;

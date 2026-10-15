@@ -1350,7 +1350,7 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
   if (found.length >= 2 || /kit|assort|set\b/i.test(String(r.title))) {
     const passes = [
       "Look carefully at all printed text in this photo of a component kit. List EVERY distinct component part number printed on it, in the order they appear, including ones in small print. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
-      "This photo shows a kit with a printed table or list of component types or values. Transcribe each entry (part number or value such as 2.2uH or 100nF), written without spaces, one by one, column by column. Do not skip any and do not invent any. Ignore quantities like '10 Pcs' and tolerances like '10%'. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
+      "This photo shows a kit with a printed table or list of component types or values. Transcribe each entry (part number or value such as 2.2uH or 100nF), written without spaces, one by one, column by column. Do not skip any and do not invent any. Ignore quantities like '10 Pcs', tolerances like '10%', barcodes and serial numbers. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
     ];
     const more = await Promise.all(passes.map((p) => run(p).then((o) => o?.response ?? o?.result?.response ?? o?.choices?.[0]?.message?.content ?? "").catch(() => "")));
     for (const x of more) {
@@ -1359,6 +1359,10 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
       found = found.concat(toList(o?.parts));
     }
   }
+  // Settet er en verdiliste (2.2UH, 100NF, 4K7): da er alt annet (strekkodetekst, serienummer) støy som skal bort.
+  const valueRe = /^\d+(\.\d+)?(P|N|U|M|K|R)?(F|H)?$|^\d+[RKMPNU]\d+$/;
+  found = [...new Set(found)];
+  if (found.length >= 5 && found.filter((x) => valueRe.test(x)).length / found.length >= 0.6) found = found.filter((x) => valueRe.test(x));
   const partList = [...new Set(found)].sort((a, b) => a.localeCompare(b, "en", { numeric: true })).slice(0, 40);
   return { parts: partList, title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), tolerance: s(r.tolerance, 20).replace(/[^\d.,%±+\- ]/g, "").trim(), raw: j ? "" : s(text, 300) };
 }
