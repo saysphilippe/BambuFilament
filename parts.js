@@ -1261,12 +1261,17 @@ function deriveKit(title) {
 }
 // Et sett med én pakketype i tittelen (f.eks. «180PCS SOT-23 Transistor Kit») har samme fotavtrykk på alle delprodukter,
 // ikke det som følger av hvert enkelt delenummer (BC547 → TO-92). Butikkens egen pakkeangivelse (pkgFixed) går foran.
+// Alt annet som delproduktet ikke har selv (kategori, bilde, butikk, ordre, plassering) arves også fra settet.
 function inheritKitPkg(list) {
   for (const c of list) {
-    if (!c.parent || c.pkgFixed) continue;
+    if (!c.parent) continue;
     const k = pstate.parts.find((x) => x.id === c.parent);
-    const pkg = k && (findPackage(k.pkgFixed) || findPackage(k.variant, k.title));
-    if (pkg) c.pkg = pkg;
+    if (!k) continue;
+    const pkg = findPackage(k.pkgFixed) || findPackage(k.variant, k.title);
+    if (pkg && !c.pkgFixed) c.pkg = pkg;
+    if (!c.catManual) c.category = k.category;
+    if (!c.image && k.image) { c.image = k.image; c.imgSearch = k.imgSearch; c.imgWeb = k.imgWeb; c.imgWebSrc = k.imgWebSrc; }
+    for (const f of ["shopCat", "catHint", "maker", "url", "store", "storeUrl", "orderId", "orderDate", "status", "location", "owner"]) if (!c[f] && k[f]) c[f] = k[f];
   }
 }
 async function addKitParts(kit, entries) {
