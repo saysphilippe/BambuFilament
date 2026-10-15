@@ -1219,7 +1219,7 @@ const visibleParts = () => {
 
 // Søk i verdier (2,2 uH, 100nF, ±10 %): µ = u, komma = punktum, og mellomrom mellom tall og enhet (2.2 uH = 2.2uh), ± og % tåles.
 const valueForm = (t) => String(t || "").toLowerCase().replace(/[µμ]/g, "u").replace(/±/g, "").replace(/(\d),(\d)/g, "$1.$2")
-  .replace(/(\d)\s+(?=[a-zΩ%])/g, "$1").replace(/\s+/g, " ").trim();
+  .replace(/[\u03c9\u03a9\u2126]|\bohms?\b/g, "").replace(/(\d)\s+(?=[a-z%])/g, "$1").replace(/\s+/g, " ").trim();
 const matchesQ = (p, q) => {
   if (!q) return true;
   const hay = [p.manualNo ? `m-${p.manualNo}` : "", p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, p.pkg, p.description, CAT_NAME[p.category], p.owner].join(" ");
@@ -1263,25 +1263,25 @@ const kitParts = (p) => pstate.parts.filter((x) => x.parent === p.id).sort((a, b
 const kitOf = (p) => (p.parent ? pstate.parts.find((x) => x.id === p.parent) || null : null);
 // «BC547 20», «BC547 x 20», «BC547» (antall fra feltet), eller en liste skilt med komma/linjeskift/mellomrom.
 function normValue(t) {
-  const m = /^(\d+(?:\.\d+)?)([pnuµμmMkKG]?)(H|F|Ω|R|OHM)?$/i.exec(String(t || "").replace(",", ".").trim());
+  const m = /^(\d+(?:\.\d+)?)([pnuµμmMkKG]?)(H|F|Ω|R|OHM)?$/i.exec(String(t || "").replace(/\u2126/g, "\u03a9").replace(",", ".").trim());
   if (!m || (!m[2] && !m[3])) return null;
   const unit = /^[HF]$/i.test(m[3] || "") ? m[3].toUpperCase() : /^ohm$/i.test(m[3] || "") ? "Ω" : m[3] || "";
   let pre = m[2];
   if (/[µμUu]/.test(pre)) pre = "u";
   else if (/[nN]/.test(pre)) pre = "n";
   else if (/[pP]/.test(pre)) pre = "p";
-  else if (/[kK]/.test(pre)) pre = "k";
+  else if (/[kK]/.test(pre)) pre = unit === "H" || unit === "F" ? "k" : "K";
   else if (/[mM]/.test(pre)) pre = unit === "H" || unit === "F" ? "m" : pre;
   return m[1] + pre + unit;
 }
 // Står delenummeret som eget ord i tittelen? («1UH» står ikke i «1UH-4.7MH», som er et område.)
-const titleHas = (title, n) => String(title).split(/[\s,;/]+/).some((w) => w.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase() === String(n).toUpperCase());
+const titleHas = (title, n) => String(title).split(/[\s,;/]+/).some((w) => partCase(w.replace(/^[^\w]+|[^\w\u03a9\u2126]+$/g, "")) === String(n) || w.replace(/^[^\w]+|[^\w\u03a9\u2126]+$/g, "").toUpperCase() === String(n).toUpperCase());
 const partCase = (t) => normValue(t) || String(t).toUpperCase();
 // Sorteringsnøkkel for verdier: 1uH før 100uH før 1mH (størrelsen, ikke teksten). Delenumre har ingen nøkkel.
 const valueKey = (t) => {
-  const m = /^(\d+(?:\.\d+)?)([pnumkMG]?)/.exec(String(t || ""));
+  const m = /^(\d+(?:\.\d+)?)([pnumkKMG]?)/.exec(String(t || ""));
   if (!m || !normValue(t)) return null;
-  return Number(m[1]) * ({ p: 1e-12, n: 1e-9, u: 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9 }[m[2]] || 1);
+  return Number(m[1]) * ({ p: 1e-12, n: 1e-9, u: 1e-6, m: 1e-3, k: 1e3, K: 1e3, M: 1e6, G: 1e9 }[m[2]] || 1);
 };
 const byValue = (a, b) => { const x = valueKey(a), y = valueKey(b); return x !== null && y !== null && x !== y ? x - y : String(a).localeCompare(String(b), "en", { numeric: true }); };
 
@@ -1293,7 +1293,7 @@ function parseKitLines(text, defQty) {
     const m = t.match(/^(\S+)(?:\s*[x×*:]\s*|\s+)(\d{1,6})$/i);
     const items = m ? [[m[1], Number(m[2])]] : t.split(/\s+/).map((x) => [x, defQty]);
     for (const [mpn, n] of items) {
-      const k = partCase(clip(mpn.replace(/[µμ]/g, "u").replace(/[^\w.+Ω-]/g, ""), 60));
+      const k = partCase(clip(mpn.replace(/[µμ]/g, "u").replace(/[^\w.+Ω\u2126-]/g, ""), 60));
       if (k) out.set(k, Math.max(1, n || defQty));
     }
   }
@@ -1306,8 +1306,12 @@ function deriveKit(title) {
   const skip = /^\d+(pcs?|pieces?|values?|kinds?|types?|pack|sets?|v|mm|cm|w|a|k|r|uf|nf|pf|ohms?)$/i;
   const mpns = [];
   for (const w of t.split(/[\s,;/]+/)) {
-    const k = partCase(w.replace(/[µμ]/g, "u").replace(/^[^\w]+|[^\w]+$/g, "")), K = k.toUpperCase();
-    if (k.length < 3 || k.length > 14 || !/^[A-Z0-9][A-Z0-9.-]*$/.test(K) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(K) || !/[A-Z]/.test(K) || !/\d/.test(K) || skip.test(K) || mpns.includes(k)) continue;
+    const k = partCase(w.replace(/[µμ]/g, "u").replace(/^[^\w]+|[^\w\u03a9\u2126]+$/g, "")), K = k.toUpperCase();
+    const isVal = !!normValue(k);
+    if (k.length < 3 || k.length > 14 || (!isVal && (!/^[A-Z0-9][A-Z0-9.-]*$/.test(K) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(K) || !/[A-Z]/.test(K) || !/\d/.test(K) || skip.test(K))) || mpns.includes(k)) continue;
+    // 10K (uten enhet) og 10KΩ er samme verdi: behold varianten med Ω.
+    const bare = k.replace(/Ω$/, ""), at = mpns.findIndex((x) => x.replace(/Ω$/, "") === bare);
+    if (at >= 0) { if (k.endsWith("Ω")) mpns[at] = k; continue; }
     mpns.push(k);
   }
   if (mpns.length < 2) return null;
