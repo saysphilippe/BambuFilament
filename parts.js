@@ -2020,12 +2020,18 @@ function openPart(id) {
       ${p.parent ? "" : (() => {
         const kids = kitParts(p);
         if (!kids.length && !mine) return "";
-        return `<section class="kit-box"><h3>Innhold i settet${kids.length ? ` <span class="hint">(${kids.length} delprodukter)</span>` : ""}</h3>
-          ${kids.length ? `<table class="kit-list"><thead><tr><th>Delprodukt</th><th>Igjen</th><th>Datablad</th></tr></thead><tbody>${kids.map((c) => `<tr><td><button type="button" class="linkbtn" data-sibling="${ctx.esc(c.id)}">${ctx.esc(c.mpn || c.title)}</button>${c.pkg ? ` <span class="hint">${ctx.esc(c.pkg)}</span>` : ""}</td><td>${remaining(c)} av ${units(c)} stk</td><td>${datasheetLinks(c.mpn || c.title).slice(0, 2).map((d) => `<a href="${ctx.esc(d.url)}" target="_blank" rel="noopener">${ctx.esc(d.label)} ↗</a>`).join(" · ")}</td></tr>`).join("")}</tbody></table>` : `<p class="hint">Ingen delprodukter ennå. Legg inn innholdet i settet, så får hver type eget kort, datablad og lagerstatus.</p>`}
+        const tot = kids.reduce((n, c) => n + units(c), 0), left = kids.reduce((n, c) => n + remaining(c), 0);
+        return `<section class="kit-box"><h3>Innhold i settet</h3>
+          ${kids.length ? `<p class="kit-sum"><b>${kids.length}</b> typer · <b>${tot}</b> stk totalt · <b>${left}</b> igjen</p>
+          <ul class="kit-grid">${kids.map((c) => {
+            const u = units(c), r = remaining(c), pct = u ? Math.max(0, Math.min(100, Math.round((100 * r) / u))) : 0;
+            const ds = datasheetLinks(c.mpn || c.title)[0];
+            return `<li class="kit-tile${r === 0 ? " empty" : ""}"><button type="button" class="kit-tile-main" data-sibling="${ctx.esc(c.id)}" title="${ctx.esc(c.description || "")}"><span class="kit-name">${ctx.esc(c.mpn || c.title)}</span><span class="kit-stock">${r} av ${u} stk</span><span class="kit-bar"><i style="width:${pct}%"></i></span>${c.description ? `<span class="kit-desc">${ctx.esc(c.description)}</span>` : ""}</button>${ds ? `<a class="kit-ds" href="${ctx.esc(ds.url)}" target="_blank" rel="noopener">Datablad ↗</a>` : ""}</li>`;
+          }).join("")}</ul>` : `<p class="hint">Ingen delprodukter ennå. Legg inn innholdet i settet, så får hver type eget kort, datablad og lagerstatus.</p>`}
           ${mine && !kids.length && deriveKit(p.title) ? (() => { const d = deriveKit(p.title); return `<p class="kit-derive"><button type="button" class="btn btn-primary" data-derivekit>Opprett ${d.mpns.length} delprodukter fra tittelen${d.each ? ` × ${d.each} stk` : ""}</button> <span class="hint">${ctx.esc(d.mpns.join(", "))}</span></p>`; })() : ""}
-          ${mine ? `<div class="kit-add"><label class="grow">Legg til delprodukter (delenummer, ett per linje eller skilt med komma; «BC547 20» gir eget antall)<textarea id="pd-kit" rows="3" maxlength="2000" placeholder="BC327, BC337, BC517, BC547"></textarea></label>
+          ${mine ? `<details class="kit-add-box"${kids.length ? "" : " open"}><summary>Legg til delprodukter</summary><div class="kit-add"><label class="grow">Delenummer, ett per linje eller skilt med komma; «BC547 20» gir eget antall<textarea id="pd-kit" rows="3" maxlength="2000" placeholder="BC327, BC337, BC517, BC547"></textarea></label>
             <label>Antall hver<input id="pd-kitqty" type="number" min="1" max="100000" value="20"></label>
-            <button type="button" class="btn" data-addkit>Legg til</button></div><p class="hint kit-msg" role="status"></p>` : ""}
+            <button type="button" class="btn" data-addkit>Legg til</button></div><p class="hint kit-msg" role="status"></p></details>` : ""}
         </section>`;
       })()}
       <div class="part-edit">
