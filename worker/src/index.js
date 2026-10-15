@@ -1314,7 +1314,7 @@ async function fetchImageDataUrl(url) {
   throw fail("Fant ikke bildet, eller det er for stort.", 502);
 }
 
-async function aiDescribe({ image: imageIn, imageUrl, cats }, env) {
+async function aiDescribe({ image: imageIn, imageUrl, cats, tiles: tilesIn }, env) {
   if (!env.AI) throw fail("Bildetolkning er ikke slått på (mangler AI-binding).", 503);
   const image = imageUrl ? await fetchImageDataUrl(imageUrl) : imageIn;
   const m =/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(image || ""));
@@ -1347,7 +1347,7 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
   else try { r = JSON.parse(j ? j[0] : "{}"); } catch { /* ukjent svarformat */ }
   const s = (v, n) => String(Array.isArray(v) ? v.join(" ") : v ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
   const catId = list.some((c) => c.id === r.category) ? r.category : "";
-  const toList = (v) => (Array.isArray(v) ? v : String(v || "").split(/[\s,;]+/)).map((x) => s(x, 30).toUpperCase().replace(/[^\w.+-]/g, "")).filter((x) => x.length >= 3);
+  const toList = (v) => (Array.isArray(v) ? v : String(v || "").split(/[\s,;]+/)).map((x) => s(x, 30).toUpperCase().replace(/[^\w.+-]/g, "")).filter((x) => x.length >= 3 && !/^\d+(PCS?|PIECES?|VALUES?|KINDS?|TYPES?|STK)$/.test(x));
   // Modellen overser ofte ett eller to delenumre per runde (ulike hver gang). For sett leses bildet derfor to ganger til
   // med egne «list opp alt»-spørsmål, og delenumrene slås sammen.
   let found = toList(r.parts);
@@ -1356,7 +1356,11 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
       "Look carefully at all printed text in this photo of a component kit. List EVERY distinct component part number printed on it, in the order they appear, including ones in small print. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
       "This photo shows a kit with a printed table or list of component types. Transcribe each part number, one by one, left to right and top to bottom. Do not skip any and do not invent any. Reply with ONE JSON object only: {\"parts\": [\"...\"]}",
     ];
-    const more = await Promise.all(passes.map((p) => run({ prompt: p, image: m[2] }).then((o) => o?.response ?? o?.result?.response ?? "").catch(() => "")));
+    // Små tabeller leses best i utsnitt: nettleseren sender fire overlappende, forstørrede utsnitt, og hvert leses for seg.
+    const tilePass = "This is a zoomed-in crop of a photo of a component kit with a printed table or list. List EVERY component part number or value printed in this crop, one entry each, written without spaces (e.g. BC547, 10K, 2.2uH, 100nF). Ignore quantities like '10 Pcs' and tolerances like '10%'. Reply with ONE JSON object only: {\"parts\": [\"...\"]}";
+    const tiles = (Array.isArray(tilesIn) ? tilesIn : []).slice(0, 4).map((t) => /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(t || ""))?.[1]).filter((t) => t && t.length < 700000);
+    const jobs = [...passes.map((p) => [p, m[2]]), ...tiles.map((t) => [tilePass, t])];
+    const more = await Promise.all(jobs.map(([p, img]) => run({ prompt: p, image: img }).then((o) => o?.response ?? o?.result?.response ?? "").catch(() => "")));
     for (const x of more) {
       let o = x;
       if (typeof x === "string") { const jj = /\{[\s\S]*\}/.exec(x); try { o = JSON.parse(jj ? jj[0] : "{}"); } catch { o = {}; } }

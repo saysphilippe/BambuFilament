@@ -1668,6 +1668,24 @@ async function shrinkImage(file, maxSide = 800, maxLen = OWN_IMG_MAX) {
   }
   throw new Error("Bildet ble for stort selv etter krymping. Prøv et enklere bilde.");
 }
+// Fire overlappende, forstørrede utsnitt (2 × 2) til bildetolkningen. Små tabeller på settets eske leses mye bedre slik.
+async function imageTiles(source) {
+  const bmp = await createImageBitmap(source);
+  const tw = Math.round(bmp.width * 0.58), th = Math.round(bmp.height * 0.58);
+  const k = Math.min(2, 900 / Math.max(tw, th));
+  const out = [];
+  for (const [fx, fy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(tw * k);
+    cv.height = Math.round(th * k);
+    const g = cv.getContext("2d");
+    g.fillStyle = "#fff";
+    g.fillRect(0, 0, cv.width, cv.height);
+    g.drawImage(bmp, fx * (bmp.width - tw), fy * (bmp.height - th), tw, th, 0, 0, cv.width, cv.height);
+    out.push(cv.toDataURL("image/jpeg", 0.82));
+  }
+  return out;
+}
 
 function openNewPart() {
   let dlg = ctx.$("#newpart-dialog");
@@ -1677,7 +1695,7 @@ function openNewPart() {
     dlg.className = "wide-dialog part-dialog";
     document.body.appendChild(dlg);
   }
-  let image = "", aiImage = ""; // aiImage: større utgave bare til bildetolkningen (liten skrift leses bedre), lagres ikke
+  let image = "", aiImage = "", aiTiles = []; // aiImage: større utgave bare til bildetolkningen (liten skrift leses bedre), lagres ikke
   dlg.innerHTML = `<button type="button" class="dlg-close" aria-label="Lukk" title="Lukk (Esc)">×</button>
   <form class="newpart" method="dialog">
     <h2>Nytt produkt</h2>
@@ -1720,6 +1738,7 @@ function openNewPart() {
     try {
       image = await shrinkImage(f);
       aiImage = await shrinkImage(f, 1400, 600000).catch(() => image);
+      aiTiles = await imageTiles(f).catch(() => []);
       $(".np-preview").innerHTML = `<img src="${ctx.esc(image)}" alt="Forhåndsvisning">`;
       $("[data-npsuggest]").disabled = false;
       msg(`Bildet er klart (${Math.round(image.length / 1024)} kB).`);
@@ -1731,7 +1750,7 @@ function openNewPart() {
     msg("Leser bildet …");
     try {
       if (ctx.DEMO) throw new Error("Bildetolkning er ikke tilgjengelig i demoen.");
-      const r = await ctx.dbCall("/ai/describe", { image: aiImage || image, cats: sortedCats().map(([id, name]) => ({ id, name })) });
+      const r = await ctx.dbCall("/ai/describe", { image: aiImage || image, tiles: aiTiles, cats: sortedCats().map(([id, name]) => ({ id, name })) });
       const put = (sel, v) => { if (v && !$(sel).value.trim()) $(sel).value = v; };
       // Alle delenumre i et sett skal stå i tittelen (som i butikklistinger), så delproduktene kan utledes fra den.
       const names = r.parts?.length ? r.parts : String(r.mpn).split(/[\s,;]+/).filter(Boolean).length > 1 ? String(r.mpn).split(/[\s,;]+/).filter(Boolean) : [];
@@ -1801,23 +1820,25 @@ function dataUrlToBlob(url) {
 }
 async function readImageWithAi(p) {
   const cats = sortedCats().map(([id, name]) => ({ id, name }));
-  if (p.image.startsWith("data:")) {
-    const image = await shrinkImage(dataUrlToBlob(p.image), 1400, 600000).catch(() => p.image);
-    return ctx.dbCall("/ai/describe", { image, cats });
-  }
   // Butikkbilder tillater lesing fra andre sider (CORS). Nettleseren laster dem som bilde (CSP tillater det, ikke fetch),
   // krymper dem og sender dem selv. Workeren henter bildet bare hvis det ikke går.
-  let image = "";
+  let src = null;
   try {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.referrerPolicy = "no-referrer";
-    img.src = p.image.replace(/_\d+x\d+\.(jpg|png|webp)$/i, "");
-    await img.decode();
-    image = await shrinkImage(img, 1400, 600000);
+    if (p.image.startsWith("data:")) src = dataUrlToBlob(p.image);
+    else {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.referrerPolicy = "no-referrer";
+      img.src = p.image.replace(/_\d+x\d+\.(jpg|png|webp)$/i, "");
+      await img.decode();
+      src = img;
+    }
   } catch { /* faller tilbake til Workeren */ }
-  if (image) return ctx.dbCall("/ai/describe", { image, cats });
-  return ctx.dbCall("/ai/describe", { imageUrl: p.image, cats });
+  if (!src) return ctx.dbCall("/ai/describe", { imageUrl: p.image, cats });
+  const image = await shrinkImage(src, 1400, 600000).catch(() => (p.image.startsWith("data:") ? p.image : ""));
+  const tiles = await imageTiles(src).catch(() => []);
+  if (!image) return ctx.dbCall("/ai/describe", { imageUrl: p.image, cats, tiles });
+  return ctx.dbCall("/ai/describe", { image, cats, tiles });
 }
 // r: svaret fra bildetolkningen (eller null). Returnerer rader {key, label, now, next, checked} og eventuelle nye delprodukter.
 function proposeChanges(p, r) {
