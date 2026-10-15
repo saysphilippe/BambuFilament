@@ -1618,6 +1618,8 @@ export default {
     "(ingen)": "(none)",
     "{*} fra før": "{*} existing",
     "stk hver": "pcs each",
+    "Skrivemåte": "Spelling",
+    "({*} delprodukter, m = milli, M = mega, u = mikro)": "({*} sub-products, m = milli, M = mega, u = micro)",
     "Overskriften sier {*} typer, men bare {*} er funnet. Legg til resten for hånd i feltet.": "The title says {*} types, but only {*} were found. Add the rest by hand in the field.",
     "Bruk valgte": "Apply selected",
     "Velg minst én endring.": "Select at least one change.",

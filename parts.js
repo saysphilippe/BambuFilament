@@ -1259,9 +1259,30 @@ function filtered() {
 const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 const groupKey = (p) => [p.owner, p.source, p.itemId || norm(p.mpn) || norm(p.title), norm(p.variant)].join("|");
 // Sett (hovedprodukt) og delprodukter. Delprodukter er egne varer med lagerstatus og datablad.
-const kitParts = (p) => pstate.parts.filter((x) => x.parent === p.id).sort((a, b) => a.mpn.localeCompare(b.mpn, "en", { numeric: true }));
+const kitParts = (p) => pstate.parts.filter((x) => x.parent === p.id).sort((a, b) => byValue(a.mpn, b.mpn));
 const kitOf = (p) => (p.parent ? pstate.parts.find((x) => x.id === p.parent) || null : null);
 // «BC547 20», «BC547 x 20», «BC547» (antall fra feltet), eller en liste skilt med komma/linjeskift/mellomrom.
+function normValue(t) {
+  const m = /^(\d+(?:\.\d+)?)([pnuµμmMkKG]?)(H|F|Ω|R|OHM)?$/i.exec(String(t || "").replace(",", ".").trim());
+  if (!m || (!m[2] && !m[3])) return null;
+  const unit = /^[HF]$/i.test(m[3] || "") ? m[3].toUpperCase() : /^ohm$/i.test(m[3] || "") ? "Ω" : m[3] || "";
+  let pre = m[2];
+  if (/[µμUu]/.test(pre)) pre = "u";
+  else if (/[nN]/.test(pre)) pre = "n";
+  else if (/[pP]/.test(pre)) pre = "p";
+  else if (/[kK]/.test(pre)) pre = "k";
+  else if (/[mM]/.test(pre)) pre = unit === "H" || unit === "F" ? "m" : pre;
+  return m[1] + pre + unit;
+}
+const partCase = (t) => normValue(t) || String(t).toUpperCase();
+// Sorteringsnøkkel for verdier: 1uH før 100uH før 1mH (størrelsen, ikke teksten). Delenumre har ingen nøkkel.
+const valueKey = (t) => {
+  const m = /^(\d+(?:\.\d+)?)([pnumkMG]?)/.exec(String(t || ""));
+  if (!m || !normValue(t)) return null;
+  return Number(m[1]) * ({ p: 1e-12, n: 1e-9, u: 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9 }[m[2]] || 1);
+};
+const byValue = (a, b) => { const x = valueKey(a), y = valueKey(b); return x !== null && y !== null && x !== y ? x - y : String(a).localeCompare(String(b), "en", { numeric: true }); };
+
 function parseKitLines(text, defQty) {
   const out = new Map();
   for (const raw of String(text || "").split(/[\n,;]+/)) {
@@ -1270,7 +1291,7 @@ function parseKitLines(text, defQty) {
     const m = t.match(/^(\S+)(?:\s*[x×*:]\s*|\s+)(\d{1,6})$/i);
     const items = m ? [[m[1], Number(m[2])]] : t.split(/\s+/).map((x) => [x, defQty]);
     for (const [mpn, n] of items) {
-      const k = clip(mpn.replace(/[^\w.+-]/g, ""), 60).toUpperCase();
+      const k = partCase(clip(mpn.replace(/[µμ]/g, "u").replace(/[^\w.+Ω-]/g, ""), 60));
       if (k) out.set(k, Math.max(1, n || defQty));
     }
   }
@@ -1283,8 +1304,8 @@ function deriveKit(title) {
   const skip = /^\d+(pcs?|pieces?|values?|kinds?|types?|pack|sets?|v|mm|cm|w|a|k|r|uf|nf|pf|ohms?)$/i;
   const mpns = [];
   for (const w of t.split(/[\s,;/]+/)) {
-    const k = w.replace(/^[^\w]+|[^\w]+$/g, "").toUpperCase();
-    if (k.length < 3 || k.length > 14 || !/^[A-Z0-9][A-Z0-9.-]*$/.test(k) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(k) || !/[A-Z]/.test(k) || !/\d/.test(k) || skip.test(k) || mpns.includes(k)) continue;
+    const k = partCase(w.replace(/[µμ]/g, "u").replace(/^[^\w]+|[^\w]+$/g, "")), K = k.toUpperCase();
+    if (k.length < 3 || k.length > 14 || !/^[A-Z0-9][A-Z0-9.-]*$/.test(K) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(K) || !/[A-Z]/.test(K) || !/\d/.test(K) || skip.test(K) || mpns.includes(k)) continue;
     mpns.push(k);
   }
   if (mpns.length < 2) return null;
@@ -1831,12 +1852,12 @@ function proposeChanges(p, r) {
   const rows = [];
   const own = deriveKit(p.title)?.mpns || [];
   const fromImg = r?.parts?.length ? r.parts : String(r?.mpn || "").split(/[\s,;]+/).filter((x) => x.length >= 3).length > 1 ? String(r.mpn).split(/[\s,;]+/).filter((x) => x.length >= 3) : [];
-  const names = [...new Set([...own, ...fromImg.map((x) => x.toUpperCase())])];
+  const names = [...new Set([...own, ...fromImg.map(partCase)])];
   // Alle delenumre i et sett skal stå i overskriften (som i butikklistinger), så delproduktene kan utledes fra den.
   let title = p.title;
   if (!title && r?.title) title = r.title;
   const kitLike = names.length >= 3 || fromImg.length >= 2 || /\b(kit|assort\w*|sets?|\d+\s*values?|\d+\s*kinds?|\d+\s*types?)\b/i.test(p.title);
-  const missing = names.length >= 2 && kitLike ? names.filter((n) => !title.toUpperCase().includes(n)) : [];
+  const missing = names.length >= 2 && kitLike ? names.filter((n) => !title.toUpperCase().includes(n.toUpperCase())) : [];
   if (missing.length) title = `${title} ${missing.join(",")}`.trim();
   title = clip(title, 300);
   if (title && title !== p.title) rows.push({ key: "title", label: "Overskrift", now: p.title, next: title, checked: true });
@@ -1852,8 +1873,10 @@ function proposeChanges(p, r) {
   if (r?.category && CAT_NAME[r.category] && r.category !== p.category) rows.push({ key: "category", label: "Kategori", now: CAT_NAME[p.category], next: r.category, checked: p.category === "other" && !p.catManual });
   const kit = p.parent || !kitLike ? null : deriveKit(title);
   const have = new Set(kitParts(p).map((k) => k.mpn.toUpperCase()));
-  const fresh = kit ? kit.mpns.filter((m) => !have.has(m)) : [];
-  return { rows, kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null };
+  const fresh = kit ? kit.mpns.filter((m) => !have.has(m.toUpperCase())) : [];
+  // Delprodukter med verdier skrevet med feil liten/stor bokstav (1UH i stedet for 1uH, MH i stedet for mH).
+  const fix = kitParts(p).filter((k) => normValue(k.mpn) && normValue(k.mpn) !== k.mpn).map((k) => [k.id, k.mpn, normValue(k.mpn)]);
+  return { rows, fix, kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null };
 }
 function renderProposal(dlg, p, prop, note) {
   const box = dlg.querySelector(".ai-box");
@@ -1862,8 +1885,9 @@ function renderProposal(dlg, p, prop, note) {
     : `<input type="text" data-aival="${r.key}" value="${ctx.esc(r.next)}" maxlength="${r.key === "description" ? 600 : 300}">`;
   const body = prop.rows.map((r) => `<tr><td><label><input type="checkbox" data-aikey="${r.key}"${r.checked ? " checked" : ""}> ${ctx.esc(r.label)}</label></td><td class="ai-now">${ctx.esc(r.now || "(tomt)")}</td><td>${cell(r)}</td></tr>`).join("");
   const kit = prop.kit ? `<tr><td><label><input type="checkbox" data-aikey="kit" checked> Delprodukter</label></td><td class="ai-now">${prop.kit.had ? `${prop.kit.had} fra før` : "(ingen)"}</td><td><input type="text" data-aikitlist maxlength="1500" value="${ctx.esc(prop.kit.mpns.join(", "))}"> <span class="hint">× <input type="number" data-aikitqty min="1" max="100000" value="${prop.kit.each}"> stk hver</span>${prop.kit.kinds && prop.kit.had + prop.kit.mpns.length < prop.kit.kinds ? `<br><span class="hint ai-missing">Overskriften sier ${prop.kit.kinds} typer, men bare ${prop.kit.had + prop.kit.mpns.length} er funnet. Legg til resten for hånd i feltet.</span>` : ""}</td></tr>` : "";
+  const fix = prop.fix?.length ? `<tr><td><label><input type="checkbox" data-aikey="fixcase" checked> Skrivemåte</label></td><td class="ai-now">${ctx.esc(prop.fix.slice(0, 8).map((x) => x[1]).join(", "))}${prop.fix.length > 8 ? " …" : ""}</td><td>${ctx.esc(prop.fix.slice(0, 8).map((x) => x[2]).join(", "))}${prop.fix.length > 8 ? " …" : ""} <span class="hint">(${prop.fix.length} delprodukter, m = milli, M = mega, u = mikro)</span></td></tr>` : "";
   box.innerHTML = `<h3>Forslag til endringer</h3>${note ? `<p class="hint">${ctx.esc(note)}</p>` : ""}
-    ${body || kit ? `<table class="ai-table"><thead><tr><th>Felt</th><th>Nå</th><th>Forslag</th></tr></thead><tbody>${body}${kit}</tbody></table>
+    ${body || kit || fix ? `<table class="ai-table"><thead><tr><th>Felt</th><th>Nå</th><th>Forslag</th></tr></thead><tbody>${body}${fix}${kit}</tbody></table>
     <p><button type="button" class="btn btn-primary" data-aiapply>Bruk valgte</button> <span class="hint ai-apply-msg" role="status"></span></p>` : `<p class="hint">Ingen endringer å foreslå.</p>`}`;
   box.hidden = false;
   dlg._ai = prop;
@@ -1895,6 +1919,10 @@ async function applyProposal(dlg, p, btn) {
   Object.assign(p, cleanPart(p));
   try {
     await saveOne(p);
+    if (on.has("fixcase") && prop.fix?.length) {
+      for (const [id, , good] of prop.fix) { const k = pstate.parts.find((x) => x.id === id); if (k) { k.mpn = good; k.title = good; } }
+      await savePatch(prop.fix.map(([id]) => pstate.parts.find((x) => x.id === id)).filter(Boolean).map((k) => ({ id: k.id, data: k })));
+    }
     if (on.has("kit") && prop.kit) {
       const each = Math.max(1, Math.round(Number(box.querySelector("[data-aikitqty]")?.value) || 1));
       const typed = parseKitLines(box.querySelector("[data-aikitlist]")?.value || "", each);

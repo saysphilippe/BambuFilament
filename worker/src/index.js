@@ -1315,6 +1315,27 @@ async function fetchImageDataUrl(url) {
   throw fail("Fant ikke bildet, eller det er for stort.", 502);
 }
 
+function normValue(t) {
+  const m = /^(\d+(?:\.\d+)?)([pnuµμmMkKG]?)(H|F|Ω|R|OHM)?$/i.exec(String(t || "").replace(",", ".").trim());
+  if (!m || (!m[2] && !m[3])) return null;
+  const unit = /^[HF]$/i.test(m[3] || "") ? m[3].toUpperCase() : /^ohm$/i.test(m[3] || "") ? "Ω" : m[3] || "";
+  let pre = m[2];
+  if (/[µμUu]/.test(pre)) pre = "u";
+  else if (/[nN]/.test(pre)) pre = "n";
+  else if (/[pP]/.test(pre)) pre = "p";
+  else if (/[kK]/.test(pre)) pre = "k";
+  else if (/[mM]/.test(pre)) pre = unit === "H" || unit === "F" ? "m" : pre;
+  return m[1] + pre + unit;
+}
+
+// Sorteringsnøkkel for verdier: 1uH før 100uH før 1mH (størrelsen, ikke teksten). Delenumre har ingen nøkkel.
+const valueKey = (t) => {
+  const m = /^(\d+(?:\.\d+)?)([pnumkMG]?)/.exec(String(t || ""));
+  if (!m || !normValue(t)) return null;
+  return Number(m[1]) * ({ p: 1e-12, n: 1e-9, u: 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9 }[m[2]] || 1);
+};
+const byValue = (a, b) => { const x = valueKey(a), y = valueKey(b); return x !== null && y !== null && x !== y ? x - y : String(a).localeCompare(String(b), "en", { numeric: true }); };
+
 async function aiDescribe({ image: imageIn, imageUrl, cats }, env) {
   if (!env.AI) throw fail("Bildetolkning er ikke slått på (mangler AI-binding).", 503);
   const image = imageUrl ? await fetchImageDataUrl(imageUrl) : imageIn;
@@ -1343,7 +1364,7 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
   else try { r = JSON.parse(j ? j[0] : "{}"); } catch { /* ukjent svarformat */ }
   const s = (v, n) => String(Array.isArray(v) ? v.join(" ") : v ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
   const catId = list.some((c) => c.id === r.category) ? r.category : "";
-  const toList = (v) => (Array.isArray(v) ? v : String(v || "").split(/[\s,;]+/)).map((x) => s(x, 30).toUpperCase().replace(/[^\w.+-]/g, "")).filter((x) => x.length >= 3 && !/^\d+(PCS?|PIECES?|VALUES?|KINDS?|TYPES?|STK)$/.test(x));
+  const toList = (v) => (Array.isArray(v) ? v : String(v || "").split(/[\s,;]+/)).map((x) => { const c = s(x, 30).replace(/[µμ]/g, "u").replace(/[^\w.+,Ω-]/g, ""); return normValue(c) || c.toUpperCase(); }).filter((x) => x.length >= 3 && !/^\d+(PCS?|PIECES?|VALUES?|KINDS?|TYPES?|STK)$/.test(x));
   // Modellen overser ofte ett eller to delenumre per runde (ulike hver gang). For sett leses bildet derfor to ganger til
   // med egne «list opp alt»-spørsmål, og delenumrene slås sammen.
   let found = toList(r.parts);
@@ -1360,9 +1381,11 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
     }
   }
   // Settet er en verdiliste (2.2UH, 100NF, 4K7): da er alt annet (strekkodetekst, serienummer) støy som skal bort.
-  const valueRe = /^\d+(\.\d+)?(P|N|U|M|K|R)?(F|H)?$|^\d+[RKMPNU]\d+$/;
+  const valueRe = /^\d+[RKMPNUrkmpnu]\d+$/;
   found = [...new Set(found)];
-  if (found.length >= 5 && found.filter((x) => valueRe.test(x)).length / found.length >= 0.6) found = found.filter((x) => valueRe.test(x));
-  const partList = [...new Set(found)].sort((a, b) => a.localeCompare(b, "en", { numeric: true })).slice(0, 40);
+  if (found.length >= 5 && found.filter((x) => normValue(x) || valueRe.test(x)).length / found.length >= 0.6) found = found.filter((x) => normValue(x) || valueRe.test(x));
+  // Induktanser oppgis i henry (uH, mH, H): en lest «nF» eller «uF» i et induktorsett er en feillesing av H.
+  if (/induct/i.test(String(r.title) + " " + String(r.description))) found = found.map((x) => (normValue(x) ? x.replace(/F$/, "H") : x));
+  const partList = [...new Set(found)].sort(byValue).slice(0, 40);
   return { parts: partList, title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), tolerance: s(r.tolerance, 20).replace(/[^\d.,%±+\- ]/g, "").trim(), raw: j ? "" : s(text, 300) };
 }
