@@ -1896,6 +1896,9 @@ function renderProposal(dlg, p, prop, note) {
     ${body || kit || fix || tolRow ? `<table class="ai-table"><thead><tr><th>Felt</th><th>Nå</th><th>Forslag</th></tr></thead><tbody>${body}${fix}${tolRow}${kit}</tbody></table>
     <p><button type="button" class="btn btn-primary" data-aiapply>Bruk valgte</button> <span class="hint ai-apply-msg" role="status"></span></p>` : `<p class="hint">Ingen endringer å foreslå.</p>`}`;
   box.hidden = false;
+  // Tekstfeltene vokser til all teksten vises, uten rulling.
+  const grow = (t) => { t.style.height = "auto"; t.style.height = `${t.scrollHeight + 2}px`; };
+  box.querySelectorAll("textarea").forEach((t) => { grow(t); t.oninput = () => grow(t); });
   dlg._ai = prop;
 }
 async function analysePart(dlg, p, btn) {
