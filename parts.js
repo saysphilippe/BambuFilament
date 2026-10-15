@@ -1307,8 +1307,9 @@ function deriveKit(title) {
   const mpns = [];
   for (const w of t.split(/[\s,;/]+/)) {
     const k = partCase(w.replace(/[µμ]/g, "u").replace(/^[^\w]+|[^\w\u03a9\u2126]+$/g, "")), K = k.toUpperCase();
-    const isVal = !!normValue(k);
-    if (k.length < 3 || k.length > 14 || (!isVal && (!/^[A-Z0-9][A-Z0-9.*-]*$/.test(K) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(K) || !/[A-Z]/.test(K) || !/\d/.test(K) || skip.test(K))) || mpns.includes(k)) continue;
+    const isVal = !!normValue(k), isM = /^M\d{1,2}(\.\d)?$/.test(K);
+    if (/^(GB|DIN|ISO|ANSI|JIS|ASME)\d/.test(K) || /^A[24]-\d+$/.test(K)) continue;
+    if ((k.length < 3 && !isM) || k.length > 14 || (!isVal && !isM && (!/^[A-Z0-9][A-Z0-9.*-]*$/.test(K) || /^[\d.]+[A-Z]*-[\d.]+[A-Z]*$/.test(K) || !/[A-Z]/.test(K) || !/\d/.test(K) || skip.test(K))) || mpns.includes(k)) continue;
     // 10K (uten enhet) og 10KΩ er samme verdi: behold varianten med Ω.
     const bare = k.replace(/Ω$/, ""), at = mpns.findIndex((x) => x.replace(/Ω$/, "") === bare);
     if (at >= 0) { if (k.endsWith("Ω")) mpns[at] = k; continue; }
@@ -1318,7 +1319,7 @@ function deriveKit(title) {
   const sized = mpns.filter((x) => x.includes("*"));
   if (sized.length >= 2) mpns.splice(0, mpns.length, ...sized);
   if (mpns.length < 2) return null;
-  const total = Number((t.match(/(\d{1,6})\s*(?:pcs?|pieces?|stk)\b/i) || [])[1]) || 0;
+  const total = /\d+(?:\/\d+)+\s*(?:pcs?|pieces?|stk)\b/i.test(t) ? 0 : Number((t.match(/(\d{1,6})\s*(?:pcs?|pieces?|stk)\b/i) || [])[1]) || 0;
   const kinds = Number((t.match(/(\d{1,4})\s*(?:values?|kinds?|types?)\b/i) || [])[1]) || mpns.length;
   const each = total ? Math.max(1, Math.floor(total / kinds)) : 0;
   return { mpns, each, total, kinds };
@@ -1863,6 +1864,19 @@ async function readImageWithAi(p) {
   return ctx.dbCall("/ai/describe", { image, cats });
 }
 // r: svaret fra bildetolkningen (eller null). Returnerer rader {key, label, now, next, checked} og eventuelle nye delprodukter.
+// Oppføringer som lister mange størrelser i tittelen (M1.6 M2 M2.5 …) og der varianten velger én av dem, er ikke et sett:
+// kjøpet er én størrelse. Gir delenummer (M2*5 = gjenge M2, lengde 5 mm; M2*3*3.5 = M2, høyde 3 mm, ytre diameter 3,5 mm) og beskrivelse.
+function variantSize(v) {
+  const t = String(v || "");
+  const th = /\bM(\d{1,2}(?:\.\d)?)\b/i.exec(t);
+  if (!th) return null;
+  const od = /\bOD\s*(\d+(?:\.\d+)?)\s*mm/i.exec(t);
+  const len = /(\d+(?:\.\d+)?)\s*mm/i.exec(t.replace(/\bOD\s*\d+(?:\.\d+)?\s*mm/i, ""));
+  const c = (x) => x.replace(".", ",");
+  const L = len?.[1];
+  if (!L) return null;
+  return { mpn: `M${th[1]}*${L}${od ? "*" + od[1] : ""}`, desc: od ? `Gjenge M${c(th[1])}, høyde ${c(L)} mm, ytre diameter ${c(od[1])} mm.` : `Gjenge M${c(th[1])}, lengde ${c(L)} mm.` };
+}
 function proposeChanges(p, r) {
   const rows = [];
   const own = deriveKit(p.title)?.mpns || [];
@@ -1871,20 +1885,21 @@ function proposeChanges(p, r) {
   // Alle delenumre i et sett skal stå i overskriften (som i butikklistinger), så delproduktene kan utledes fra den.
   let title = p.title;
   if (!title && r?.title) title = r.title;
-  const kitLike = names.length >= 3 || fromImg.length >= 2 || /\b(kit|assort\w*|sets?|\d+\s*values?|\d+\s*kinds?|\d+\s*types?)\b/i.test(p.title);
+  const vs = variantSize(p.variant), listing = !!vs && own.length >= 2;
+  const kitLike = !listing && (names.length >= 3 || fromImg.length >= 2 || /\b(kit|assort\w*|sets?|\d+\s*values?|\d+\s*kinds?|\d+\s*types?)\b/i.test(p.title));
   const missing = names.length >= 2 && kitLike ? names.filter((n) => !titleHas(title, n)) : [];
   if (missing.length) title = `${title} ${missing.join(",")}`.trim();
   title = clip(title, 300);
   if (title && title !== p.title) rows.push({ key: "title", label: "Overskrift", now: p.title, next: title, checked: true });
   const one = (key, label, now, next, checked) => { next = String(next || "").trim(); if (next && next.toLowerCase() !== String(now || "").toLowerCase()) rows.push({ key, label, now, next, checked }); };
-  if (!(names.length >= 2 && kitLike)) one("mpn", "Delenummer", p.mpn, r?.mpn, !p.mpn);
+  if (!(names.length >= 2 && kitLike)) one("mpn", "Delenummer", p.mpn, listing ? vs.mpn : r?.mpn, !p.mpn);
   one("maker", "Produsent", p.maker, r?.maker, !p.maker);
   const pkg = findPackage(r?.pkg) || r?.pkg || (names.length >= 2 ? findPackage(title) : "");
   one("pkgFixed", "Pakke", p.pkg, pkg, !p.pkg);
   const tol = String(r?.tolerance || "").trim();
   // Toleransen (±10 %) er nyttig produktinformasjon og tas med i beskrivelsen.
   const withTol = (d) => (tol && !String(d).replace(/\s/g, "").includes(tol.replace(/\s/g, "")) ? `${String(d).trim()} Toleranse ${tol}.`.trim() : String(d || "").trim());
-  one("description", "Beskrivelse", p.description, withTol(p.description || r?.description || ""), !p.description || (!!tol && !p.description.includes(tol)));
+  one("description", "Beskrivelse", p.description, withTol(p.description || (listing ? vs.desc : "") || r?.description || ""), !p.description || (!!tol && !p.description.includes(tol)));
   if (r?.category && CAT_NAME[r.category] && r.category !== p.category) rows.push({ key: "category", label: "Kategori", now: CAT_NAME[p.category], next: r.category, checked: p.category === "other" && !p.catManual });
   const kit = p.parent || !kitLike ? null : deriveKit(title);
   const have = new Set(kitParts(p).map((k) => k.mpn.toUpperCase()));
