@@ -1276,6 +1276,8 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .ai-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ai-table th, .ai-table td { text-align: left; padding: 4px 8px 4px 0; vertical-align: top; }
 .ai-table td input[type="text"], .ai-table td select { width: 100%; min-width: 160px; box-sizing: border-box; }
+.ai-table td textarea { width: 100%; min-width: 220px; box-sizing: border-box; resize: vertical; font: inherit; line-height: 1.35; }
+.ai-table td:last-child { width: 55%; }
 .ai-table .ai-now { color: var(--muted, #888); overflow-wrap: anywhere; }
 .ai-table input[data-aikitqty] { width: 4.5em; }
 .kit-box { margin: 14px 0; padding: 10px 12px; border: 1px solid var(--border, rgba(128,128,128,.35)); border-radius: 8px; }

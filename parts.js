@@ -1331,7 +1331,7 @@ function inheritKitPkg(list) {
     for (const f of ["shopCat", "catHint", "maker", "url", "store", "storeUrl", "orderId", "orderDate", "status", "location", "owner"]) if (!c[f] && k[f]) c[f] = k[f];
   }
 }
-async function addKitParts(kit, entries) {
+async function addKitParts(kit, entries, description = "") {
   const now = new Date().toISOString(), made = [];
   for (const [mpn, n] of entries) {
     const id = `${kit.id}>${mpn}`;
@@ -1341,7 +1341,7 @@ async function addKitParts(kit, entries) {
     const c = cleanPart({
       id, parent: kit.id, source: kit.source, owner: kit.owner, title: mpn, mpn, qty: n, pack: 1, packManual: true,
       orderId: kit.orderId, orderDate: kit.orderDate, status: kit.status, store: kit.store, storeUrl: kit.storeUrl,
-      location: kit.location, added: now, updated: now,
+      location: kit.location, description, added: now, updated: now,
     });
     pstate.parts.push(c);
     made.push(c);
@@ -1878,18 +1878,22 @@ function proposeChanges(p, r) {
   const fresh = kit ? kit.mpns.filter((m) => !have.has(m.toUpperCase())) : [];
   // Delprodukter med verdier skrevet med feil liten/stor bokstav (1UH i stedet for 1uH, MH i stedet for mH).
   const fix = kitParts(p).filter((k) => normValue(k.mpn) && normValue(k.mpn) !== k.mpn).map((k) => [k.id, k.mpn, normValue(k.mpn)]);
-  return { rows, fix, kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null };
+  // Toleransen (fra bildet, ellers fra beskrivelsen) gjelder alle delproduktene i settet.
+  const tolAll = tol || (/Toleranse\s+(\S+(?:\s*%)?)/.exec(p.description || "")?.[1] || "").replace(/[.,]$/, "");
+  const tolKids = tolAll && !p.parent ? kitParts(p).filter((k) => !String(k.description || "").includes(tolAll)) : [];
+  return { rows, fix, tol: p.parent ? "" : tolAll, tolKids: tolKids.map((k) => k.id), kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null };
 }
 function renderProposal(dlg, p, prop, note) {
   const box = dlg.querySelector(".ai-box");
   const cell = (r) => r.key === "category"
     ? `<select data-aival="category">${sortedCats().map(([cid, name]) => `<option value="${ctx.esc(cid)}"${cid === r.next ? " selected" : ""}>${ctx.esc(name)}</option>`).join("")}</select>`
-    : `<input type="text" data-aival="${r.key}" value="${ctx.esc(r.next)}" maxlength="${r.key === "description" ? 600 : 300}">`;
+    : `<textarea data-aival="${r.key}" rows="${Math.min(8, Math.max(2, Math.ceil(r.next.length / 45)))}" maxlength="${r.key === "description" ? 600 : 300}">${ctx.esc(r.next)}</textarea>`;
   const body = prop.rows.map((r) => `<tr><td><label><input type="checkbox" data-aikey="${r.key}"${r.checked ? " checked" : ""}> ${ctx.esc(r.label)}</label></td><td class="ai-now">${ctx.esc(r.now || "(tomt)")}</td><td>${cell(r)}</td></tr>`).join("");
-  const kit = prop.kit ? `<tr><td><label><input type="checkbox" data-aikey="kit" checked> Delprodukter</label></td><td class="ai-now">${prop.kit.had ? `${prop.kit.had} fra før` : "(ingen)"}</td><td><input type="text" data-aikitlist maxlength="1500" value="${ctx.esc(prop.kit.mpns.join(", "))}"> <span class="hint">× <input type="number" data-aikitqty min="1" max="100000" value="${prop.kit.each}"> stk hver</span>${prop.kit.kinds && prop.kit.had + prop.kit.mpns.length < prop.kit.kinds ? `<br><span class="hint ai-missing">Overskriften sier ${prop.kit.kinds} typer, men bare ${prop.kit.had + prop.kit.mpns.length} er funnet. Legg til resten for hånd i feltet.</span>` : ""}</td></tr>` : "";
+  const kit = prop.kit ? `<tr><td><label><input type="checkbox" data-aikey="kit" checked> Delprodukter</label></td><td class="ai-now">${prop.kit.had ? `${prop.kit.had} fra før` : "(ingen)"}</td><td><textarea data-aikitlist rows="${Math.min(12, Math.max(4, Math.ceil(prop.kit.mpns.join(", ").length / 40)))}" maxlength="1500">${ctx.esc(prop.kit.mpns.join(", "))}</textarea><span class="hint">× <input type="number" data-aikitqty min="1" max="100000" value="${prop.kit.each}"> stk hver${prop.tol ? `, toleranse ${ctx.esc(prop.tol)}` : ""}</span>${prop.kit.kinds && prop.kit.had + prop.kit.mpns.length < prop.kit.kinds ? `<br><span class="hint ai-missing">Overskriften sier ${prop.kit.kinds} typer, men bare ${prop.kit.had + prop.kit.mpns.length} er funnet. Legg til resten for hånd i feltet.</span>` : ""}</td></tr>` : "";
   const fix = prop.fix?.length ? `<tr><td><label><input type="checkbox" data-aikey="fixcase" checked> Skrivemåte</label></td><td class="ai-now">${ctx.esc(prop.fix.slice(0, 8).map((x) => x[1]).join(", "))}${prop.fix.length > 8 ? " …" : ""}</td><td>${ctx.esc(prop.fix.slice(0, 8).map((x) => x[2]).join(", "))}${prop.fix.length > 8 ? " …" : ""} <span class="hint">(${prop.fix.length} delprodukter, m = milli, M = mega, u = mikro)</span></td></tr>` : "";
+  const tolRow = prop.tolKids?.length ? `<tr><td><label><input type="checkbox" data-aikey="tolkids" checked> Toleranse på delprodukter</label></td><td class="ai-now">${prop.tolKids.length} uten toleranse</td><td>Toleranse ${ctx.esc(prop.tol)} <span class="hint">(legges i beskrivelsen)</span></td></tr>` : "";
   box.innerHTML = `<h3>Forslag til endringer</h3>${note ? `<p class="hint">${ctx.esc(note)}</p>` : ""}
-    ${body || kit || fix ? `<table class="ai-table"><thead><tr><th>Felt</th><th>Nå</th><th>Forslag</th></tr></thead><tbody>${body}${fix}${kit}</tbody></table>
+    ${body || kit || fix || tolRow ? `<table class="ai-table"><thead><tr><th>Felt</th><th>Nå</th><th>Forslag</th></tr></thead><tbody>${body}${fix}${tolRow}${kit}</tbody></table>
     <p><button type="button" class="btn btn-primary" data-aiapply>Bruk valgte</button> <span class="hint ai-apply-msg" role="status"></span></p>` : `<p class="hint">Ingen endringer å foreslå.</p>`}`;
   box.hidden = false;
   dlg._ai = prop;
@@ -1925,10 +1929,15 @@ async function applyProposal(dlg, p, btn) {
       for (const [id, , good] of prop.fix) { const k = pstate.parts.find((x) => x.id === id); if (k) { k.mpn = good; k.title = good; } }
       await savePatch(prop.fix.map(([id]) => pstate.parts.find((x) => x.id === id)).filter(Boolean).map((k) => ({ id: k.id, data: k })));
     }
+    if (on.has("tolkids") && prop.tolKids?.length) {
+      const kids = prop.tolKids.map((id) => pstate.parts.find((x) => x.id === id)).filter(Boolean);
+      for (const k of kids) k.description = `${k.description ? k.description + " " : ""}Toleranse ${prop.tol}.`.trim();
+      await savePatch(kids.map((k) => ({ id: k.id, data: k })));
+    }
     if (on.has("kit") && prop.kit) {
       const each = Math.max(1, Math.round(Number(box.querySelector("[data-aikitqty]")?.value) || 1));
       const typed = parseKitLines(box.querySelector("[data-aikitlist]")?.value || "", each);
-      await addKitParts(p, typed);
+      await addKitParts(p, typed, prop.tol ? `Toleranse ${prop.tol}.` : "");
     }
     ctx.setSync("Endringene er lagret");
     dlg.close("");
