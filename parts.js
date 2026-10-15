@@ -1729,7 +1729,9 @@ function openNewPart() {
       const missing = names.filter((n) => !title.toUpperCase().includes(n.toUpperCase()));
       if (names.length >= 2 && missing.length) title = `${title} ${names.join(",")}`.trim();
       if (title) $("#np-title").value = title;
-      if (names.length < 2) put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-pkg", r.pkg); put("#np-desc", r.description);
+      if (names.length < 2) put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-desc", r.description);
+      // Pakke: fra modellen, ellers fra tittelen («SOT-23 Transistor Kit») eller fra kjente delenumre (BC547 → TO-92).
+      put("#np-pkg", findPackage(r.pkg) || r.pkg || findPackage(title) || names.map((n) => String(findPart(n, n)?.pkg || "").split("/")[0]).find(Boolean) || "");
       if (r.category) $("#np-cat").value = r.category;
       // Delprodukter og antall hver utledes fra tittelen, på samme måte som «Opprett delprodukter fra tittelen».
       const kit = deriveKit(title);
