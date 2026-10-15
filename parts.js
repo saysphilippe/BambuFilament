@@ -1217,7 +1217,14 @@ const visibleParts = () => {
   return Object.values(hidden).some((h) => h.size) ? pstate.parts.filter((p) => !hidden[p.owner]?.has(p.category)) : pstate.parts;
 };
 
-const matchesQ = (p, q) => !q || [p.manualNo ? `m-${p.manualNo}` : "", p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, p.pkg, CAT_NAME[p.category], p.owner].join(" ").toLowerCase().includes(q);
+// Søk i verdier (2,2 uH, 100nF, ±10 %): µ = u, komma = punktum, og mellomrom mellom tall og enhet (2.2 uH = 2.2uh), ± og % tåles.
+const valueForm = (t) => String(t || "").toLowerCase().replace(/[µμ]/g, "u").replace(/±/g, "").replace(/(\d),(\d)/g, "$1.$2")
+  .replace(/(\d)\s+(?=[a-zΩ%])/g, "$1").replace(/\s+/g, " ").trim();
+const matchesQ = (p, q) => {
+  if (!q) return true;
+  const hay = [p.manualNo ? `m-${p.manualNo}` : "", p.title, p.variant, p.store, p.orderId, p.mpn, p.maker, p.location, p.note, p.pkg, p.description, CAT_NAME[p.category], p.owner].join(" ");
+  return hay.toLowerCase().includes(q) || valueForm(hay).includes(valueForm(q));
+};
 
 // Søketreff som filtrene (kategori, eier, butikk, pakke, «Har igjen») skjuler.
 function hiddenMatches(shownCount) {
