@@ -1302,7 +1302,8 @@ async function aiDescribe({ image, cats }, env) {
     .map((c) => ({ id: String(c?.id || "").slice(0, 40), name: String(c?.name || "").slice(0, 60) })).filter((c) => c.id && c.name);
   const prompt = `This is a photo of an electronic component, a pack of components or a component kit that a hobbyist bought online. Reply with ONE JSON object only, no other text, with these keys:
 "title": a short product title in English like an online shop listing (e.g. "180PCS SOT-23 Transistor Kit Assorted Set", "10pcs TL082CP Dual JFET Op-Amp DIP-8"). Include quantity if it is printed or clearly countable.
-"mpn": the main manufacturer part number if it is readable, else "".
+"mpn": the manufacturer part number if the photo shows ONE single part type and it is readable, else "".
+"parts": an array of every distinct part number you can read when the photo shows a kit or assortment of several part types (e.g. ["BC327","BC337","BC547"]), else [].
 "maker": the manufacturer if readable, else "".
 "package": the package type if you can tell (e.g. SOT-23, TO-92, DIP-8, 0805), else "".
 "category": the id of the best matching category from this list, else "": ${JSON.stringify(list)}
@@ -1325,5 +1326,6 @@ Only use text you can actually read in the photo. Do not guess part numbers.`;
   else try { r = JSON.parse(j ? j[0] : "{}"); } catch { /* ukjent svarformat */ }
   const s = (v, n) => String(Array.isArray(v) ? v.join(" ") : v ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n);
   const catId = list.some((c) => c.id === r.category) ? r.category : "";
-  return { title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), raw: j ? "" : s(text, 300) };
+  const partList = [...new Set((Array.isArray(r.parts) ? r.parts : String(r.parts || "").split(/[\s,;]+/)).map((x) => s(x, 30).toUpperCase().replace(/[^\w.+-]/g, "")).filter((x) => x.length >= 3))].slice(0, 40);
+  return { parts: partList, title: s(r.title, 200), mpn: s(r.mpn, 60), maker: s(r.maker, 60), pkg: s(r.package, 30), category: catId, description: s(r.description, 300), raw: j ? "" : s(text, 300) };
 }

@@ -1694,6 +1694,10 @@ function openNewPart() {
       <label>Plassering<input id="np-loc" type="text" maxlength="80" placeholder="F.eks. Skuff 3"></label>
     </div>
     <label>Beskrivelse<textarea id="np-desc" rows="2" maxlength="600"></textarea></label>
+    <div class="np-row">
+      <label class="grow">Delprodukter i settet (delenumre, ett per linje eller skilt med komma; tom = ingen)<textarea id="np-parts" rows="3" maxlength="2000" placeholder="BC327, BC337, BC517, BC547"></textarea></label>
+      <label>Antall hver<input id="np-kitqty" type="number" min="1" max="100000" value="20"></label>
+    </div>
     <div class="part-actions">
       <button class="btn" value="cancel" type="submit" formnovalidate>Avbryt</button>
       <button class="btn btn-primary" type="button" data-npsave>Lagre produkt</button>
@@ -1722,6 +1726,15 @@ function openNewPart() {
       if (r.title) $("#np-title").value = r.title;
       put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-pkg", r.pkg); put("#np-desc", r.description);
       if (r.category) $("#np-cat").value = r.category;
+      const names = r.parts?.length ? r.parts : (String(r.mpn).split(/[\s,;]+/).filter(Boolean).length > 1 ? String(r.mpn).split(/[\s,;]+/).filter(Boolean) : []);
+      if (names.length >= 2 && !$("#np-parts").value.trim()) {
+        $("#np-parts").value = names.join(", ");
+        // Antall per type: totalt antall i tittelen («200PCS») delt på antall typer («10Value»), ellers fordelt på delenumrene.
+        const d = deriveKit(`${r.title} ${names.join(" ")}`);
+        const total = d?.total || 0, kinds = d?.kinds || names.length;
+        if (total) $("#np-kitqty").value = Math.max(1, Math.floor(total / Math.max(kinds, names.length)));
+        $("#np-qty").value = 1;
+      }
       msg(r.title ? "Forslag fylt inn. Sjekk og rett det som er feil." : "Fant ikke noe tydelig i bildet. Fyll inn for hånd.", !r.title);
     } catch (err) { msg(err.message, true); }
     btn.disabled = false;
@@ -1742,6 +1755,8 @@ function openNewPart() {
     try {
       pstate.parts.push(c);
       if (!ctx.DEMO) await savePatch([{ id: c.id, data: c }]);
+      const kids = parseKitLines($("#np-parts").value, Math.max(1, Math.round(Number($("#np-kitqty").value) || 1)));
+      if (kids.length) await addKitParts(c, kids);
       render();
       dlg.close("");
       ctx.setSync("Produktet er lagret");

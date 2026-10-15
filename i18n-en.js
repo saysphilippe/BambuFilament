@@ -1604,5 +1604,6 @@ export default {
     "✎ Opprettet for hånd · M-{*}": "✎ Created by hand · M-{*}",
     "Opprettelsesnr.": "Creation no.",
     "opprettet for hånd": "created by hand",
+    "Delprodukter i settet (delenumre, ett per linje eller skilt med komma; tom = ingen)": "Sub-products in the kit (part numbers, one per line or comma-separated; empty = none)",
   },
 };
