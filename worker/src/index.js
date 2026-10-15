@@ -1301,7 +1301,7 @@ async function aiDescribe({ image, cats }, env) {
   const list = (Array.isArray(cats) ? cats : []).slice(0, 60)
     .map((c) => ({ id: String(c?.id || "").slice(0, 40), name: String(c?.name || "").slice(0, 60) })).filter((c) => c.id && c.name);
   const prompt = `This is a photo of an electronic component, a pack of components or a component kit that a hobbyist bought online. Reply with ONE JSON object only, no other text, with these keys:
-"title": a short product title in English like an online shop listing (e.g. "180PCS SOT-23 Transistor Kit Assorted Set", "10pcs TL082CP Dual JFET Op-Amp DIP-8"). Include quantity if it is printed or clearly countable.
+"title": a short product title in English like an online shop listing (e.g. "180PCS SOT-23 Transistor Kit Assorted Set", "10pcs TL082CP Dual JFET Op-Amp DIP-8"). Include quantity if it is printed or clearly countable. If the photo shows a kit of several part numbers, end the title with ALL the readable part numbers separated by commas (e.g. "200PCS NPN PNP Power Transistor Kit BC327,BC337,BC547").
 "mpn": the manufacturer part number if the photo shows ONE single part type and it is readable, else "".
 "parts": an array of every distinct part number you can read when the photo shows a kit or assortment of several part types (e.g. ["BC327","BC337","BC547"]), else [].
 "maker": the manufacturer if readable, else "".

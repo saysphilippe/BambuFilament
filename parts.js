@@ -1723,16 +1723,19 @@ function openNewPart() {
       if (ctx.DEMO) throw new Error("Bildetolkning er ikke tilgjengelig i demoen.");
       const r = await ctx.dbCall("/ai/describe", { image, cats: sortedCats().map(([id, name]) => ({ id, name })) });
       const put = (sel, v) => { if (v && !$(sel).value.trim()) $(sel).value = v; };
-      if (r.title) $("#np-title").value = r.title;
-      put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-pkg", r.pkg); put("#np-desc", r.description);
+      // Alle delenumre i et sett skal stå i tittelen (som i butikklistinger), så delproduktene kan utledes fra den.
+      const names = r.parts?.length ? r.parts : String(r.mpn).split(/[\s,;]+/).filter(Boolean).length > 1 ? String(r.mpn).split(/[\s,;]+/).filter(Boolean) : [];
+      let title = String(r.title || "").trim();
+      const missing = names.filter((n) => !title.toUpperCase().includes(n.toUpperCase()));
+      if (names.length >= 2 && missing.length) title = `${title} ${names.join(",")}`.trim();
+      if (title) $("#np-title").value = title;
+      if (names.length < 2) put("#np-mpn", r.mpn); put("#np-maker", r.maker); put("#np-pkg", r.pkg); put("#np-desc", r.description);
       if (r.category) $("#np-cat").value = r.category;
-      const names = r.parts?.length ? r.parts : (String(r.mpn).split(/[\s,;]+/).filter(Boolean).length > 1 ? String(r.mpn).split(/[\s,;]+/).filter(Boolean) : []);
-      if (names.length >= 2 && !$("#np-parts").value.trim()) {
-        $("#np-parts").value = names.join(", ");
-        // Antall per type: totalt antall i tittelen («200PCS») delt på antall typer («10Value»), ellers fordelt på delenumrene.
-        const d = deriveKit(`${r.title} ${names.join(" ")}`);
-        const total = d?.total || 0, kinds = d?.kinds || names.length;
-        if (total) $("#np-kitqty").value = Math.max(1, Math.floor(total / Math.max(kinds, names.length)));
+      // Delprodukter og antall hver utledes fra tittelen, på samme måte som «Opprett delprodukter fra tittelen».
+      const kit = deriveKit(title);
+      if (kit && !$("#np-parts").value.trim()) {
+        $("#np-parts").value = kit.mpns.join(", ");
+        if (kit.each) $("#np-kitqty").value = kit.each;
         $("#np-qty").value = 1;
       }
       msg(r.title ? "Forslag fylt inn. Sjekk og rett det som er feil." : "Fant ikke noe tydelig i bildet. Fyll inn for hånd.", !r.title);
