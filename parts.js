@@ -1342,9 +1342,10 @@ function inheritKitPkg(list) {
 }
 // M2*3*3.5 = gjenge M2, høyde 3 mm, ytre diameter 3,5 mm (innsatsmutter og lignende).
 const sizeInfo = (mpn) => {
-  const m = /^M(\d+(?:\.\d+)?)\*(\d+(?:\.\d+)?)\*(\d+(?:\.\d+)?)$/i.exec(String(mpn || ""));
+  const m = /^M(\d+(?:\.\d+)?)\*(\d+(?:\.\d+)?)(?:\*(\d+(?:\.\d+)?))?$/i.exec(String(mpn || ""));
   const c = (x) => x.replace(".", ",");
-  return m ? `Gjenge M${c(m[1])}, høyde ${c(m[2])} mm, ytre diameter ${c(m[3])} mm.` : "";
+  if (!m) return "";
+  return m[3] ? `Gjenge M${c(m[1])}, høyde ${c(m[2])} mm, ytre diameter ${c(m[3])} mm.` : `Gjenge M${c(m[1])}, lengde ${c(m[2])} mm.`;
 };
 async function addKitParts(kit, entries, description = "") {
   const now = new Date().toISOString(), made = [];
@@ -1911,7 +1912,9 @@ function proposeChanges(p, r) {
   const tolAll = tol || (/Toleranse\s+(\S+(?:\s*%)?)/.exec(p.description || "")?.[1] || "").replace(/[.,]$/, "");
   const tolKids = tolAll && !p.parent ? kitParts(p).filter((k) => !String(k.description || "").includes(tolAll)) : [];
   const qtys = r?.qty && typeof r.qty === "object" ? r.qty : {};
-  return { rows, fix, tol: p.parent ? "" : tolAll, tolKids: tolKids.map((k) => k.id), kit: fresh.length ? { qtys: Object.fromEntries(fresh.filter((m) => qtys[m]).map((m) => [m, qtys[m]])), mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null };
+  const bought = listing && !p.parent && !have.has(vs.mpn.toUpperCase()) ? { qtys: { [vs.mpn]: units(p) }, mpns: [vs.mpn], each: units(p), had: have.size, kinds: 0 } : null;
+  if (bought) { const at = rows.findIndex((x) => x.key === "mpn"); if (at >= 0) rows.splice(at, 1); }
+  return { rows, fix, tol: p.parent ? "" : tolAll, tolKids: tolKids.map((k) => k.id), kit: bought || (fresh.length ? { qtys: Object.fromEntries(fresh.filter((m) => qtys[m]).map((m) => [m, qtys[m]])), mpns: fresh, each: kit.each || 1, had: have.size, kinds: /\d+\s*(values?|kinds?|types?)\b/i.test(title) ? kit.kinds : 0 } : null) };
 }
 function renderProposal(dlg, p, prop, note) {
   const box = dlg.querySelector(".ai-box");
