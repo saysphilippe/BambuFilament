@@ -1283,6 +1283,7 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .np-img { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
 .np-preview { width: 140px; height: 140px; flex: none; border: 1px dashed var(--border, rgba(128,128,128,.5)); border-radius: 8px; display: grid; place-items: center; overflow: hidden; background: #fff; }
 .np-preview img { width: 100%; height: 100%; object-fit: contain; }
+.np-preview:has(img), .part-detail-img img { cursor: zoom-in; }
 .np-actions { display: grid; gap: 8px; justify-items: start; flex: 1 1 220px; }
 .np-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .np-msg.bad { color: var(--danger, #c0392b); }

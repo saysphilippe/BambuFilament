@@ -66,7 +66,7 @@ const pstate = {
 const clip = (s, n) => String(s ?? "").trim().slice(0, n);
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 // AliExpress sitt grå plassholderbilde (gamle ordre og varer som er fjernet har ikke bilde lenger).
-const OWN_IMG_MAX = 100000;
+const OWN_IMG_MAX = 140000;
 const ALI_PLACEHOLDER =/Sf5a31ce867174aa7bf499352d6875ddcs/;
 const safeImg = (u) => {
   u = String(u || "").trim();
@@ -352,6 +352,10 @@ function openZoom(head, svg, foot, light) {
     ${foot}`;
   setZoom(dlg, 0);
   dlg.showModal();
+}
+// Bilde i stort format med samme zoomknapper (−/+, Ctrl/⌘ + hjul). Bildet ligger i «fpz-stage» og kan rulles når det er zoomet.
+function openImageZoom(src, title) {
+  openZoom(`<b>${ctx.esc(title || "Bilde")}</b>`, `<img src="${ctx.esc(src)}" alt="" referrerpolicy="no-referrer">`, "", true);
 }
 function setZoom(dlg, i) {
   i = Math.max(0, Math.min(FP_ZOOMS.length - 1, i));
@@ -1644,7 +1648,7 @@ export function mouserRows(text) {
 //
 // Bildet krympes i nettleseren til et lite JPEG (data-URL) og sendes til Workeren (/ai/describe), som
 // foreslår tittel, delenummer, produsent, pakketype og kategori. Forslagene fylles inn i skjemaet og kan rettes.
-async function shrinkImage(file, maxSide = 480) {
+async function shrinkImage(file, maxSide = 800) {
   const bmp = await createImageBitmap(file);
   const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
   const cv = document.createElement("canvas");
@@ -1654,7 +1658,7 @@ async function shrinkImage(file, maxSide = 480) {
   g.fillStyle = "#fff";
   g.fillRect(0, 0, cv.width, cv.height);
   g.drawImage(bmp, 0, 0, cv.width, cv.height);
-  for (const q of [0.78, 0.68, 0.58, 0.48]) {
+  for (const q of [0.78, 0.68, 0.58, 0.48, 0.4, 0.32]) {
     const url = cv.toDataURL("image/jpeg", q);
     if (url.length <= OWN_IMG_MAX) return url;
   }
@@ -1705,6 +1709,7 @@ function openNewPart() {
   </form>`;
   const $ = (s) => dlg.querySelector(s);
   const msg = (t, bad) => { const m = $(".np-msg"); m.textContent = t; m.classList.toggle("bad", !!bad); };
+  $(".np-preview").onclick = () => { if (image) openImageZoom(image, $("#np-title").value.trim() || "Bilde"); };
   $("#np-file").onchange = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -1942,6 +1947,7 @@ function openPart(id) {
     }
     const fz = e.target.closest("[data-fpzoom]");
     if (fz) return openFootprintZoom(fz.dataset.fpzoom, kicadHint(p));
+    if (e.target.closest(".part-detail-img img") && p.image) return openImageZoom(p.image, p.title);
     const sch = e.target.closest(".schematic-fig .schematic-wrap");
     if (sch) {
       const fig = sch.closest(".schematic-fig");
