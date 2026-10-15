@@ -206,6 +206,7 @@ async function loadNow() {
     const raw = parts?.parts || [];
     pstate.deleted = new Set(raw.filter((p) => p?.deleted && p.id).map((p) => String(p.id)));
     pstate.parts = raw.filter((p) => !p?.deleted).map(cleanPart).filter(Boolean);
+    inheritKitPkg(pstate.parts);
     pstate.reqs = (parts?.requests || []).map(cleanReq).filter(Boolean);
     pstate.projects = (parts?.projects || []).map(cleanProject).filter(Boolean);
     pstate.prefs = Object.fromEntries(Object.entries(parts?.prefs || {})
@@ -1258,6 +1259,16 @@ function deriveKit(title) {
   const each = total ? Math.max(1, Math.floor(total / kinds)) : 0;
   return { mpns, each, total, kinds };
 }
+// Et sett med én pakketype i tittelen (f.eks. «180PCS SOT-23 Transistor Kit») har samme fotavtrykk på alle delprodukter,
+// ikke det som følger av hvert enkelt delenummer (BC547 → TO-92). Butikkens egen pakkeangivelse (pkgFixed) går foran.
+function inheritKitPkg(list) {
+  for (const c of list) {
+    if (!c.parent || c.pkgFixed) continue;
+    const k = pstate.parts.find((x) => x.id === c.parent);
+    const pkg = k && (findPackage(k.pkgFixed) || findPackage(k.variant, k.title));
+    if (pkg) c.pkg = pkg;
+  }
+}
 async function addKitParts(kit, entries) {
   const now = new Date().toISOString(), made = [];
   for (const [mpn, n] of entries) {
@@ -1273,6 +1284,7 @@ async function addKitParts(kit, entries) {
     pstate.parts.push(c);
     made.push(c);
   }
+  inheritKitPkg(made);
   render();
   if (!ctx.DEMO) await savePatch(made.map((p) => ({ id: p.id, data: p })));
   return made;
