@@ -1338,7 +1338,7 @@ function partCard(group) {
     <span class="part-body">
       <span class="part-title">${ctx.esc(p.title || "Uten navn")}</span>
       ${p.variant ? `<span class="part-variant">${ctx.esc(p.variant)}</span>` : ""}
-      ${p.parent ? `<span class="kit-tag">Del av sett</span>` : kitParts(p).length ? `<span class="kit-tag">Sett · ${kitParts(p).length} delprodukter</span>` : ""}
+      ${p.parent ? `<span class="kit-tag kit-child" title="${ctx.esc(kitOf(p)?.title || "")}">📦 Del av samling${kitOf(p) ? `: ${ctx.esc(kitOf(p).title)}` : ""}</span>` : kitParts(p).length ? `<span class="kit-tag">Sett · ${kitParts(p).length} delprodukter</span>` : ""}
       <span class="part-meta"><b>${ctx.esc(qty)}</b>${fmtMoney(p) ? ` · ${ctx.esc(fmtMoney(p))}/stk` : ""}</span>
       ${p.pkg ? `<span class="part-pkg" title="${ctx.esc(packageInfo(p.pkg))}">${footprintSvg(p.pkg, 24) || packageSvg(p.pkg, 22)}${ctx.esc(p.pkg)}</span>` : ""}
       <span class="part-foot"><span class="owner-dot" style="--owner:${ctx.userColor(p.owner)}"></span>${ctx.esc(p.owner || "Ukjent")}<span class="part-date">${ctx.esc(fmtDate(newest))}</span></span>

@@ -1263,6 +1263,7 @@ dialog.fp-zoom-dialog[open] { display: flex; }
 .to-top:hover { border-color: var(--accent); color: var(--accent); }
 
 .kit-tag { display: inline-block; font-size: 11px; font-weight: 600; color: var(--accent); margin: 2px 0; }
+.kit-tag.kit-child { display: block; padding: 3px 8px; margin: 4px 0; border: 1px solid var(--accent); border-radius: 999px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kit-back { margin: 0 0 8px; }
 .kit-back-name { display: block; font-size: 12px; }
 .kit-back-box { display: flex; gap: 10px; align-items: center; margin: 0 0 10px; }
