@@ -123,6 +123,7 @@ export default {
     "{*} delprodukter opprettet": "{*} sub-products created",
     "Del av sett": "Part of kit",
     "← Tilbake til hovedprodukt": "← Back to main product",
+    "Del av: {*}": "Part of: {*}",
     "Sett · {*} delprodukter": "Kit · {*} sub-products",
     "Innhold i settet": "Kit contents",
     "({*} delprodukter)": "({*} sub-products)",
