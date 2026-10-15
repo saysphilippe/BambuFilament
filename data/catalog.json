@@ -1,5 +1,5 @@
 {
- "updated": "2026-10-15T04:38:36.528Z",
+ "updated": "2026-10-15T11:28:47.012Z",
  "source": {
   "colors": "https://github.com/bambulab/BambuStudio/blob/master/resources/profiles/BBL/filament/filaments_color_codes.json",
   "store": "https://eu.store.bambulab.com"
@@ -2265,7 +2265,7 @@
      ],
      "code": "13100",
      "firstSeen": "2025-07-17T06:55:52Z",
-     "stock": "out"
+     "stock": "in"
     },
     {
      "key": "GFA02-Y1",
@@ -2275,7 +2275,7 @@
      ],
      "code": "13400",
      "firstSeen": "2025-07-17T06:55:52Z",
-     "stock": "out"
+     "stock": "in"
     },
     {
      "key": "GFA02-G2",
@@ -2305,7 +2305,7 @@
      ],
      "code": "13800",
      "firstSeen": "2025-07-17T06:55:52Z",
-     "stock": "out"
+     "stock": "in"
     }
    ],
    "product": {
