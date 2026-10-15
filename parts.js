@@ -1828,18 +1828,19 @@ function proposeChanges(p, r) {
   // Alle delenumre i et sett skal stå i overskriften (som i butikklistinger), så delproduktene kan utledes fra den.
   let title = p.title;
   if (!title && r?.title) title = r.title;
-  const missing = names.length >= 2 ? names.filter((n) => !title.toUpperCase().includes(n)) : [];
+  const kitLike = names.length >= 3 || fromImg.length >= 2 || /\b(kit|assort\w*|sets?|\d+\s*values?|\d+\s*kinds?|\d+\s*types?)\b/i.test(p.title);
+  const missing = names.length >= 2 && kitLike ? names.filter((n) => !title.toUpperCase().includes(n)) : [];
   if (missing.length) title = `${title} ${missing.join(",")}`.trim();
   title = clip(title, 300);
   if (title && title !== p.title) rows.push({ key: "title", label: "Overskrift", now: p.title, next: title, checked: true });
   const one = (key, label, now, next, checked) => { next = String(next || "").trim(); if (next && next.toLowerCase() !== String(now || "").toLowerCase()) rows.push({ key, label, now, next, checked }); };
-  if (names.length < 2) one("mpn", "Delenummer", p.mpn, r?.mpn, !p.mpn);
+  if (!(names.length >= 2 && kitLike)) one("mpn", "Delenummer", p.mpn, r?.mpn, !p.mpn);
   one("maker", "Produsent", p.maker, r?.maker, !p.maker);
   const pkg = findPackage(r?.pkg) || r?.pkg || (names.length >= 2 ? findPackage(title) : "");
   one("pkgFixed", "Pakke", p.pkg, pkg, !p.pkg);
   one("description", "Beskrivelse", p.description, r?.description, !p.description);
   if (r?.category && CAT_NAME[r.category] && r.category !== p.category) rows.push({ key: "category", label: "Kategori", now: CAT_NAME[p.category], next: r.category, checked: p.category === "other" && !p.catManual });
-  const kit = p.parent ? null : deriveKit(title);
+  const kit = p.parent || !kitLike ? null : deriveKit(title);
   const have = new Set(kitParts(p).map((k) => k.mpn.toUpperCase()));
   const fresh = kit ? kit.mpns.filter((m) => !have.has(m)) : [];
   return { rows, kit: fresh.length ? { mpns: fresh, each: kit.each || 1, had: have.size } : null };
