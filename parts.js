@@ -1371,7 +1371,16 @@ const siblings = (p) => { const k = groupKey(p); return visibleParts().filter((x
 function groupParts(list) {
   const g = new Map();
   for (const p of list) { const k = groupKey(p); (g.get(k) || g.set(k, []).get(k)).push(p); }
-  return [...g.values()];
+  const out = [...g.values()];
+  // Kortet viser siste kjøpsdato for hele produktet (også brukte kjøp), så sorter etter den.
+  if (pstate.sort === "new" || pstate.sort === "old") {
+    const last = new Map();
+    for (const p of visibleParts()) { const k = groupKey(p); if (!(last.get(k) >= p.orderDate)) last.set(k, p.orderDate); }
+    const d = (grp) => last.get(groupKey(grp[0])) || "";
+    const dir = pstate.sort === "new" ? -1 : 1;
+    out.sort((a, b) => dir * d(a).localeCompare(d(b)) || a[0].title.localeCompare(b[0].title));
+  }
+  return out;
 }
 // Kortet viser og handler på kjøpet med mest igjen (ved likt: det nyeste).
 const pickRep = (items) => [...items].sort((a, b) => remaining(b) - remaining(a) || b.orderDate.localeCompare(a.orderDate))[0];
