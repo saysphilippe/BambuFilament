@@ -1378,7 +1378,8 @@ function groupParts(list) {
     for (const p of visibleParts()) { const k = groupKey(p); if (!(last.get(k) >= p.orderDate)) last.set(k, p.orderDate); }
     const d = (grp) => last.get(groupKey(grp[0])) || "";
     const dir = pstate.sort === "new" ? -1 : 1;
-    out.sort((a, b) => dir * d(a).localeCompare(d(b)) || a[0].title.localeCompare(b[0].title));
+    const man = (grp) => (grp[0].source === "manual" ? 1 : 0); // håndlagte samles nederst
+    out.sort((a, b) => man(a) - man(b) || dir * d(a).localeCompare(d(b)) || a[0].title.localeCompare(b[0].title));
   }
   return out;
 }
